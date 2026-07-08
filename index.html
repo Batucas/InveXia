@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InveXia · Gestión de inversiones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ ACCESO ============ -->
+<div id="auth" class="auth-wrap">
+  <div class="auth-hero">
+    <div class="brand" style="font-size:1.4rem">
+      <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="7" stroke="#4FA3FF" stroke-width="1.4" opacity=".5"/><ellipse cx="20" cy="20" rx="17" ry="7" stroke="#4FA3FF" stroke-width="1.2" opacity=".45" transform="rotate(35 20 20)"/><ellipse cx="20" cy="20" rx="17" ry="7" stroke="#2DD4BF" stroke-width="1.2" opacity=".35" transform="rotate(-35 20 20)"/><path d="M11 27 L18 15 M18 27 L11 15" stroke="#EAF1FB" stroke-width="2.4" stroke-linecap="round"/><path d="M22 27 L29 15 M29 27 L22 15" stroke="#2E7DF6" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span>Inve<span class="x">X</span>ia</span>
+    </div>
+    <div>
+      <h1 class="headline">Del <em>perfil de riesgo</em><br>a una cartera hecha para ti.</h1>
+      <p class="sub">Ciencia, datos y estrategia aplicados a tu inversión. Responde tu perfil, recibe una cartera diseñada por tu asesor y hazle seguimiento.</p>
+      <div class="hero-metrics">
+        <div class="m"><div class="n mono">5</div><div class="l">Perfiles de riesgo</div></div>
+        <div class="m"><div class="n mono">2</div><div class="l">Ejes de análisis</div></div>
+        <div class="m"><div class="n mono">100%</div><div class="l">A tu medida</div></div>
+      </div>
+    </div>
+    <div style="color:var(--faint);font-size:.78rem">Ciencia · Datos · Estrategia · Ventaja</div>
+    <svg class="hero-orbit" viewBox="0 0 200 200" fill="none">
+      <ellipse cx="100" cy="100" rx="90" ry="34" stroke="#2E7DF6" stroke-width=".8" transform="rotate(30 100 100)"/>
+      <ellipse cx="100" cy="100" rx="90" ry="34" stroke="#2DD4BF" stroke-width=".8" transform="rotate(-30 100 100)"/>
+      <ellipse cx="100" cy="100" rx="90" ry="34" stroke="#4FA3FF" stroke-width=".8" transform="rotate(90 100 100)"/>
+      <circle cx="100" cy="100" r="10" fill="#2E7DF6"/>
+    </svg>
+  </div>
+
+  <div class="auth-panel">
+    <div class="auth-card">
+      <h2 id="authTitle">Bienvenido</h2>
+      <p class="lead" id="authLead">Ingresa a tu cuenta para continuar.</p>
+      <div class="seg">
+        <button id="tabLogin" class="on" onclick="ui.authMode('login')">Iniciar sesión</button>
+        <button id="tabReg" onclick="ui.authMode('register')">Crear cuenta</button>
+      </div>
+      <div id="fieldName" class="field hidden">
+        <label>Nombre completo</label>
+        <input id="inName" class="input" type="text" placeholder="Tu nombre y apellido">
+      </div>
+      <div class="field">
+        <label>Correo electrónico</label>
+        <input id="inEmail" class="input" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input id="inPass" class="input" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button id="authBtn" class="btn btn-primary" onclick="auth.submit()">Iniciar sesión</button>
+      <div id="authMsg" class="msg-line"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APLICACIÓN ============ -->
+<div id="app" class="app hidden">
+  <aside id="sidebar" class="sidebar">
+    <div class="side-brand">
+      <div class="brand">
+        <svg viewBox="0 0 40 40" fill="none"><path d="M11 27 L18 15 M18 27 L11 15" stroke="#EAF1FB" stroke-width="2.6" stroke-linecap="round"/><path d="M22 27 L29 15 M29 27 L22 15" stroke="#2E7DF6" stroke-width="2.6" stroke-linecap="round"/></svg>
+        <span>Inve<span class="x">X</span>ia<span class="tag">Gestión de inversiones</span></span>
+      </div>
+    </div>
+    <nav id="nav" class="nav"></nav>
+    <div class="side-user">
+      <div id="uAvatar" class="avatar">··</div>
+      <div class="who" style="flex:1">
+        <b id="uName">—</b><span id="uRole">—</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="auth.logout()" title="Salir">Salir</button>
+    </div>
+  </aside>
+
+  <div>
+    <div class="topbar-mob">
+      <div class="brand" style="font-size:1.1rem"><span>Inve<span class="x">X</span>ia</span></div>
+      <button class="burger" onclick="ui.toggleSidebar()">☰</button>
+    </div>
+    <main id="main" class="main"></main>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
