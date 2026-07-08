@@ -7,5 +7,5 @@
 //  (La anon key es pública por diseño; la seguridad la da el RLS.)
 // ============================================================
 
-export const SUPABASE_URL = "https://urvugmyvjqkbilhvftti.supabase.co/rest/v1/";
+export const SUPABASE_URL = "https://urvugmyvjqkbilhvftti.supabase.co";
 export const SUPABASE_ANON_KEY = "sb_publishable_fQWA2MIp1BFZs-IDO3ReYg_uJsVFEJP";
