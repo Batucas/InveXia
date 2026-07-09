@@ -149,9 +149,20 @@ function translateErr(m=""){
 
 /* ============================================================
    Sesión
+   ------------------------------------------------------------
+   OJO: Supabase dispara eventos también al renovar el token
+   (p. ej. al volver a la pestaña). Si repintáramos la app en cada
+   evento, se perdería cualquier formulario a medio llenar.
+   Solo reaccionamos a un cambio REAL de usuario.
    ============================================================ */
-sb.auth.onAuthStateChange(async (_e,session)=>{
-  state.session=session;
+sb.auth.onAuthStateChange(async (event,session)=>{
+  const prevUser = state.session?.user?.id || null;
+  const nextUser = session?.user?.id || null;
+  state.session = session;
+
+  if(event==="TOKEN_REFRESHED" || event==="USER_UPDATED" || event==="INITIAL_SESSION") return;
+  if(prevUser === nextUser) return;   // mismo usuario: no repintar
+
   if(session){ await loadProfile(); enterApp(); } else showAuth();
 });
 async function loadProfile(){
@@ -170,7 +181,9 @@ function enterApp(){
   const p=state.profile, admin=p.role==="admin";
   $("#uName").textContent=p.full_name||"—";
   $("#uRole").textContent=admin?"Administrador":"Cliente";
-  $("#uAvatar").textContent=initials(p.full_name);
+  const av=$("#uAvatar");
+  if(p.avatar_url) av.innerHTML=`<img src="${esc(p.avatar_url)}" alt="" onerror="this.parentNode.textContent='${initials(p.full_name)}'">`;
+  else av.textContent=initials(p.full_name);
   buildNav(admin);
   if(!location.hash) location.hash = admin?"#/clientes":"#/inicio";
   else route();
@@ -181,16 +194,20 @@ function enterApp(){
    ============================================================ */
 const NAV_CLIENT=[
   ["inicio","Inicio",icon("home")],
+  ["notificaciones","Notificaciones",icon("bell")],
   ["riesgo","Perfil de riesgo",icon("gauge")],
   ["cartera","Mi cartera",icon("pie")],
   ["simulador","Simulador",icon("chart")],
+  ["asistente","Asistente IA",icon("bot")],
   ["mercado","Mercado e ideas",icon("news")],
   ["cursos","Cursos",icon("book")],
   ["calendario","Calendario",icon("cal")],
   ["mensajes","Mensajes",icon("chat")],
+  ["perfil","Mi perfil",icon("user")],
 ];
 const NAV_ADMIN=[
   ["clientes","Clientes",icon("users")],
+  ["notificaciones","Notificaciones",icon("bell")],
   ["publicaciones","Noticias e ideas",icon("news")],
   ["cursos","Cursos",icon("book")],
   ["calendario","Calendario",icon("cal")],
@@ -200,10 +217,21 @@ function buildNav(admin){
   const nav=$("#nav"); nav.innerHTML="";
   nav.append(el(`<div class="nav-label">${admin?"Administración":"Mi cuenta"}</div>`));
   (admin?NAV_ADMIN:NAV_CLIENT).forEach(([id,label,ic])=>{
-    const a=el(`<a data-v="${id}">${ic}<span>${label}</span></a>`);
+    const a=el(`<a data-v="${id}">${ic}<span>${label}</span>${id==="notificaciones"?'<span class="badge hidden" id="notifBadge">0</span>':""}</a>`);
     a.onclick=()=>{ location.hash="#/"+id; $("#sidebar").classList.remove("open"); };
     nav.append(a);
   });
+  refreshBadge();
+  clearInterval(state.cache.badgeTimer);
+  state.cache.badgeTimer=setInterval(refreshBadge,30000);
+}
+async function refreshBadge(){
+  if(!state.session) return;
+  const { count }=await sb.from("notifications").select("id",{count:"exact",head:true})
+    .eq("user_id",state.profile.id).eq("read",false);
+  const b=$("#notifBadge"); if(!b) return;
+  if(count>0){ b.textContent=count>99?"99+":count; b.classList.remove("hidden"); }
+  else b.classList.add("hidden");
 }
 window.addEventListener("hashchange",route);
 function route(){
@@ -225,12 +253,16 @@ async function render(){
     if(admin){
       if(state.view==="clientes"&&state.param) return void await viewAdminClient(state.param);
       if(state.view==="clientes")      return void await viewAdminClients();
+      if(state.view==="notificaciones") return void await viewNotifications();
       if(state.view==="publicaciones") return void await viewPostsAdmin();
       if(state.view==="cursos")        return void await viewCoursesAdmin();
       if(state.view==="calendario")    return void await viewCalendarAdmin();
       if(state.view==="mensajes")      return void await viewAdminInbox();
     } else {
       if(state.view==="inicio")     return void await viewClientHome();
+      if(state.view==="notificaciones") return void await viewNotifications();
+      if(state.view==="asistente")  return void await viewAssistant();
+      if(state.view==="perfil")     return void await viewProfile();
       if(state.view==="riesgo")     return void await viewRisk();
       if(state.view==="cartera")    return void await viewPortfolio();
       if(state.view==="simulador")  return void await viewSimulator();
@@ -904,6 +936,98 @@ async function viewClientMessages(){
 }
 
 /* ============================================================
+   Notificaciones (cliente y admin)
+   ============================================================ */
+async function viewNotifications(){
+  const ns=await sb.from("notifications").select("*").eq("user_id",state.profile.id)
+    .order("created_at",{ascending:false}).limit(50).then(r=>r.data||[]);
+  const m=$("#main");
+  const unread=ns.filter(n=>!n.read).length;
+  m.innerHTML=head("Avisos","Notificaciones",
+    unread?`Tienes ${unread} sin leer.`:"Estás al día.");
+  if(unread) $("#headExtra").append(el(`<button class="btn btn-ghost btn-sm" onclick="app.readAll()">Marcar todas como leídas</button>`));
+  if(!ns.length){ m.append(el(`<div class="card empty">${icon("bell")}<p style="margin-top:.4rem">No tienes notificaciones.</p></div>`)); return; }
+  const ICONS={mensaje:"chat",evento:"cal",cartera:"pie",general:"bell"};
+  const box=el(`<div></div>`);
+  ns.forEach(n=>{
+    const it=el(`<div class="notif ${n.read?"":"unread"}">
+      <div class="notif-ic">${icon(ICONS[n.kind]||"bell")}</div>
+      <div class="li-main" style="flex:1"><b>${esc(n.title)}</b><span>${esc(n.body||"")}</span></div>
+      <span class="mono" style="color:var(--faint);font-size:.72rem;white-space:nowrap">${fmtTime(n.created_at)}</span></div>`);
+    it.onclick=()=>app.openNotif(n);
+    box.append(it);
+  });
+  m.append(box);
+}
+
+/* ============================================================
+   Asistente IA
+   ============================================================ */
+async function viewAssistant(){
+  const m=$("#main");
+  m.innerHTML=head("Asistente","Asistente IA",
+    "Resuelve dudas sobre inversión, tu perfil y tu cartera. Para decisiones concretas, habla con tu asesor.");
+  m.append(el(`<div class="card">
+    <div id="chat" class="chat"></div>
+    <div class="composer">
+      <input id="botIn" class="input" placeholder="Pregunta lo que quieras…" onkeydown="if(event.key==='Enter')app.askBot()">
+      <button id="botBtn" class="btn btn-primary" style="width:auto" onclick="app.askBot()">Enviar</button>
+    </div>
+    <p class="card-sub" style="margin:.8rem 0 0;font-size:.76rem">El asistente es educativo y puede equivocarse. No ejecuta operaciones ni sustituye la asesoría de tu gestor.</p>
+  </div>`));
+  state.cache.bot = state.cache.bot || [];
+  renderBot();
+  if(!state.cache.bot.length){
+    const sug=["¿Qué significa mi perfil de riesgo?","¿Por qué diversificar?","¿Cómo funciona el interés compuesto?"];
+    $("#chat").innerHTML=`<div class="empty" style="padding:1.2rem">
+      <div style="margin-bottom:.9rem">Hola ${esc((state.profile.full_name||"").split(" ")[0])}. ¿En qué te ayudo?</div>
+      <div class="flex" style="justify-content:center;flex-wrap:wrap">
+        ${sug.map(q=>`<button class="btn btn-ghost btn-sm" onclick="app.askBot('${esc(q)}')">${esc(q)}</button>`).join("")}
+      </div></div>`;
+  }
+}
+function renderBot(){
+  const box=$("#chat"); if(!box) return;
+  if(!state.cache.bot.length) return;
+  box.innerHTML="";
+  state.cache.bot.forEach(x=>box.append(el(
+    `<div class="bubble ${x.role==="user"?"me":"them"}">${esc(x.content).replace(/\n/g,"<br>")}</div>`)));
+  box.scrollTop=box.scrollHeight;
+}
+
+/* ============================================================
+   Mi perfil (cliente)
+   ============================================================ */
+async function viewProfile(){
+  const p=state.profile;
+  const m=$("#main");
+  m.innerHTML=head("Cuenta","Mi perfil","Tus datos personales y de contacto.");
+  m.append(el(`<div class="card" style="max-width:560px">
+    <div class="field"><label>Foto de perfil</label>
+      <div class="imgpick">
+        <div class="imgpick-preview avatar-prev ${p.avatar_url?"has":""}" id="prev_avatar">
+          ${p.avatar_url?`<img src="${esc(p.avatar_url)}" alt="">`:`<span>${initials(p.full_name)}</span>`}</div>
+        <div class="imgpick-ctrl">
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer">Subir foto
+            <input type="file" accept="image/*" hidden onchange="app.pickAvatar(this)"></label>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="app.clearAvatar()">Quitar</button>
+          <input type="hidden" id="url_avatar" value="${esc(p.avatar_url||"")}">
+          <span class="imgpick-hint">JPG, PNG o WebP · máx. 5 MB</span>
+        </div></div></div>
+    <div class="divide"></div>
+    <div class="field"><label>Nombre completo</label><input id="pfFull" class="input" value="${esc(p.full_name||"")}"></div>
+    <div class="field"><label>Correo</label><input class="input" value="${esc(p.email||"")}" disabled></div>
+    <div class="flex" style="gap:.8rem;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:180px"><label>Celular (con código de país)</label>
+        <input id="phIn" class="input" placeholder="+591 7xxxxxxx" value="${esc(p.phone||"")}"></div>
+      <div class="field" style="flex:1;min-width:180px"><label>Fecha de nacimiento</label>
+        <input id="pfBirth" class="input" type="date" value="${esc(p.birth_date||"")}"></div>
+    </div>
+    <button class="btn btn-primary btn-sm" style="width:auto" onclick="app.saveProfileInfo()">Guardar cambios</button>
+  </div>`));
+}
+
+/* ============================================================
    ADMIN · Clientes
    ============================================================ */
 async function viewAdminClients(){
@@ -960,6 +1084,7 @@ async function viewAdminClient(uid){
   const ph=$(".page-head > div:first-child");
   ph.innerHTML=`<div class="eyebrow">Cliente</div><h1>${esc(client.full_name||client.email)}</h1>
     <p><span class="mono">${esc(client.email||"")}</span>${client.phone?` · <span class="mono">${esc(client.phone)}</span>`:""}</p>`;
+  $("#headExtra").append(el(`<button class="btn btn-ghost btn-sm" onclick="location.hash='#/mensajes/${uid}'">Escribir mensaje</button>`));
   $("#headExtra").append(el(`<button class="btn btn-ghost btn-sm" onclick="location.hash='#/clientes'">← Clientes</button>`));
 
   const grid=el(`<div class="quad-wrap"></div>`);
@@ -1117,18 +1242,28 @@ async function viewCalendarAdmin(){
 }
 async function viewAdminInbox(){
   const m=$("#main"); m.innerHTML=head("Contacto","Mensajes","Conversaciones con tus clientes.");
+  const clients=await sb.from("profiles").select("id,full_name,email,avatar_url").eq("role","client").then(r=>r.data||[]);
+  const pmap=Object.fromEntries(clients.map(p=>[p.id,p]));
+
+  // Hilo individual (funciona aunque no haya mensajes previos)
+  if(state.param) return void await adminThread(state.param,pmap[state.param]);
+
+  $("#headExtra").append(el(`<button class="btn btn-primary btn-sm" style="width:auto" onclick="app.newThread()">+ Escribir a un cliente</button>`));
+  m.append(el(`<div id="newThread"></div>`));
+
   const msgs=await sb.from("messages").select("*").order("created_at",{ascending:false}).then(r=>r.data||[]);
   const ids=[...new Set(msgs.map(x=>x.client_id))];
-  if(!ids.length){ m.append(el(`<div class="card empty">${icon("chat")}<p style="margin-top:.4rem">Sin mensajes todavía.</p></div>`)); return; }
-  const profs=await sb.from("profiles").select("id,full_name,email").in("id",ids).then(r=>r.data||[]);
-  const pmap=Object.fromEntries(profs.map(p=>[p.id,p]));
-  if(state.param) return void await adminThread(state.param,pmap[state.param]);
+  if(!ids.length){
+    m.append(el(`<div class="card empty">${icon("chat")}<p style="margin-top:.4rem">Sin conversaciones todavía.</p>
+      <p style="font-size:.85rem">Usa <b>Escribir a un cliente</b> para iniciar una.</p></div>`));
+    return;
+  }
   const list=el(`<div></div>`);
   ids.forEach(id=>{
     const last=msgs.find(x=>x.client_id===id), p=pmap[id]||{};
     const unread=msgs.some(x=>x.client_id===id&&x.sender_role==="client"&&!x.read);
     const it=el(`<div class="list-item row-click">
-      <div class="flex"><div class="avatar">${initials(p.full_name)}</div>
+      <div class="flex"><div class="avatar">${p.avatar_url?`<img src="${esc(p.avatar_url)}" alt="">`:initials(p.full_name)}</div>
         <div class="li-main"><b>${esc(p.full_name||p.email||"Cliente")}</b><span>${esc((last?.body||"").slice(0,60))}</span></div></div>
       <div class="flex">${unread?'<span class="pill pill-blue dot">Nuevo</span>':''}
         <span class="mono" style="color:var(--faint);font-size:.75rem">${fmtTime(last.created_at)}</span></div></div>`);
@@ -1142,7 +1277,7 @@ async function adminThread(uid,prof){
   $("#headExtra").append(el(`<button class="btn btn-ghost btn-sm" onclick="location.hash='#/mensajes'">← Bandeja</button>`));
   $(".page-head h1").textContent=prof?.full_name||prof?.email||"Cliente";
   m.append(el(`<div class="card"><div id="chat" class="chat"></div>
-    <div class="composer"><input id="msgIn" class="input" placeholder="Responder…" onkeydown="if(event.key==='Enter')app.sendMsg('${uid}')">
+    <div class="composer"><input id="msgIn" class="input" placeholder="Escribe un mensaje…" onkeydown="if(event.key==='Enter')app.sendMsg('${uid}')">
     <button class="btn btn-primary" style="width:auto" onclick="app.sendMsg('${uid}')">Enviar</button></div></div>`));
   await loadThread(uid);
   await sb.from("messages").update({read:true}).eq("client_id",uid).eq("sender_role","client").eq("read",false);
@@ -1250,6 +1385,97 @@ const app = {
       sender_role:state.profile.role, body });
     if(error) return ui.toast(error.message,"err");
     await loadThread(clientId);
+    refreshBadge();
+  },
+
+  // notificaciones
+  async openNotif(n){
+    if(!n.read){ await sb.from("notifications").update({read:true}).eq("id",n.id); refreshBadge(); }
+    if(n.link) location.hash=n.link; else render();
+  },
+  async readAll(){
+    await sb.from("notifications").update({read:true}).eq("user_id",state.profile.id).eq("read",false);
+    refreshBadge(); ui.toast("Marcadas como leídas","ok"); render();
+  },
+
+  // asistente IA
+  async askBot(preset){
+    const inp=$("#botIn");
+    const text=(preset||inp.value).trim(); if(!text) return;
+    if(!preset) inp.value="";
+    state.cache.bot=state.cache.bot||[];
+    state.cache.bot.push({role:"user",content:text});
+    renderBot();
+    const box=$("#chat");
+    const thinking=el(`<div class="bubble them"><span class="spinner" style="border-color:rgba(120,150,200,.3);border-top-color:var(--blue-400)"></span></div>`);
+    box.append(thinking); box.scrollTop=box.scrollHeight;
+    const btn=$("#botBtn"); btn.disabled=true;
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const r=await fetch("/api/chat",{ method:"POST",
+        headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token },
+        body:JSON.stringify({ messages:state.cache.bot }) });
+      const ct=r.headers.get("content-type")||"";
+      if(!ct.includes("application/json")) throw new Error("La función /api/chat no está desplegada.");
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.message||d.error||"Error del asistente");
+      state.cache.bot.push({role:"assistant",content:d.reply});
+    }catch(e){
+      state.cache.bot.push({role:"assistant",content:"⚠ "+e.message});
+    }
+    btn.disabled=false; renderBot(); $("#botIn")?.focus();
+  },
+
+  // perfil del cliente
+  async pickAvatar(input){
+    const file=input.files?.[0]; if(!file) return;
+    const box=$("#prev_avatar"); box.classList.add("has"); box.innerHTML='<span class="spinner"></span>';
+    try{
+      const url=await uploadImage(file,`avatars/${state.profile.id}`);
+      $("#url_avatar").value=url;
+      box.innerHTML=`<img src="${esc(url)}" alt="">`;
+      ui.toast("Foto subida. No olvides guardar.","ok");
+    }catch(e){
+      box.classList.remove("has"); box.innerHTML=`<span>${initials(state.profile.full_name)}</span>`;
+      ui.toast(/bucket|policy|row-level/i.test(e.message)?"Falta ejecutar migration_v5.sql en Supabase":e.message,"err");
+    }
+    input.value="";
+  },
+  clearAvatar(){
+    $("#url_avatar").value="";
+    const box=$("#prev_avatar"); box.classList.remove("has");
+    box.innerHTML=`<span>${initials(state.profile.full_name)}</span>`;
+  },
+  async saveProfileInfo(){
+    const upd={ full_name:$("#pfFull").value.trim()||state.profile.full_name,
+      phone:$("#phIn").value.trim()||null,
+      birth_date:$("#pfBirth").value||null,
+      avatar_url:$("#url_avatar").value.trim()||null };
+    const {error}=await sb.from("profiles").update(upd).eq("id",state.profile.id);
+    if(error) return ui.toast(error.message,"err");
+    Object.assign(state.profile,upd);
+    $("#uName").textContent=state.profile.full_name||"—";
+    const av=$("#uAvatar");
+    if(upd.avatar_url) av.innerHTML=`<img src="${esc(upd.avatar_url)}" alt="">`;
+    else av.textContent=initials(state.profile.full_name);
+    ui.toast("Perfil actualizado","ok");
+  },
+
+  // admin: iniciar conversación
+  newThread(){
+    const box=$("#newThread"); if(box.dataset.open){ box.innerHTML=""; box.dataset.open=""; return; }
+    box.dataset.open="1";
+    box.innerHTML=`<div class="card"><div class="card-sub">Cargando clientes…</div></div>`;
+    sb.from("profiles").select("id,full_name,email").eq("role","client").order("full_name")
+      .then(({data})=>{
+        const cs=data||[];
+        if(!cs.length){ box.innerHTML=`<div class="card"><p class="card-sub" style="margin:0">No hay clientes registrados.</p></div>`; return; }
+        box.innerHTML=`<div class="card">
+          <div class="field"><label>Elige un cliente</label>
+            <select id="ntSel" class="input">${cs.map(c=>`<option value="${c.id}">${esc(c.full_name||c.email)}</option>`).join("")}</select></div>
+          <button class="btn btn-primary btn-sm" style="width:auto"
+            onclick="location.hash='#/mensajes/'+document.getElementById('ntSel').value">Abrir conversación</button></div>`;
+      });
   },
 
   // imágenes
@@ -1459,6 +1685,9 @@ function icon(n){
     cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/>',
     chat:'<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/>',
     users:'<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.5a3.5 3.5 0 0 1 0 7"/>',
+    user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
+    bell:'<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 19a2 2 0 0 0 3 0"/>',
+    bot:'<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.2"/><path d="M9 13.5h.01M15 13.5h.01"/>',
   }[n]||"";
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 }
