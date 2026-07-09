@@ -471,3 +471,9 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
   border-radius:var(--r-md);padding:.7rem .9rem;color:var(--warn);font-size:.86rem;line-height:1.45}
 .bot-error svg{width:17px;height:17px;flex:0 0 auto;margin-top:1px}
 .bot-error span{color:var(--muted)}
+
+/* --- contador de consultas del asistente --- */
+.quota{font-size:.8rem;color:var(--muted)}
+.quota b{font-size:.95rem;color:var(--text)}
+.quota .warn-t{color:var(--warn)}
+.quota .neg{color:var(--bad)}

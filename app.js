@@ -968,6 +968,10 @@ async function viewAssistant(){
   m.innerHTML=head("Asistente","Asistente IA",
     "Resuelve dudas sobre inversión, tu perfil y tu cartera. Para decisiones concretas, habla con tu asesor.");
   m.append(el(`<div class="card">
+    <div class="flex between" style="margin-bottom:.9rem">
+      <span class="pill pill-blue dot">En línea</span>
+      <span id="quota" class="quota">—</span>
+    </div>
     <div id="chat" class="chat"></div>
     <div class="composer">
       <input id="botIn" class="input" placeholder="Pregunta lo que quieras…" onkeydown="if(event.key==='Enter')app.askBot()">
@@ -977,6 +981,7 @@ async function viewAssistant(){
   </div>`));
   state.cache.bot = state.cache.bot || [];
   renderBot();
+  loadQuota();
   if(!state.cache.bot.length){
     const sug=["¿Qué significa mi perfil de riesgo?","¿Por qué diversificar?","¿Cómo funciona el interés compuesto?"];
     $("#chat").innerHTML=`<div class="empty" style="padding:1.2rem">
@@ -985,6 +990,27 @@ async function viewAssistant(){
         ${sug.map(q=>`<button class="btn btn-ghost btn-sm" onclick="app.askBot('${esc(q)}')">${esc(q)}</button>`).join("")}
       </div></div>`;
   }
+}
+async function loadQuota(){
+  try{
+    const { data:{ session } }=await sb.auth.getSession();
+    const r=await fetch("/api/chat",{ headers:{ Authorization:"Bearer "+session.access_token } });
+    const ct=r.headers.get("content-type")||"";
+    if(!ct.includes("application/json")) return;
+    const d=await r.json();
+    if(d.ok) paintQuota(d);
+  }catch(e){ /* silencio: no bloquear la vista */ }
+}
+function paintQuota(d){
+  const box=$("#quota"); if(!box) return;
+  if(d.unlimited){ box.textContent="Sin límite (administrador)"; return; }
+  const left=d.remaining??0, lim=d.limit||5;
+  box.innerHTML=`<b class="mono ${left===0?"neg":(left<=1?"warn-t":"")}">${left}</b> de ${lim} consultas esta semana`;
+  const btn=$("#botBtn"), inp=$("#botIn");
+  if(left<=0 && btn){
+    btn.disabled=true; inp.disabled=true;
+    inp.placeholder="Sin consultas disponibles esta semana";
+  } else if(btn){ btn.disabled=false; inp.disabled=false; inp.placeholder="Pregunta lo que quieras…"; }
 }
 function renderBot(){
   const box=$("#chat"); if(!box) return;
@@ -1430,12 +1456,22 @@ const app = {
       const ct=r.headers.get("content-type")||"";
       if(!ct.includes("application/json")) throw new Error("La función /api/chat no está desplegada.");
       const d=await r.json();
-      if(!d.ok) throw new Error(d.message||d.error||"Error del asistente");
+      if(!d.ok){
+        if(d.error==="quota"){
+          state.cache.bot.pop();               // no gastar el turno en el historial
+          state.cache.bot.push({role:"error",content:d.message});
+          paintQuota({remaining:0,limit:d.limit||5});
+          renderBot(); btn.disabled=true; return;
+        }
+        throw new Error(d.message||"Error del asistente");
+      }
       state.cache.bot.push({role:"assistant",content:d.reply});
+      if(!d.unlimited) paintQuota(d);
     }catch(e){
       state.cache.bot.push({role:"error",content:e.message});
     }
-    btn.disabled=false; renderBot(); $("#botIn")?.focus();
+    if(!$("#botIn")?.disabled) btn.disabled=false;
+    renderBot(); $("#botIn")?.focus();
   },
 
   // perfil del cliente
