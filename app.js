@@ -1056,8 +1056,9 @@ async function viewAdminClients(){
              :st==="draft"?`<span class="pill pill-warn dot">Borrador</span>`
              :`<span class="pill dot" style="color:var(--faint)">Sin cartera</span>`;
     const wa=c.phone?`<a href="https://wa.me/${esc(c.phone.replace(/[^0-9]/g,""))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="pill pill-ok">WhatsApp</a>`:"";
+    const av=c.avatar_url?`<img src="${esc(c.avatar_url)}" alt="">`:initials(c.full_name);
     const tr=el(`<tr class="row-click">
-      <td><div class="flex"><div class="avatar" style="width:30px;height:30px">${initials(c.full_name)}</div>
+      <td><div class="flex"><div class="avatar" style="width:32px;height:32px">${av}</div>
         <div><b>${esc(c.full_name||"—")}</b><br><span class="mono" style="color:var(--faint);font-size:.76rem">${esc(c.email||"")}</span></div></div></td>
       <td>${ra?.goal_type?esc(ra.goal_type==="otro"?"Otro":GOALS[ra.goal_type]):"—"}</td>
       <td>${band}</td><td>${pill}</td>
@@ -1082,8 +1083,14 @@ async function viewAdminClient(uid){
 
   m.innerHTML=head("Cliente","x","");
   const ph=$(".page-head > div:first-child");
-  ph.innerHTML=`<div class="eyebrow">Cliente</div><h1>${esc(client.full_name||client.email)}</h1>
-    <p><span class="mono">${esc(client.email||"")}</span>${client.phone?` · <span class="mono">${esc(client.phone)}</span>`:""}</p>`;
+  const edad = client.birth_date
+    ? Math.floor((Date.now()-new Date(client.birth_date))/(365.25*864e5)) : null;
+  ph.innerHTML=`<div class="flex" style="gap:.9rem;align-items:center">
+      <div class="avatar" style="width:52px;height:52px;border-radius:12px">
+        ${client.avatar_url?`<img src="${esc(client.avatar_url)}" alt="">`:initials(client.full_name)}</div>
+      <div><div class="eyebrow">Cliente</div><h1>${esc(client.full_name||client.email)}</h1>
+        <p><span class="mono">${esc(client.email||"")}</span>${client.phone?` · <span class="mono">${esc(client.phone)}</span>`:""}${edad!=null?` · ${edad} años`:""}</p>
+      </div></div>`;
   $("#headExtra").append(el(`<button class="btn btn-ghost btn-sm" onclick="location.hash='#/mensajes/${uid}'">Escribir mensaje</button>`));
   $("#headExtra").append(el(`<button class="btn btn-ghost btn-sm" onclick="location.hash='#/clientes'">← Clientes</button>`));
 
