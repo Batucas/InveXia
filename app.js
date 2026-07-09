@@ -249,37 +249,71 @@ const head=(eyebrow,title,sub="")=>`<div class="page-head no-print"><div><div cl
    CLIENTE · Inicio
    ============================================================ */
 async function viewClientHome(){
-  const [ra,pf]=await Promise.all([latestAssessment(state.profile.id), publishedPortfolio(state.profile.id)]);
-  const step=!ra?1:(!pf?2:3);
+  const [ra,pf,posts,courses]=await Promise.all([
+    latestAssessment(state.profile.id),
+    publishedPortfolio(state.profile.id),
+    sb.from("posts").select("*").eq("published",true).order("created_at",{ascending:false}).limit(9).then(r=>r.data||[]),
+    sb.from("courses").select("*").eq("published",true).order("created_at",{ascending:false}).limit(3).then(r=>r.data||[]),
+  ]);
   const m=$("#main");
-  m.innerHTML=head("Panel","Hola, "+(state.profile.full_name||"").split(" ")[0])
-   +`<div class="steps">
-      ${stepBox(1,"Perfil de riesgo",step)}
-      ${stepBox(2,"Diseño de cartera",step)}
-      ${stepBox(3,"Seguimiento",step)}
-     </div>`;
-  const wrap=el(`<div class="grid grid-2"></div>`);
-  if(step===1){
-    wrap.append(el(`<div class="card"><h3>Empecemos por tu perfil</h3>
-      <p class="card-sub">Cuéntanos tu objetivo, cuánto puedes aportar y responde ~10 preguntas. Toma 4 minutos.</p>
-      <button class="btn btn-primary" style="width:auto" onclick="location.hash='#/riesgo'">Responder cuestionario</button></div>`));
-  } else if(step===2){
-    wrap.append(el(`<div class="card"><h3>Perfil listo · <span style="color:${cssv(BANDS[ra.final_band].cvar)}">${esc(ra.band_label)}</span></h3>
-      <p class="card-sub">Tu asesor está diseñando tu cartera. Mientras tanto, puedes proyectar tus aportes en el simulador.</p>
-      <div class="flex"><span class="pill dot pill-warn">En diseño</span>
-      <button class="btn btn-ghost btn-sm" onclick="location.hash='#/simulador'">Abrir simulador</button></div></div>`));
+  const first=(state.profile.full_name||"").split(" ")[0];
+  m.innerHTML=head("Panel","Hola, "+first,"Lo último de InveXia: ideas, mercado y formación.");
+
+  // --- franja de progreso ---
+  if(!ra){
+    m.append(el(`<div class="banner">
+      <div><div class="eyebrow" style="color:var(--blue-400);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;font-weight:600">Primer paso</div>
+        <h3 style="margin:.3rem 0">Descubre tu perfil de inversor</h3>
+        <p class="card-sub" style="margin:0">Un cuestionario de 4 minutos. Con él diseñamos la cartera adecuada para ti.</p></div>
+      <button class="btn btn-primary" style="width:auto;white-space:nowrap" onclick="location.hash='#/riesgo'">Empezar ahora</button>
+    </div>`));
+  } else if(!pf){
+    m.append(el(`<div class="strip">
+      <span class="pill dot pill-warn">En diseño</span>
+      <span>Perfil <b style="color:${cssv(BANDS[ra.final_band].cvar)}">${esc(ra.band_label)}</b> · tu asesor está construyendo tu cartera.</span>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="location.hash='#/simulador'">Proyectar aportes</button>
+    </div>`));
   } else {
-    wrap.append(el(`<div class="card"><h3>Tu cartera está lista</h3>
-      <p class="card-sub">Perfil <b style="color:${cssv(BANDS[ra.final_band].cvar)}">${esc(ra.band_label)}</b>. Revisa composición y rendimiento.</p>
-      <button class="btn btn-primary" style="width:auto" onclick="location.hash='#/cartera'">Ver mi cartera</button></div>`));
+    m.append(el(`<div class="strip">
+      <span class="pill dot pill-ok">Cartera activa</span>
+      <span>Perfil <b style="color:${cssv(BANDS[ra.final_band].cvar)}">${esc(ra.band_label)}</b> · ${esc(pf.name)}.</span>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="location.hash='#/cartera'">Ver rendimiento</button>
+    </div>`));
   }
-  wrap.append(el(`<div class="card"><h3>Mis datos de contacto</h3>
+
+  const ideas=posts.filter(p=>p.kind==="idea").slice(0,4);
+  const news =posts.filter(p=>p.kind==="noticia").slice(0,4);
+
+  if(ideas.length){
+    m.append(sectionHead("Ideas de inversión","#/mercado"));
+    const g=el(`<div class="grid grid-2" style="margin-bottom:1.8rem"></div>`);
+    ideas.forEach(p=>g.append(ideaCard(p))); m.append(g);
+  }
+  if(news.length){
+    m.append(sectionHead("Mercado","#/mercado"));
+    const g=el(`<div class="grid grid-2" style="margin-bottom:1.8rem"></div>`);
+    news.forEach(p=>g.append(newsCard(p))); m.append(g);
+  }
+  if(courses.length){
+    m.append(sectionHead("Cursos","#/cursos"));
+    const g=el(`<div class="grid grid-3" style="margin-bottom:1.8rem"></div>`);
+    courses.forEach(c=>g.append(courseCard(c))); m.append(g);
+  }
+  if(!ideas.length && !news.length && !courses.length){
+    m.append(el(`<div class="card empty">${icon("news")}<p style="margin-top:.4rem">Aún no hay contenido publicado. Vuelve pronto.</p></div>`));
+  }
+
+  m.append(el(`<div class="card mt2"><h3>Mis datos de contacto</h3>
     <p class="card-sub">Tu asesor te contactará por estos medios.</p>
     <div class="field"><label>Correo</label><input class="input" value="${esc(state.profile.email||"")}" disabled></div>
     <div class="field"><label>Celular (con código de país)</label>
       <input id="phIn" class="input" placeholder="+591 7xxxxxxx" value="${esc(state.profile.phone||"")}"></div>
     <button class="btn btn-ghost btn-sm" onclick="app.savePhone()">Guardar celular</button></div>`));
-  m.append(wrap);
+}
+function sectionHead(title,href){
+  return el(`<div class="flex between" style="margin:.4rem 0 .9rem">
+    <div class="nav-label" style="padding:0">${title}</div>
+    <a style="font-size:.82rem;cursor:pointer" onclick="location.hash='${href}'">Ver todo →</a></div>`);
 }
 function stepBox(n,title,cur){
   const cls=cur>n?"done":(cur===n?"active":"");
@@ -759,40 +793,90 @@ async function viewFeed(){
   const ideas=posts.filter(p=>p.kind==="idea"), news=posts.filter(p=>p.kind==="noticia");
   if(ideas.length){
     m.append(el(`<div class="nav-label" style="padding-left:0">Ideas de inversión</div>`));
-    const g=el(`<div class="grid grid-2" style="margin-bottom:1.6rem"></div>`);
+    const g=el(`<div class="grid grid-2" style="margin-bottom:1.8rem"></div>`);
     ideas.forEach(p=>g.append(ideaCard(p))); m.append(g);
   }
   if(news.length){
     m.append(el(`<div class="nav-label" style="padding-left:0">Noticias del mercado</div>`));
-    news.forEach(p=>m.append(newsCard(p)));
+    const g=el(`<div class="grid grid-2"></div>`);
+    news.forEach(p=>g.append(newsCard(p))); m.append(g);
   }
+}
+/* ============================================================
+   Imágenes (Supabase Storage · bucket "media")
+   ============================================================ */
+const MAX_IMG = 5 * 1024 * 1024;
+function imagePicker(id){
+  return `<div class="imgpick" id="wrap_${id}">
+    <div class="imgpick-preview" id="prev_${id}"><span>Sin imagen</span></div>
+    <div class="imgpick-ctrl">
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer">Subir imagen
+        <input type="file" accept="image/*" hidden onchange="app.pickImage('${id}',this)"></label>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="app.clearImage('${id}')">Quitar</button>
+      <input class="input mono" id="url_${id}" placeholder="…o pega una URL de imagen"
+        oninput="app.previewImage('${id}',this.value)">
+      <span class="imgpick-hint">JPG, PNG, WebP o GIF · máx. 5 MB</span>
+    </div></div>`;
+}
+async function uploadImage(file,folder){
+  if(!file.type.startsWith("image/")) throw new Error("El archivo no es una imagen.");
+  if(file.size>MAX_IMG) throw new Error("La imagen supera los 5 MB.");
+  const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
+  const path=`${folder}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const { error }=await sb.storage.from("media").upload(path,file,{ cacheControl:"3600", upsert:false });
+  if(error) throw new Error(error.message);
+  return sb.storage.from("media").getPublicUrl(path).data.publicUrl;
+}
+
+/* ============================================================
+   CLIENTE · Mercado e ideas
+   ============================================================ */
+function cover(url,alt,fallbackText,accent="var(--blue-500)"){
+  if(url) return `<div class="cover"><img src="${esc(url)}" alt="${esc(alt)}" loading="lazy"
+    onerror="this.parentNode.classList.add('ph');this.remove()"></div>`;
+  return `<div class="cover ph" style="--accent:${accent}"><span>${esc(fallbackText||"")}</span></div>`;
 }
 function ideaCard(p){
   const dirColor={compra:"var(--ok)",venta:"var(--bad)",mantener:"var(--warn)"}[p.direction]||"var(--muted)";
-  return el(`<div class="card idea">
-    <div class="flex between">
-      <div class="flex" style="gap:.5rem">
-        <span class="mono ticker">${esc(p.ticker||"—")}</span>
-        <span class="pill" style="color:${dirColor};text-transform:capitalize">${esc(p.direction||"idea")}</span>
+  return el(`<div class="card idea media-card">
+    ${cover(p.image_url,p.title,p.ticker||"IDEA",dirColor)}
+    <div class="media-body">
+      <div class="flex between">
+        <div class="flex" style="gap:.5rem">
+          <span class="mono ticker">${esc(p.ticker||"—")}</span>
+          <span class="pill" style="color:${dirColor};text-transform:capitalize">${esc(p.direction||"idea")}</span>
+        </div>
+        <span class="pill ${p.status==="abierta"?"pill-ok":""} dot" style="${p.status!=="abierta"?"color:var(--faint)":""}">${esc(p.status||"abierta")}</span>
       </div>
-      <span class="pill ${p.status==="abierta"?"pill-ok":""} dot" style="${p.status!=="abierta"?"color:var(--faint)":""}">${esc(p.status||"abierta")}</span>
-    </div>
-    <h3 style="margin:.7rem 0 .3rem">${esc(p.title)}</h3>
-    <p class="card-sub" style="margin-bottom:.8rem">${esc(p.body||"")}</p>
-    <div class="flex" style="gap:1.4rem;font-size:.82rem">
-      ${p.target_price?`<div><div class="k-mini">Precio objetivo</div><b class="mono">${money(p.target_price,"USD")}</b></div>`:""}
-      ${p.horizon?`<div><div class="k-mini">Horizonte</div><b>${esc(p.horizon)}</b></div>`:""}
-      <div><div class="k-mini">Publicada</div><b class="mono">${fmtDate(p.created_at)}</b></div>
-    </div>
-    ${p.source_url?`<a class="btn btn-ghost btn-sm mt" href="${esc(p.source_url)}" target="_blank" rel="noopener">Ver fuente</a>`:""}
-  </div>`);
+      <h3 style="margin:.7rem 0 .3rem">${esc(p.title)}</h3>
+      <p class="card-sub" style="margin-bottom:.8rem">${esc(p.body||"")}</p>
+      <div class="flex" style="gap:1.4rem;font-size:.82rem;flex-wrap:wrap">
+        ${p.target_price?`<div><div class="k-mini">Precio objetivo</div><b class="mono">${money(p.target_price,"USD")}</b></div>`:""}
+        ${p.horizon?`<div><div class="k-mini">Horizonte</div><b>${esc(p.horizon)}</b></div>`:""}
+        <div><div class="k-mini">Publicada</div><b class="mono">${fmtDate(p.created_at)}</b></div>
+      </div>
+      ${p.source_url?`<a class="btn btn-ghost btn-sm mt" href="${esc(p.source_url)}" target="_blank" rel="noopener">Ver fuente</a>`:""}
+    </div></div>`);
 }
 function newsCard(p){
-  return el(`<div class="list-item" style="align-items:flex-start">
-    <div class="li-main"><b>${esc(p.title)}</b>
-      <span style="display:block;margin-top:.25rem">${esc(p.body||"")}</span>
-      ${p.source_url?`<a href="${esc(p.source_url)}" target="_blank" rel="noopener" style="font-size:.82rem">Leer fuente →</a>`:""}</div>
-    <span class="mono" style="color:var(--faint);font-size:.75rem;white-space:nowrap">${fmtDate(p.created_at)}</span></div>`);
+  return el(`<div class="card media-card">
+    ${cover(p.image_url,p.title,"NOTICIA","var(--blue-400)")}
+    <div class="media-body">
+      <div class="k-mini">${fmtDate(p.created_at)}</div>
+      <h3 style="margin:.35rem 0 .4rem;font-size:1rem">${esc(p.title)}</h3>
+      <p class="card-sub" style="margin:0">${esc(p.body||"")}</p>
+      ${p.source_url?`<a class="mt" style="display:inline-block;font-size:.82rem" href="${esc(p.source_url)}" target="_blank" rel="noopener">Leer fuente →</a>`:""}
+    </div></div>`);
+}
+function courseCard(c){
+  return el(`<div class="card media-card">
+    ${cover(c.image_url,c.title,"CURSO","var(--risk-1)")}
+    <div class="media-body">
+      <span class="pill pill-blue">${esc(c.level||"Curso")}</span>
+      <h3 style="margin:.6rem 0 .3rem;font-size:1rem">${esc(c.title)}</h3>
+      <p class="card-sub">${esc(c.description||"")}</p>
+      ${c.url?`<a class="btn btn-ghost btn-sm" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir curso</a>`:""}
+    </div></div>`);
 }
 
 /* ============================================================
@@ -803,9 +887,7 @@ async function viewCoursesClient(){
   const m=$("#main"); m.innerHTML=head("Formación","Cursos","Contenido publicado por InveXia.");
   if(!cs.length){ m.append(el(`<div class="card empty">${icon("book")}<p style="margin-top:.4rem">Aún no hay cursos publicados.</p></div>`)); return; }
   const g=el(`<div class="grid grid-3"></div>`);
-  cs.forEach(c=>g.append(el(`<div class="card"><span class="pill pill-blue">${esc(c.level||"Curso")}</span>
-    <h3 style="margin:.6rem 0 .3rem">${esc(c.title)}</h3><p class="card-sub">${esc(c.description||"")}</p>
-    ${c.url?`<a class="btn btn-ghost btn-sm" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir curso</a>`:""}</div>`)));
+  cs.forEach(c=>g.append(courseCard(c)));
   m.append(g);
 }
 async function viewCalendarClient(){
@@ -925,6 +1007,17 @@ async function viewAdminClient(uid){
     await renderPortfolioBody(m,pf,holds,true);
   }
 
+  // zona de peligro
+  m.append(el(`<div class="card danger mt2">
+    <h3>Zona de peligro</h3>
+    <p class="card-sub">Eliminar la cuenta de <b>${esc(client.full_name||client.email)}</b> borra de forma permanente
+      su perfil de riesgo, su cartera, sus posiciones y toda la conversación. No hay forma de deshacerlo.</p>
+    <div class="flex">
+      <button class="btn btn-ghost btn-sm" onclick="app.exportClient('${uid}')">Exportar sus datos antes (JSON)</button>
+      <button class="btn btn-danger btn-sm" onclick="app.confirmDelete('${uid}','${esc(client.full_name||client.email).replace(/'/g,"\\'")}')">Eliminar cuenta</button>
+    </div>
+  </div>`));
+
   state.cache.edit={ uid, pf, alloc:{...a}, holds:holds.map(h=>({...h})) };
   renderAllocEditor(); renderHoldList();
 }
@@ -985,6 +1078,7 @@ async function viewPostsAdmin(){
   if(!posts.length){ m.append(el(`<div class="card empty">${icon("news")}<p style="margin-top:.4rem">Aún no has publicado nada.</p></div>`)); return; }
   const list=el(`<div class="mt"></div>`);
   posts.forEach(p=>list.append(el(`<div class="list-item">
+    ${p.image_url?`<img class="thumb" src="${esc(p.image_url)}" alt="" loading="lazy">`:""}
     <div class="li-main"><div class="flex" style="gap:.5rem">
       <span class="pill ${p.kind==='idea'?'pill-blue':''}" style="${p.kind!=='idea'?'color:var(--faint)':''}">${p.kind==="idea"?"Idea":"Noticia"}</span>
       ${p.ticker?`<span class="mono ticker" style="font-size:.8rem">${esc(p.ticker)}</span>`:""}</div>
@@ -1008,6 +1102,7 @@ async function viewCoursesAdmin(){
   if(!cs.length){ m.append(el(`<div class="card empty">${icon("book")}<p style="margin-top:.4rem">Aún no has creado cursos.</p></div>`)); return; }
   const list=el(`<div class="mt"></div>`);
   cs.forEach(c=>list.append(el(`<div class="list-item">
+    ${c.image_url?`<img class="thumb" src="${esc(c.image_url)}" alt="" loading="lazy">`:""}
     <div class="li-main"><b>${esc(c.title)}</b><span>${esc(c.level||"")} · ${c.published?"Publicado":"Borrador"}</span></div>
     <div class="flex"><button class="btn btn-ghost btn-sm" onclick="app.togglePub('${c.id}',${!c.published})">${c.published?"Ocultar":"Publicar"}</button>
       <button class="btn btn-ghost btn-sm" onclick="app.delCourse('${c.id}')">Eliminar</button></div></div>`)));
@@ -1157,6 +1252,29 @@ const app = {
     await loadThread(clientId);
   },
 
+  // imágenes
+  previewImage(id,url){
+    const box=$("#prev_"+id);
+    if(!url){ box.innerHTML="<span>Sin imagen</span>"; box.classList.remove("has"); return; }
+    box.classList.add("has");
+    box.innerHTML=`<img src="${esc(url)}" alt="" onerror="this.parentNode.classList.remove('has');this.parentNode.innerHTML='<span>No se pudo cargar</span>'">`;
+  },
+  async pickImage(id,input){
+    const file=input.files?.[0]; if(!file) return;
+    const box=$("#prev_"+id);
+    box.classList.add("has"); box.innerHTML='<span class="spinner"></span>';
+    try{
+      const url=await uploadImage(file, id==="post"?"posts":"courses");
+      $("#url_"+id).value=url; app.previewImage(id,url);
+      ui.toast("Imagen subida","ok");
+    }catch(e){
+      app.clearImage(id);
+      ui.toast(/bucket|not found/i.test(e.message)?"Falta ejecutar migration_v4.sql en Supabase":e.message,"err");
+    }
+    input.value="";
+  },
+  clearImage(id){ $("#url_"+id).value=""; app.previewImage(id,""); },
+
   // publicaciones
   postForm(){
     const box=$("#postForm"); if(box.dataset.open){ box.innerHTML=""; box.dataset.open=""; return; }
@@ -1164,6 +1282,7 @@ const app = {
     box.innerHTML=`<div class="card">
       <div class="field" style="max-width:200px"><label>Tipo</label>
         <select id="pKind" class="input" onchange="app.postKindChange()"><option value="noticia">Noticia</option><option value="idea">Idea de inversión</option></select></div>
+      <div class="field"><label>Imagen de portada</label>${imagePicker("post")}</div>
       <div class="field"><label>Título</label><input id="pTitle" class="input"></div>
       <div class="field"><label>Contenido / tesis</label><textarea id="pBody" class="input"></textarea></div>
       <div class="field"><label>Enlace a la fuente (opcional)</label><input id="pUrl" class="input" placeholder="https://…"></div>
@@ -1184,6 +1303,7 @@ const app = {
     const t=$("#pTitle").value.trim(); if(!t) return ui.toast("Ponle un título","err");
     const kind=$("#pKind").value;
     const row={ kind, title:t, body:$("#pBody").value.trim(), source_url:$("#pUrl").value.trim()||null,
+      image_url:$("#url_post").value.trim()||null,
       published:$("#pPub").checked, created_by:state.profile.id };
     if(kind==="idea"){
       row.ticker=$("#pTicker").value.trim().toUpperCase()||null;
@@ -1198,11 +1318,73 @@ const app = {
   async closeIdea(id,status){ await sb.from("posts").update({status}).eq("id",id); render(); },
   async delPost(id){ if(!confirm("¿Eliminar esta publicación?"))return; await sb.from("posts").delete().eq("id",id); render(); },
 
+  // eliminación de clientes
+  async exportClient(uid){
+    const [p,ra,pfs,msgs]=await Promise.all([
+      sb.from("profiles").select("*").eq("id",uid).single().then(r=>r.data),
+      sb.from("risk_assessments").select("*").eq("user_id",uid).then(r=>r.data),
+      sb.from("portfolios").select("*").eq("user_id",uid).then(r=>r.data),
+      sb.from("messages").select("*").eq("client_id",uid).then(r=>r.data),
+    ]);
+    const ids=(pfs||[]).map(x=>x.id);
+    const holds= ids.length ? await sb.from("holdings").select("*").in("portfolio_id",ids).then(r=>r.data) : [];
+    const dump={ exportado:new Date().toISOString(), perfil:p, evaluaciones:ra,
+                 carteras:pfs, posiciones:holds, mensajes:msgs };
+    const blob=new Blob([JSON.stringify(dump,null,2)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download=`invexia-${(p?.full_name||uid).replace(/\s+/g,"-").toLowerCase()}.json`; a.click();
+    ui.toast("Datos exportados","ok");
+  },
+  confirmDelete(uid,name){
+    const old=$("#modal"); if(old) old.remove();
+    const modal=el(`<div id="modal" class="modal-bg">
+      <div class="modal">
+        <h3>Eliminar cuenta</h3>
+        <p class="card-sub">Vas a eliminar permanentemente a <b>${esc(name)}</b> y todos sus datos:
+          perfil de riesgo, cartera, posiciones y mensajes. <b>Esta acción no se puede deshacer.</b></p>
+        <div class="field"><label>Para confirmar, escribe <b class="mono">ELIMINAR</b></label>
+          <input id="delWord" class="input mono" placeholder="ELIMINAR" autocomplete="off"></div>
+        <div class="flex between mt">
+          <button class="btn btn-ghost btn-sm" onclick="app.closeModal()">Cancelar</button>
+          <button id="delBtn" class="btn btn-danger btn-sm" disabled onclick="app.doDelete('${uid}')">Eliminar definitivamente</button>
+        </div>
+        <div id="delMsg" class="msg-line"></div>
+      </div></div>`);
+    document.body.append(modal);
+    const inp=$("#delWord",modal);
+    inp.focus();
+    inp.oninput=()=>{ $("#delBtn").disabled = inp.value.trim().toUpperCase()!=="ELIMINAR"; };
+    modal.onclick=(e)=>{ if(e.target===modal) app.closeModal(); };
+  },
+  closeModal(){ $("#modal")?.remove(); },
+  async doDelete(uid){
+    const btn=$("#delBtn"), box=$("#delMsg");
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
+    box.className="msg-line";
+    try{
+      const { data:{ session } } = await sb.auth.getSession();
+      const r=await fetch("/api/delete-user",{ method:"POST",
+        headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token },
+        body:JSON.stringify({ userId:uid }) });
+      const ct=r.headers.get("content-type")||"";
+      if(!ct.includes("application/json")) throw new Error("La función /api/delete-user no está desplegada.");
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.message||d.error||"Error desconocido");
+      app.closeModal();
+      ui.toast("Cuenta eliminada","ok");
+      location.hash="#/clientes";
+    }catch(e){
+      box.textContent=e.message; box.classList.add("err");
+      btn.disabled=false; btn.textContent="Eliminar definitivamente";
+    }
+  },
+
   // cursos
   courseForm(){
     const box=$("#courseForm"); if(box.dataset.open){ box.innerHTML=""; box.dataset.open=""; return; }
     box.dataset.open="1";
     box.innerHTML=`<div class="card">
+      <div class="field"><label>Imagen de referencia</label>${imagePicker("course")}</div>
       <div class="field"><label>Título</label><input id="cT" class="input"></div>
       <div class="flex" style="gap:.8rem"><div class="field" style="flex:1"><label>Nivel</label>
         <select id="cL" class="input"><option>Básico</option><option>Intermedio</option><option>Avanzado</option></select></div>
@@ -1214,7 +1396,8 @@ const app = {
   async saveCourse(){
     const t=$("#cT").value.trim(); if(!t) return ui.toast("Ponle un título","err");
     const {error}=await sb.from("courses").insert({ title:t, level:$("#cL").value,
-      url:$("#cU").value.trim()||null, description:$("#cD").value.trim(), published:$("#cP").checked });
+      url:$("#cU").value.trim()||null, description:$("#cD").value.trim(),
+      image_url:$("#url_course").value.trim()||null, published:$("#cP").checked });
     if(error) return ui.toast(error.message,"err");
     ui.toast("Curso creado","ok"); render();
   },

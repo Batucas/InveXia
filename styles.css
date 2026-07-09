@@ -353,3 +353,62 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 
 /* --- Nombres largos de instrumentos: que envuelvan con gracia --- */
 .tbl td b{overflow-wrap:anywhere}
+
+/* ============================================================
+   v2.2 · Zona de peligro y modal de confirmación
+   ============================================================ */
+.card.danger{border-color:rgba(248,113,113,.32);
+  background:linear-gradient(180deg,rgba(248,113,113,.05),var(--navy-900))}
+.card.danger h3{color:var(--bad)}
+
+.btn-danger{background:rgba(248,113,113,.14);color:var(--bad);border:1px solid rgba(248,113,113,.45)}
+.btn-danger:hover:not([disabled]){background:var(--bad);color:#fff;border-color:var(--bad)}
+
+.modal-bg{position:fixed;inset:0;background:rgba(3,7,15,.78);backdrop-filter:blur(3px);
+  display:grid;place-items:center;z-index:60;padding:1.2rem;animation:fade .16s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{background:var(--navy-850);border:1px solid var(--line-strong);border-radius:var(--r-lg);
+  padding:1.6rem;max-width:440px;width:100%;box-shadow:var(--shadow)}
+.modal h3{color:var(--bad);margin-bottom:.4rem}
+.modal .card-sub{margin-bottom:1.2rem}
+.modal .msg-line{text-align:right}
+
+/* ============================================================
+   v2.3 · Feed con imágenes
+   ============================================================ */
+
+/* --- franjas de estado en el inicio --- */
+.banner{display:flex;align-items:center;justify-content:space-between;gap:1.4rem;flex-wrap:wrap;
+  background:linear-gradient(100deg,rgba(46,125,246,.16),rgba(45,212,191,.06));
+  border:1px solid rgba(46,125,246,.3);border-radius:var(--r-lg);padding:1.3rem 1.5rem;margin-bottom:1.8rem}
+.strip{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;background:var(--navy-850);
+  border:1px solid var(--line);border-radius:var(--r-md);padding:.75rem 1rem;margin-bottom:1.8rem;
+  font-size:.9rem;color:var(--muted)}
+
+/* --- tarjetas con portada --- */
+.media-card{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.media-card .media-body{padding:1.2rem 1.3rem 1.3rem}
+.cover{aspect-ratio:16/9;background:var(--navy-800);overflow:hidden;position:relative;flex:0 0 auto}
+.cover img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .4s ease}
+.media-card:hover .cover img{transform:scale(1.03)}
+.cover.ph{display:grid;place-items:center;
+  background:radial-gradient(120% 100% at 30% 0%, color-mix(in srgb, var(--accent, var(--blue-500)) 26%, transparent), transparent 70%), var(--navy-850);
+  border-bottom:1px solid var(--line)}
+.cover.ph span{font-family:'JetBrains Mono',monospace;font-size:1.05rem;letter-spacing:.18em;
+  color:var(--accent,var(--blue-400));opacity:.75}
+.cover.ph .spinner{border-color:rgba(255,255,255,.25);border-top-color:var(--blue-400)}
+.card.idea.media-card{border-left:3px solid var(--blue-500)}
+
+/* --- selector de imagen (admin) --- */
+.imgpick{display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap}
+.imgpick-preview{width:180px;aspect-ratio:16/9;border:1px dashed var(--line-strong);border-radius:var(--r-sm);
+  background:var(--navy-900);display:grid;place-items:center;overflow:hidden;flex:0 0 auto}
+.imgpick-preview.has{border-style:solid}
+.imgpick-preview span{color:var(--faint);font-size:.78rem}
+.imgpick-preview img{width:100%;height:100%;object-fit:cover}
+.imgpick-ctrl{flex:1;min-width:220px;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.imgpick-ctrl .input{flex:1 0 100%;font-size:.82rem}
+.imgpick-hint{flex:1 0 100%;color:var(--faint);font-size:.72rem}
+
+/* --- miniaturas en listas del admin --- */
+.thumb{width:64px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex:0 0 auto}
