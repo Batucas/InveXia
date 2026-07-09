@@ -431,15 +431,23 @@ async function fetchQuotes(symbols){
   if(!symbols.length) return { ok:true, quotes:{} };
   try{
     const r=await fetch("/api/quotes?symbols="+encodeURIComponent(symbols.join(",")));
+    if(r.status===404) return { ok:false, error:"no_api",
+      message:"La función /api/quotes no está desplegada. ¿Subiste la carpeta api/ a GitHub?" };
+    const ct=r.headers.get("content-type")||"";
+    if(!ct.includes("application/json")) return { ok:false, error:"no_api",
+      message:"El servidor no devolvió datos. En local usa 'npx vercel dev'." };
     return await r.json();
-  }catch(e){ return { ok:false, error:"offline" }; }
+  }catch(e){ return { ok:false, error:"offline", message:"Sin conexión con el servidor de precios." }; }
 }
 // Precio efectivo de una posición: mercado > manual > costo
+// OJO: usar Number.isFinite, NO isFinite (isFinite(null)===true).
 function priceOf(h,quotes){
   const q = h.ticker ? quotes?.[h.ticker] : null;
-  if(q && isFinite(q.price)) return { price:q.price, src:"mercado", percent:q.percent };
-  if(isFinite(num(h.manual_price))) return { price:num(h.manual_price), src:"manual" };
-  if(isFinite(num(h.avg_cost))) return { price:num(h.avg_cost), src:"costo" };
+  if(q && Number.isFinite(q.price)) return { price:q.price, src:"mercado", percent:q.percent };
+  const man = num(h.manual_price);
+  if(Number.isFinite(man)) return { price:man, src:"manual" };
+  const cost = num(h.avg_cost);
+  if(Number.isFinite(cost)) return { price:cost, src:"costo" };
   return { price:null, src:"—" };
 }
 function perfOf(holds,quotes){
@@ -447,9 +455,9 @@ function perfOf(holds,quotes){
   const rows=holds.map(h=>{
     const q=num(h.quantity), c=num(h.avg_cost);
     const { price,src,percent }=priceOf(h,quotes);
-    const hasPos = q>0 && c>0;
+    const hasPos = Number.isFinite(q) && q>0 && Number.isFinite(c) && c>0;
     if(hasPos) executed=true;
-    const v = hasPos && price!=null ? q*price : null;
+    const v = (hasPos && Number.isFinite(price)) ? q*price : null;
     const k = hasPos ? q*c : null;
     if(v!=null) value+=v;
     if(k!=null) cost+=k;
@@ -504,7 +512,8 @@ async function renderPortfolioBody(m,pf,holds,isAdmin){
       El rendimiento aparecerá cuando ${isAdmin?"registres":"tu asesor registre"} cantidades y precios de entrada.</div>`));
   }
   if(qr.ok===false && tickers.length){
-    m.append(el(`<div class="notice warn">No se pudieron obtener precios de mercado (${esc(qr.error||"error")}). Se usan precios manuales o de costo.</div>`));
+    m.append(el(`<div class="notice warn">Precios de mercado no disponibles: ${esc(qr.message||qr.error||"error")}
+      <br>Se muestran precios manuales o el precio de entrada.</div>`));
   }
 
   const wrap=el(`<div class="quad-wrap"></div>`);
@@ -534,7 +543,7 @@ async function renderPortfolioBody(m,pf,holds,isAdmin){
         <td><b>${esc(h.name)}</b>${h.ticker?` <span class="mono" style="color:var(--faint)">${esc(h.ticker)}</span>`:""}
           <br><span class="pill" style="color:${c.color};font-size:.66rem">${c.label}</span></td>
         <td style="text-align:right" class="mono">${h.price!=null?money(h.price,cur):"—"}
-          ${h.src==="mercado"&&isFinite(h.dayPct)?`<br><span class="mono ${sgn(h.dayPct)}" style="font-size:.72rem">${pct(h.dayPct)}</span>`
+          ${h.src==="mercado"&&Number.isFinite(h.dayPct)?`<br><span class="mono ${sgn(h.dayPct)}" style="font-size:.72rem">${pct(h.dayPct)}</span>`
             :`<br><span style="font-size:.66rem;color:var(--faint)">${h.src}</span>`}</td>
         <td style="text-align:right" class="mono">${P.executed&&h.value!=null?money(h.value,cur):(h.target_weight??"—")+(P.executed?"":"%")}</td>
         <td style="text-align:right" class="mono ${sgn(h.pnlPct)}">${h.pnlPct!=null?pct(h.pnlPct):"—"}</td></tr>`));
