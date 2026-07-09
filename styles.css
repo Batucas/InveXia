@@ -253,3 +253,64 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
   .card{border-color:#ccc;background:#fff;box-shadow:none}
   .quad{background:#f7f9fc}
 }
+
+/* ============================================================
+   v2 · Objetivos, simulador, feed, rendimiento
+   ============================================================ */
+.pos{color:var(--ok)} .neg{color:var(--bad)}
+.stat .v.pos{color:var(--ok)} .stat .v.neg{color:var(--bad)}
+.stat .d.pos{color:var(--ok)} .stat .d.neg{color:var(--bad)}
+
+.kv{display:flex;justify-content:space-between;gap:1rem;padding:.35rem 0;font-size:.88rem;border-bottom:1px solid var(--line)}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--muted)} .kv b{color:var(--text);font-weight:600}
+.k-mini{color:var(--faint);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.15rem}
+
+.notice{background:rgba(46,125,246,.09);border:1px solid rgba(46,125,246,.3);border-radius:var(--r-md);
+  padding:.8rem 1rem;font-size:.88rem;color:var(--muted);margin-bottom:1.2rem}
+.notice b{color:var(--text)}
+.notice.warn{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.32)}
+
+/* tabs del simulador */
+.tabs{display:flex;background:var(--navy-850);border:1px solid var(--line);border-radius:var(--r-md);padding:3px}
+.tab{border:0;background:transparent;color:var(--muted);padding:.45rem .9rem;border-radius:9px;
+  font-weight:600;font-size:.85rem;transition:.15s;font-family:inherit}
+.tab.on{background:var(--blue-600);color:#fff}
+
+/* rangos */
+input[type=range]{-webkit-appearance:none;appearance:none;height:5px;background:var(--navy-800);
+  border-radius:6px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--blue-400);cursor:pointer;border:2px solid var(--navy-950)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--blue-400);
+  cursor:pointer;border:2px solid var(--navy-950)}
+input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
+
+/* gráficos */
+.chart{background:var(--navy-950);border:1px solid var(--line);border-radius:var(--r-md);padding:.8rem;overflow:hidden}
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;margin-top:.7rem;font-size:.78rem;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:.4rem}
+.legend i{width:14px;height:8px;border-radius:2px;display:inline-block}
+
+/* ideas de inversión */
+.ticker{background:var(--navy-800);border:1px solid var(--line-strong);border-radius:6px;
+  padding:.18rem .5rem;font-weight:600;color:var(--blue-300);font-size:.85rem}
+.card.idea{border-left:3px solid var(--blue-500)}
+
+/* editor de posiciones (admin) */
+.hold{border:1px solid var(--line);border-radius:var(--r-md);background:var(--navy-850);
+  padding:.8rem;margin-bottom:.7rem}
+.hold-r1{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.hold-r1 .input:nth-child(1){flex:2;min-width:150px}
+.hold-r1 .input:nth-child(2){flex:1;min-width:110px}
+.hold-r1 select{flex:1;min-width:120px}
+.hold-r1 .input:nth-child(4){width:88px}
+.hold-r2{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-top:.6rem;
+  padding-top:.6rem;border-top:1px dashed var(--line)}
+.hold-r2 label{display:block;font-size:.7rem;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.hold-r2 .input{margin-top:.25rem;padding:.5rem .6rem;font-size:.85rem}
+@media(max-width:760px){ .hold-r2{grid-template-columns:1fr 1fr} }
+
+/* accesibilidad */
+:focus-visible{outline:2px solid var(--blue-400);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}

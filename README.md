@@ -1,70 +1,113 @@
-# InveXia · Plataforma de gestión de inversiones (piloto)
+# InveXia · Plataforma de gestión de inversiones
 
-Frontend estático (HTML/CSS/JS, sin build) + **Supabase** (auth + base de datos con RLS).
-Se despliega en **Vercel** o **Netlify** en minutos.
+Frontend estático (HTML/CSS/JS) + **Supabase** (auth + base de datos con RLS)
++ una **función serverless** en Vercel para las cotizaciones de mercado.
 
-## Qué incluye
-- **Cliente:** registro/login → cuestionario de riesgo (2 ejes, 5 bandas) → espera de cartera → vista de cartera (donut + posiciones) → cursos, calendario y mensajes al asesor.
-- **Admin (tú):** lista de clientes con su perfil, **constructor de cartera** (asignación por clase + instrumentos + nota + publicar), gestor de cursos, calendario y bandeja de mensajes.
-- Perfil de riesgo **exportable** (PDF vía impresión + JSON).
+## Módulos
+**Cliente:** registro (nombre, celular) → cuestionario (objetivo + plan de aportes + dos ejes de riesgo)
+→ cartera con rendimiento en vivo → simulador de aportes → mercado e ideas → cursos, calendario, mensajes.
+
+**Administrador:** clientes (con objetivo, perfil, celular y enlace a WhatsApp), constructor de cartera
+(asignación objetivo + posiciones con cantidad y precio de entrada), noticias e ideas de inversión,
+cursos, calendario y bandeja de mensajes.
 
 ---
 
-## Paso 1 · Crear el proyecto Supabase
-1. Entra a https://supabase.com → **New project** (elige región cercana, p. ej. São Paulo).
-2. Cuando esté listo, abre **SQL Editor → New query**, pega **todo** `schema.sql` y pulsa **Run**.
-3. Ve a **Authentication → Providers → Email** y **desactiva "Confirm email"** (para el piloto, así el login es inmediato tras registrarse).
-4. En **Project Settings → API** copia:
-   - **Project URL**
-   - **anon public key**
+# ────────  ACTUALIZACIÓN v2  ────────
+Si ya tenías la v1 corriendo, sigue estos 3 pasos.
 
-## Paso 2 · Configurar
-Abre `config.js` y pega esos dos valores:
-```js
-export const SUPABASE_URL = "https://tuproyecto.supabase.co";
-export const SUPABASE_ANON_KEY = "eyJ...";
-```
-> La anon key es pública por diseño; la seguridad real la aplican las políticas RLS del esquema.
+## Paso 1 · Actualizar la base de datos
+Supabase → **SQL Editor → New query** → pega todo `migration_v2.sql` → **Run**.
+Es seguro: solo agrega columnas y la tabla `posts`. No borra nada.
 
-## Paso 3 · Convertirte en administrador
-1. Abre la app (localmente o desplegada) y **regístrate** con tu correo.
-2. En Supabase → **SQL Editor**, ejecuta:
-```sql
-update public.profiles set role='admin' where email='TU_CORREO';
-```
-3. Cierra sesión y vuelve a entrar: verás el panel de administrador.
-Cualquier otro registro entra como **cliente** automáticamente.
+## Paso 2 · Conseguir tu llave de precios de mercado
+1. Crea una cuenta gratis en **https://twelvedata.com** (plan Basic).
+2. Copia tu **API key** del panel.
 
-## Paso 4 · Desplegar
-**Netlify (lo más rápido):** entra a https://app.netlify.com → arrastra la carpeta `invexia/` a la zona de deploy. Listo.
+Plan gratuito: 800 créditos por día (se reinician a medianoche UTC) y 8 por minuto.
+Cada símbolo consulta 1 crédito. La app cachea 60 s, así que una cartera de 10 instrumentos
+consultada decenas de veces al día cabe de sobra.
 
-**Vercel:** sube la carpeta a un repo de GitHub → https://vercel.com → *Add New Project* → importa el repo → *Deploy* (sin configuración; es estático).
+## Paso 3 · Configurar la llave en Vercel
+Vercel → tu proyecto → **Settings → Environment Variables** → **Add New**:
 
-Tras desplegar, en Supabase → **Authentication → URL Configuration** agrega tu URL pública (p. ej. `https://invexia.vercel.app`) como *Site URL*.
+| Campo   | Valor                    |
+|---------|--------------------------|
+| Name    | `TWELVEDATA_API_KEY`     |
+| Value   | *(tu API key)*           |
+| Environments | marca las tres (Production, Preview, Development) |
+
+Guarda, ve a **Deployments** y pulsa **Redeploy** en el último despliegue
+(las variables solo se aplican en un despliegue nuevo).
+
+Sube los archivos nuevos a GitHub (Commit + Push) y listo. La carpeta `api/`
+debe quedar en la raíz del repo, junto a `index.html`.
+
+> Si no configuras la llave, la app **no se rompe**: muestra un aviso y usa los
+> precios manuales o el costo de entrada.
+
+---
+
+## Cómo funciona el rendimiento
+Cada posición tiene dos capas:
+- **Peso objetivo** (`target_weight`) → la cartera que *debería* tener el cliente. Es lo único obligatorio.
+- **Cantidad + precio de entrada** (`quantity`, `avg_cost`) → la cartera *realmente ejecutada*.
+
+Mientras no cargues cantidades, el cliente ve su cartera objetivo y un aviso.
+Apenas registras cantidad y precio de entrada de al menos una posición, aparecen automáticamente:
+valor actual, capital invertido, P&L global y por instrumento, y la **desviación (drift)**
+de cada clase de activo respecto a su objetivo (la barra blanca marca el objetivo).
+
+**Precio efectivo** de cada posición, en orden de prioridad:
+1. Precio de mercado (si tiene ticker y Twelve Data lo devuelve)
+2. `manual_price` — para DPF, bonos de la BBV, acciones bolivianas y cualquier cosa sin feed
+3. `avg_cost` — último recurso
+
+Tickers: acciones y ETFs en formato normal (`VOO`, `AAPL`); cripto como par (`BTC/USD`, `ETH/USD`).
+
+## Simulador de aportes
+Dos pestañas, ambas calibradas con el retorno (μ) y la volatilidad (σ) de la banda de riesgo del cliente,
+editables con sliders:
+
+- **Determinista** — capitalización mensual con aportes al final de cada mes. Separa el capital
+  aportado del interés generado.
+- **Monte Carlo** — 1 000 trayectorias de un movimiento browniano geométrico con aportes mensuales:
+  `V(t+1) = V(t)·exp((μ − σ²/2)·Δt + σ·√Δt·Z) + aporte`. Muestra abanico de percentiles
+  (p10–p90, p25–p75, mediana) y, si el cliente fijó un monto meta, la **probabilidad de alcanzarla**.
+
+Supuestos por banda (anuales, referenciales):
+
+| Banda | Perfil | μ | σ |
+|---|---|---|---|
+| 1 | Conservador | 4,5 % | 5 % |
+| 2 | Moderado-Conservador | 6,0 % | 8 % |
+| 3 | Moderado | 7,5 % | 11 % |
+| 4 | Moderado-Agresivo | 9,0 % | 15 % |
+| 5 | Agresivo | 10,5 % | 19 % |
+
+No son promesas de rentabilidad. Ajústalos si tienes mejores estimaciones para tu universo de inversión.
+
+---
+
+## Instalación desde cero
+1. **Supabase:** crea proyecto → SQL Editor → corre `schema.sql` y luego `migration_v2.sql`.
+2. **Auth:** Authentication → Providers → Email → desactiva *Confirm email*.
+3. **config.js:** pega tu Project URL y tu llave *publishable* (`sb_publishable_…`) o *anon*.
+4. **GitHub → Vercel:** sube el repo, importa en Vercel, Deploy. Añade `TWELVEDATA_API_KEY`.
+5. **Hazte admin:** regístrate en el sitio y luego en SQL Editor:
+   ```sql
+   update public.profiles set role='admin' where email='TU_CORREO';
+   ```
+   Cierra sesión y vuelve a entrar.
 
 ## Probar en local
-Necesita un servidor (por los módulos ES). Con Node:
 ```bash
-npx serve invexia
+npx serve invexia      # o: cd invexia && python3 -m http.server 5173
 ```
-o con Python:
-```bash
-cd invexia && python3 -m http.server 5173
-```
-Abre `http://localhost:5173`.
+Nota: en local `/api/quotes` no existe (es de Vercel). La app lo detecta y usa precios manuales.
+Para probar la API en local: `npx vercel dev`.
 
----
-
-## Lógica del perfil de riesgo
-- **Eje 1 — Disposición** (5 preguntas actitudinales) y **Eje 2 — Capacidad** (5 preguntas objetivas). Cada eje se puntúa y se traduce a una banda 1–5.
-- **Perfil final = mínimo(disposición, capacidad)**, y además **acotado por el horizonte** (un horizonte corto limita el nivel máximo). Es la regla defendible y auditable: nadie con baja capacidad termina en una cartera agresiva.
-- Cada banda trae una **asignación sugerida** (liquidez / renta fija / renta variable / cripto) que puedes sobrescribir al construir la cartera real.
-
-## Próximos módulos (cuando quieras)
-- Chatbot integrado en Mensajes.
-- Rendimiento real de la cartera (precios + valorización).
-- Pagos / cobro de comisión (recuerda el marco ASFI–PSAV antes de manejar dinero real).
-- Roles de "asesor" además de admin, y multi-asesor.
-
-## Nota
-Piloto de software. La administración de dinero de terceros por comisión y la custodia/operación de criptoactivos en Bolivia están reguladas por ASFI (figuras ETF/PSAV). Consulta a un abogado antes de operar con dinero real.
+## Nota regulatoria
+Piloto de software. La administración de dinero de terceros por comisión y la custodia u operación
+de criptoactivos en Bolivia están reguladas por ASFI (figuras ETF / PSAV). Consulta a un abogado
+antes de operar con dinero real de clientes.
