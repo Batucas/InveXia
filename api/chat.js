@@ -119,7 +119,18 @@ ESTILO
 
     if (!r.ok) {
       const detail = await r.text();
-      return res.status(502).json({ ok: false, error: "anthropic", message: detail.slice(0, 300) });
+      let friendly = "El asistente no está disponible en este momento.";
+      if (/credit balance is too low|insufficient/i.test(detail))
+        friendly = "El asistente está sin créditos. El administrador debe recargar saldo en console.anthropic.com (Plans & Billing).";
+      else if (/rate_limit|429/i.test(detail))
+        friendly = "Demasiadas consultas seguidas. Espera unos segundos y vuelve a intentar.";
+      else if (/authentication|invalid x-api-key|401/i.test(detail))
+        friendly = "La llave del asistente no es válida. Revisa ANTHROPIC_API_KEY en Vercel.";
+      else if (/overloaded|529/i.test(detail))
+        friendly = "El servicio está saturado. Intenta de nuevo en un momento.";
+      else if (/not_found|model/i.test(detail))
+        friendly = "El modelo configurado no está disponible para esta cuenta.";
+      return res.status(502).json({ ok: false, error: "anthropic", message: friendly });
     }
     const data = await r.json();
     const text = (data.content || [])

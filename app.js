@@ -990,8 +990,13 @@ function renderBot(){
   const box=$("#chat"); if(!box) return;
   if(!state.cache.bot.length) return;
   box.innerHTML="";
-  state.cache.bot.forEach(x=>box.append(el(
-    `<div class="bubble ${x.role==="user"?"me":"them"}">${esc(x.content).replace(/\n/g,"<br>")}</div>`)));
+  state.cache.bot.forEach(x=>{
+    if(x.role==="error"){
+      box.append(el(`<div class="bot-error">${icon("bell")}<span>${esc(x.content)}</span></div>`));
+    } else {
+      box.append(el(`<div class="bubble ${x.role==="user"?"me":"them"}">${esc(x.content).replace(/\n/g,"<br>")}</div>`));
+    }
+  });
   box.scrollTop=box.scrollHeight;
 }
 
@@ -1421,14 +1426,14 @@ const app = {
       const { data:{ session } }=await sb.auth.getSession();
       const r=await fetch("/api/chat",{ method:"POST",
         headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token },
-        body:JSON.stringify({ messages:state.cache.bot }) });
+        body:JSON.stringify({ messages:state.cache.bot.filter(x=>x.role!=="error") }) });
       const ct=r.headers.get("content-type")||"";
       if(!ct.includes("application/json")) throw new Error("La función /api/chat no está desplegada.");
       const d=await r.json();
       if(!d.ok) throw new Error(d.message||d.error||"Error del asistente");
       state.cache.bot.push({role:"assistant",content:d.reply});
     }catch(e){
-      state.cache.bot.push({role:"assistant",content:"⚠ "+e.message});
+      state.cache.bot.push({role:"error",content:e.message});
     }
     btn.disabled=false; renderBot(); $("#botIn")?.focus();
   },

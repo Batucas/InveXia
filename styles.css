@@ -442,3 +442,32 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 
 /* --- asistente --- */
 #chat .bubble .spinner{width:16px;height:16px;display:block}
+
+/* ============================================================
+   v2.5 · Menú lateral con desplazamiento
+   ------------------------------------------------------------
+   En pantallas bajas el menú del cliente (11 ítems) no cabía.
+   Ahora la lista se desplaza y el bloque de usuario queda fijo abajo.
+   ============================================================ */
+.sidebar{overflow:hidden}
+.side-brand{flex:0 0 auto}
+.nav{flex:1 1 auto;overflow-y:auto;min-height:0;padding-right:2px;
+  scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+.nav::-webkit-scrollbar{width:6px}
+.nav::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:6px}
+.nav::-webkit-scrollbar-thumb:hover{background:var(--blue-600)}
+.nav::-webkit-scrollbar-track{background:transparent}
+.side-user{flex:0 0 auto}
+
+/* Difumina el borde superior de la lista al desplazarse */
+.nav{mask-image:linear-gradient(to bottom,transparent 0,#000 8px,#000 calc(100% - 8px),transparent 100%)}
+
+/* En móvil el menú también puede desplazarse por completo */
+@media(max-width:900px){ .sidebar{overflow-y:auto} }
+
+/* --- aviso de error del asistente (no es una respuesta del bot) --- */
+.bot-error{display:flex;align-items:flex-start;gap:.6rem;align-self:stretch;
+  background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.32);
+  border-radius:var(--r-md);padding:.7rem .9rem;color:var(--warn);font-size:.86rem;line-height:1.45}
+.bot-error svg{width:17px;height:17px;flex:0 0 auto;margin-top:1px}
+.bot-error span{color:var(--muted)}
