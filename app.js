@@ -516,7 +516,7 @@ async function renderPortfolioBody(m,pf,holds,isAdmin){
       <br>Se muestran precios manuales o el precio de entrada.</div>`));
   }
 
-  const wrap=el(`<div class="quad-wrap"></div>`);
+  const wrap=el(`<div class="pf-grid"></div>`);
   // composición
   const actual = P.executed ? actualWeights(P.rows,P.value) : null;
   wrap.append(el(`<div class="card">
@@ -535,6 +535,7 @@ async function renderPortfolioBody(m,pf,holds,isAdmin){
     ${qr.ts?`<span class="mono" style="color:var(--faint);font-size:.7rem">${fmtTime(qr.ts)}</span>`:""}</div>
     <p class="card-sub">${holds.length} instrumento(s).</p></div>`);
   if(holds.length){
+    const tw=el(`<div class="tbl-wrap"></div>`);
     const t=el(`<table class="tbl"><thead><tr><th>Instrumento</th><th style="text-align:right">Precio</th>
       <th style="text-align:right">${P.executed?"Valor":"Peso"}</th><th style="text-align:right">P&L</th></tr></thead><tbody></tbody></table>`);
     P.rows.forEach(h=>{
@@ -548,7 +549,7 @@ async function renderPortfolioBody(m,pf,holds,isAdmin){
         <td style="text-align:right" class="mono">${P.executed&&h.value!=null?money(h.value,cur):(h.target_weight??"—")+(P.executed?"":"%")}</td>
         <td style="text-align:right" class="mono ${sgn(h.pnlPct)}">${h.pnlPct!=null?pct(h.pnlPct):"—"}</td></tr>`));
     });
-    side.append(t);
+    tw.append(t); side.append(tw);
   } else side.append(el(`<p class="empty" style="padding:1rem">Aún no hay instrumentos detallados.</p>`));
   wrap.append(side);
   m.append(wrap);
@@ -840,8 +841,8 @@ async function viewAdminClients(){
     ${stat("Aportes mensuales",money(aum,"USD"),"comprometidos")}
   </div>`));
   if(!clients.length){ m.append(el(`<div class="card empty">${icon("users")}<p style="margin-top:.4rem">Aún no hay clientes registrados.</p></div>`)); return; }
-  const card=el(`<div class="card"><table class="tbl"><thead><tr>
-    <th>Cliente</th><th>Objetivo</th><th>Perfil</th><th>Cartera</th><th>Contacto</th></tr></thead><tbody></tbody></table></div>`);
+  const card=el(`<div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr>
+    <th>Cliente</th><th>Objetivo</th><th>Perfil</th><th>Cartera</th><th>Contacto</th></tr></thead><tbody></tbody></table></div></div>`);
   clients.forEach(c=>{
     const ra=raBy[c.id], st=pfBy[c.id];
     const band=ra?`<span class="mono" style="color:${cssv(BANDS[ra.final_band].cvar)}">●</span> ${esc(ra.band_label)}`:`<span style="color:var(--faint)">Pendiente</span>`;

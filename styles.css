@@ -314,3 +314,42 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 /* accesibilidad */
 :focus-visible{outline:2px solid var(--blue-400);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+
+/* ============================================================
+   v2.1 · Marca en móvil + tablas sin recortes
+   ============================================================ */
+
+/* --- Marca en la pantalla de acceso (solo móvil) --- */
+.auth-mobile-brand{display:none}
+@media(max-width:900px){
+  .auth-panel{align-items:flex-start;padding:2.2rem 1.4rem 3rem;min-height:100vh}
+  .auth-mobile-brand{display:block;text-align:center;margin-bottom:2rem}
+  .amb-mark{width:64px;height:64px;margin-bottom:.5rem}
+  .amb-name{font-family:'Sora';font-weight:700;font-size:2rem;letter-spacing:-.02em;line-height:1}
+  .amb-name .x{color:var(--blue-400)}
+  .amb-tag{font-size:.62rem;letter-spacing:.26em;text-transform:uppercase;color:var(--faint);margin-top:.45rem}
+  .amb-claim{font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;color:var(--blue-400);
+    margin-top:.7rem;font-weight:600}
+  .amb-pitch{color:var(--muted);font-size:.92rem;max-width:30ch;margin:1.1rem auto 0;line-height:1.5}
+  .auth-mobile-brand::after{content:"";display:block;width:56px;height:1px;
+    background:var(--line-strong);margin:1.6rem auto 0}
+}
+
+/* --- Tablas: nunca se recortan, hacen scroll si es necesario --- */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -.3rem;padding:0 .3rem}
+.tbl-wrap .tbl{min-width:400px}
+.tbl-wrap::-webkit-scrollbar{height:6px}
+.tbl-wrap::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:6px}
+
+/* --- Que las columnas del grid puedan encogerse (evita desbordes) --- */
+.quad-wrap{grid-template-columns:minmax(0,1fr) minmax(0,340px)}
+.quad-wrap > *{min-width:0}
+.grid > *{min-width:0}
+
+/* --- Cartera: la tabla necesita más ancho que el cuadrante --- */
+.pf-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:1.1rem;align-items:start}
+.pf-grid > *{min-width:0}
+@media(max-width:1000px){ .pf-grid{grid-template-columns:1fr} }
+
+/* --- Nombres largos de instrumentos: que envuelvan con gracia --- */
+.tbl td b{overflow-wrap:anywhere}
