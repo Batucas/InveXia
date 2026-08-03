@@ -40,7 +40,9 @@ export default async function handler(req, res) {
     const H = { authorization: auth, "content-type": "application/json", accept: "application/json" };
     const now = new Date().toISOString();
     const rid = Math.random().toString(36).slice(2, 7);
-    const ssn = `666-55-${String(1000 + Math.floor(Math.random() * 9000))}`;
+    // El SSN de prueba no puede empezar con 000 ni 666 (Alpaca los rechaza).
+    const area = 100 + Math.floor(Math.random() * 800);          // 100–899, nunca 000/666
+    const ssn = `${area === 666 ? 665 : area}-${10 + Math.floor(Math.random() * 89)}-${1000 + Math.floor(Math.random() * 9000)}`;
 
     // ---------- 1. Crear la cuenta ----------
     const accountBody = {
