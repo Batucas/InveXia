@@ -38,6 +38,22 @@ export default async function handler(req, res) {
 
     const auth = "Basic " + Buffer.from(`${ALPACA_KEY_ID}:${ALPACA_SECRET}`).toString("base64");
     const H = { authorization: auth, "content-type": "application/json", accept: "application/json" };
+
+    // ---------- MODO FONDEAR: si viene fundAccountId, solo acredita fondos ----------
+    const fundOnly = (req.body?.fundAccountId || "").trim();
+    if (fundOnly) {
+      const firm = process.env.ALPACA_FIRM_ACCOUNT_ID;
+      if (!firm) return res.status(500).json({ ok: false, error: "config", message: "Falta ALPACA_FIRM_ACCOUNT_ID en Vercel." });
+      const amount = String(req.body?.amount || "50000");
+      const jRes = await fetch(`${ALPACA_BASE}/v1/journals`, {
+        method: "POST", headers: H,
+        body: JSON.stringify({ from_account: firm, to_account: fundOnly, entry_type: "JNLC", amount, description: "Fondeo de prueba InveXia" }),
+      });
+      const j = await jRes.json().catch(() => ({}));
+      if (!jRes.ok) return res.status(400).json({ ok: false, error: "fund", message: j?.message || "El journal fue rechazado." });
+      return res.status(200).json({ ok: true, account_id: fundOnly, funded: true, fundMsg: `Depósito de $${amount} acreditado (${j.status || "ok"})` });
+    }
+
     const now = new Date().toISOString();
     const rid = Math.random().toString(36).slice(2, 7);
     // El SSN de prueba no puede empezar con 000 ni 666 (Alpaca los rechaza).
@@ -79,30 +95,28 @@ export default async function handler(req, res) {
 
     const accountId = account.id;
 
-    // ---------- 2. Fondear (ACH instantáneo en sandbox) ----------
+    // ---------- 2. Fondear (journal JNLC instantáneo desde la cuenta firma) ----------
     let funded = false, fundMsg = "";
-    try {
-      const relRes = await fetch(`${ALPACA_BASE}/v1/accounts/${accountId}/ach_relationships`, {
-        method: "POST", headers: H,
-        body: JSON.stringify({
-          account_owner_name: "Cliente Prueba", bank_account_type: "CHECKING",
-          bank_account_number: "32131231abc", bank_routing_number: "121000358",
-          nickname: "Banco de prueba",
-        }),
-      });
-      const rel = await relRes.json().catch(() => ({}));
-      if (relRes.ok && rel.id) {
-        const trRes = await fetch(`${ALPACA_BASE}/v1/accounts/${accountId}/transfers`, {
+    const firm = process.env.ALPACA_FIRM_ACCOUNT_ID;
+    if (!firm) {
+      fundMsg = "Cuenta creada, sin fondear: falta ALPACA_FIRM_ACCOUNT_ID en Vercel.";
+    } else {
+      try {
+        const jRes = await fetch(`${ALPACA_BASE}/v1/journals`, {
           method: "POST", headers: H,
-          body: JSON.stringify({ transfer_type: "ach", relationship_id: rel.id, amount: "50000", direction: "INCOMING" }),
+          body: JSON.stringify({
+            from_account: firm, to_account: accountId,
+            entry_type: "JNLC", amount: "50000",
+            description: "Fondeo de prueba InveXia",
+          }),
         });
-        const tr = await trRes.json().catch(() => ({}));
-        funded = trRes.ok;
-        fundMsg = trRes.ok ? `Depósito de $50 000 (${tr.status || "enviado"})` : (tr?.message || "El fondeo quedó pendiente.");
-      } else {
-        fundMsg = rel?.message || "No se pudo crear la relación bancaria de prueba.";
-      }
-    } catch (e) { fundMsg = "Fondeo no completado: " + e.message; }
+        const j = await jRes.json().catch(() => ({}));
+        funded = jRes.ok;
+        fundMsg = jRes.ok
+          ? `Depósito de $50 000 acreditado (${j.status || "ok"})`
+          : (j?.message || "El journal de fondeo fue rechazado.");
+      } catch (e) { fundMsg = "Fondeo no completado: " + e.message; }
+    }
 
     return res.status(200).json({
       ok: true,

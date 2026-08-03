@@ -1255,6 +1255,7 @@ async function viewAdminClient(uid){
     </div>
     <div class="flex mt" style="gap:.6rem;align-items:center;flex-wrap:wrap">
       <button id="setupBtn" class="btn btn-ghost btn-sm" onclick="app.createTestAccount('${uid}')">⚙️ Crear cuenta de prueba y fondear</button>
+      ${client.alpaca_account_id?`<button id="fundBtn" class="btn btn-ghost btn-sm" onclick="app.fundAccount('${esc(client.alpaca_account_id)}')">💵 Fondear cuenta vinculada</button>`:""}
       <span id="setupMsg" class="card-sub" style="margin:0"></span>
     </div>
   </div>`));
@@ -1544,9 +1545,26 @@ const app = {
     if(error) return ui.toast(error.message,"err");
     ui.toast(val?"Cuenta de inversión vinculada":"Vínculo eliminado","ok");
   },
+  async fundAccount(accountId){
+    const btn=$("#fundBtn"), msg=$("#setupMsg");
+    btn.disabled=true; const prev=btn.textContent; btn.innerHTML='<span class="spinner"></span> Fondeando…';
+    msg.textContent="";
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const r=await fetch("/api/alpaca-setup",{ method:"POST",
+        headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token },
+        body:JSON.stringify({ fundAccountId:accountId, amount:"50000" }) });
+      const ct=r.headers.get("content-type")||"";
+      if(!ct.includes("application/json")) throw new Error("La función /api/alpaca-setup no está desplegada.");
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.message||"No se pudo fondear");
+      msg.innerHTML=`✓ ${esc(d.fundMsg||"Fondeada")}. El cliente ya puede comprar.`;
+      ui.toast("Cuenta fondeada","ok");
+    }catch(e){ msg.innerHTML=`<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+    finally{ btn.disabled=false; btn.textContent=prev; }
+  },
   async createTestAccount(uid){
     const btn=$("#setupBtn"), msg=$("#setupMsg");
-    btn.disabled=true; const prev=btn.textContent; btn.innerHTML='<span class="spinner"></span> Creando…';
     msg.textContent="";
     try{
       const { data:{ session } }=await sb.auth.getSession();
