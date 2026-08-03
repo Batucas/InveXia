@@ -44,6 +44,15 @@ export default async function handler(req, res) {
     if (fundOnly) {
       const firm = process.env.ALPACA_FIRM_ACCOUNT_ID;
       if (!firm) return res.status(500).json({ ok: false, error: "config", message: "Falta ALPACA_FIRM_ACCOUNT_ID en Vercel." });
+
+      // Verificar el estado de la cuenta antes de fondear
+      const stRes = await fetch(`${ALPACA_BASE}/v1/accounts/${fundOnly}`, { headers: { authorization: auth, accept: "application/json" } });
+      const st = await stRes.json().catch(() => ({}));
+      const status = st.status || "DESCONOClDO";
+      if (status !== "ACTIVE")
+        return res.status(400).json({ ok: false, error: "not_active",
+          message: `La cuenta aún no está activa (estado: ${status}). En sandbox la aprobación tarda unos segundos; espera un momento y vuelve a intentar.` });
+
       const amount = String(req.body?.amount || "50000");
       const jRes = await fetch(`${ALPACA_BASE}/v1/journals`, {
         method: "POST", headers: H,
