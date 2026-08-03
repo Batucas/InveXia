@@ -477,3 +477,7 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .quota b{font-size:.95rem;color:var(--text)}
 .quota .warn-t{color:var(--warn)}
 .quota .neg{color:var(--bad)}
+
+/* --- sección Operar --- */
+#buyMsg{min-height:1.1rem;margin-top:.7rem}
+.notice b{color:var(--text)}

@@ -197,6 +197,7 @@ const NAV_CLIENT=[
   ["notificaciones","Notificaciones",icon("bell")],
   ["riesgo","Perfil de riesgo",icon("gauge")],
   ["cartera","Mi cartera",icon("pie")],
+  ["operar","Operar",icon("trade")],
   ["simulador","Simulador",icon("chart")],
   ["asistente","Asistente IA",icon("bot")],
   ["mercado","Mercado e ideas",icon("news")],
@@ -265,6 +266,7 @@ async function render(){
       if(state.view==="perfil")     return void await viewProfile();
       if(state.view==="riesgo")     return void await viewRisk();
       if(state.view==="cartera")    return void await viewPortfolio();
+      if(state.view==="operar")     return void await viewTrade();
       if(state.view==="simulador")  return void await viewSimulator();
       if(state.view==="mercado")    return void await viewFeed();
       if(state.view==="cursos")     return void await viewCoursesClient();
@@ -534,6 +536,79 @@ function perfOf(holds,quotes){
   return { rows, value, cost, executed,
            pnl: executed?value-cost:null,
            pnlPct: (executed&&cost>0)?((value/cost)-1)*100:null };
+}
+
+/* ============================================================
+   CLIENTE · Operar (Alpaca sandbox)
+   ============================================================ */
+const TRADE_SYMBOLS = [
+  ["SPY","S&P 500 (SPY)"],["VOO","Vanguard S&P 500 (VOO)"],["QQQ","Nasdaq 100 (QQQ)"],
+  ["VTI","Total Market (VTI)"],["AAPL","Apple (AAPL)"],["MSFT","Microsoft (MSFT)"],
+  ["BTC/USD","Bitcoin (BTC)"],["ETH/USD","Ethereum (ETH)"],
+];
+async function viewTrade(){
+  const m=$("#main");
+  m.innerHTML=head("Inversión","Operar","Compra activos que se ejecutan en un bróker regulado.");
+  m.append(el(`<div class="notice">⚙️ <b>Modo prueba (sandbox).</b> Las órdenes se ejecutan con dinero ficticio en el entorno de pruebas de Alpaca. Nada de esto usa dinero real todavía.</div>`));
+  const wrap=el(`<div id="tradeBody">${loading()}</div>`); m.append(wrap);
+  await loadTrade();
+}
+async function loadTrade(){
+  const body=$("#tradeBody"); if(!body) return;
+  let d;
+  try{
+    const { data:{ session } }=await sb.auth.getSession();
+    const r=await fetch("/api/alpaca-positions",{ headers:{ Authorization:"Bearer "+session.access_token } });
+    const ct=r.headers.get("content-type")||"";
+    if(!ct.includes("application/json")) throw new Error("La función /api/alpaca-positions no está desplegada.");
+    d=await r.json();
+    if(!d.ok) throw new Error(d.message||d.error||"Error");
+  }catch(e){ body.innerHTML=`<div class="card"><div class="notice warn" style="margin:0">${esc(e.message)}</div></div>`; return; }
+
+  if(!d.linked){
+    body.innerHTML=`<div class="card empty">${icon("trade")}
+      <h3 style="margin-top:.4rem">Tu cuenta de inversión aún no está activa</h3>
+      <p>Tu asesor debe vincular tu cuenta para que puedas operar.</p>
+      <button class="btn btn-ghost btn-sm" style="width:auto;margin-top:.6rem" onclick="location.hash='#/mensajes'">Escribir a mi asesor</button></div>`;
+    return;
+  }
+  const a=d.account, cur=a.currency||"USD";
+  const plToday=sgn(a.pnl_today);
+  body.innerHTML="";
+  body.append(el(`<div class="grid grid-3" style="margin-bottom:1.2rem">
+    <div class="stat"><div class="k">Valor de la cuenta</div><div class="v">${money(a.equity,cur)}</div><div class="d ${plToday}">${a.pnl_today>=0?"+":""}${money(a.pnl_today,cur)} hoy</div></div>
+    <div class="stat"><div class="k">Efectivo</div><div class="v">${money(a.cash,cur)}</div><div class="d">disponible</div></div>
+    <div class="stat"><div class="k">Poder de compra</div><div class="v">${money(a.buying_power,cur)}</div><div class="d">para operar</div></div>
+  </div>`));
+
+  const grid=el(`<div class="pf-grid"></div>`);
+  // panel de compra
+  grid.append(el(`<div class="card">
+    <h3>Comprar</h3><p class="card-sub">Orden de mercado. Para ETFs y acciones caras puedes invertir por monto (permite fracciones).</p>
+    <div class="field"><label>Activo</label><select id="buySym" class="input">
+      ${TRADE_SYMBOLS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></div>
+    <div class="field"><label>Monto a invertir (${cur})</label>
+      <input id="buyAmt" class="input mono" type="number" min="1" step="any" placeholder="100"></div>
+    <button id="buyBtn" class="btn btn-primary" style="width:auto" onclick="app.buyAsset()">Comprar</button>
+    <div id="buyMsg" class="msg-line"></div>
+  </div>`));
+
+  // posiciones reales
+  const side=el(`<div class="card"><h3>Mis posiciones</h3><p class="card-sub">${d.positions.length} posición(es) en tu cuenta.</p></div>`);
+  if(d.positions.length){
+    const tw=el(`<div class="tbl-wrap"></div>`);
+    const t=el(`<table class="tbl"><thead><tr><th>Activo</th><th style="text-align:right">Valor</th><th style="text-align:right">Rend.</th></tr></thead><tbody></tbody></table>`);
+    d.positions.forEach(p=>{
+      const cl=sgn(p.unrealized_pl);
+      $("tbody",t).append(el(`<tr>
+        <td><b>${esc(p.symbol)}</b><br><span class="mono" style="color:var(--faint);font-size:.75rem">${p.qty} u · ${money(p.avg_entry,cur)}</span></td>
+        <td style="text-align:right" class="mono">${money(p.market_value,cur)}</td>
+        <td style="text-align:right" class="mono ${cl}">${pct(p.unrealized_plpc)}<br><span style="font-size:.72rem">${p.unrealized_pl>=0?"+":""}${money(p.unrealized_pl,cur)}</span></td></tr>`));
+    });
+    tw.append(t); side.append(tw);
+  } else side.append(el(`<p class="empty" style="padding:1rem">Aún no tienes posiciones. Haz tu primera compra.</p>`));
+  grid.append(side);
+  body.append(grid);
 }
 
 /* ============================================================
@@ -1171,6 +1246,20 @@ async function viewAdminClient(uid){
   }
 
   // zona de peligro
+  m.append(el(`<div class="card mt2">
+    <h3>Cuenta de inversión (Alpaca · sandbox)</h3>
+    <p class="card-sub">Pega el <b>account_id</b> de la cuenta de prueba de este cliente para habilitarle la sección <b>Operar</b>. En producción, esto se creará automáticamente en el onboarding.</p>
+    <div class="flex" style="gap:.6rem;flex-wrap:wrap">
+      <input id="alpacaId" class="input mono" style="flex:1;min-width:260px" placeholder="ej. b6332229-32b3-455e-a612-bc77e3111336" value="${esc(client.alpaca_account_id||"")}">
+      <button class="btn btn-primary btn-sm" style="width:auto" onclick="app.saveAlpacaId('${uid}')">Vincular</button>
+    </div>
+    <div class="flex mt" style="gap:.6rem;align-items:center;flex-wrap:wrap">
+      <button id="setupBtn" class="btn btn-ghost btn-sm" onclick="app.createTestAccount('${uid}')">⚙️ Crear cuenta de prueba y fondear</button>
+      <span id="setupMsg" class="card-sub" style="margin:0"></span>
+    </div>
+  </div>`));
+
+  // zona de peligro
   m.append(el(`<div class="card danger mt2">
     <h3>Zona de peligro</h3>
     <p class="card-sub">Eliminar la cuenta de <b>${esc(client.full_name||client.email)}</b> borra de forma permanente
@@ -1424,6 +1513,56 @@ const app = {
     if(error) return ui.toast(error.message,"err");
     await loadThread(clientId);
     refreshBadge();
+  },
+
+  // operar (Alpaca sandbox)
+  async buyAsset(){
+    const sym=$("#buySym").value, amt=parseFloat($("#buyAmt").value);
+    const box=$("#buyMsg"); box.className="msg-line";
+    if(!amt||amt<=0){ box.textContent="Indica un monto válido."; box.classList.add("err"); return; }
+    const btn=$("#buyBtn"); btn.disabled=true; const prev=btn.textContent; btn.innerHTML='<span class="spinner"></span>';
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const r=await fetch("/api/alpaca-order",{ method:"POST",
+        headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token },
+        body:JSON.stringify({ symbol:sym, notional:amt, side:"buy" }) });
+      const ct=r.headers.get("content-type")||"";
+      if(!ct.includes("application/json")) throw new Error("La función /api/alpaca-order no está desplegada.");
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.message||"No se pudo comprar");
+      ui.toast(`Orden enviada: ${d.order.symbol} · ${d.order.status}`,"ok");
+      $("#buyAmt").value="";
+      setTimeout(loadTrade,1200);   // dar tiempo a que la orden se ejecute
+    }catch(e){ box.textContent=e.message; box.classList.add("err"); }
+    finally{ btn.disabled=false; btn.textContent=prev; }
+  },
+
+  // admin: vincular cuenta Alpaca del cliente
+  async saveAlpacaId(uid){
+    const val=$("#alpacaId").value.trim()||null;
+    const {error}=await sb.from("profiles").update({alpaca_account_id:val}).eq("id",uid);
+    if(error) return ui.toast(error.message,"err");
+    ui.toast(val?"Cuenta de inversión vinculada":"Vínculo eliminado","ok");
+  },
+  async createTestAccount(uid){
+    const btn=$("#setupBtn"), msg=$("#setupMsg");
+    btn.disabled=true; const prev=btn.textContent; btn.innerHTML='<span class="spinner"></span> Creando…';
+    msg.textContent="";
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const r=await fetch("/api/alpaca-setup",{ method:"POST",
+        headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token } });
+      const ct=r.headers.get("content-type")||"";
+      if(!ct.includes("application/json")) throw new Error("La función /api/alpaca-setup no está desplegada.");
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.message||"No se pudo crear la cuenta");
+      // autocompletar y vincular
+      $("#alpacaId").value=d.account_id;
+      await sb.from("profiles").update({alpaca_account_id:d.account_id}).eq("id",uid);
+      msg.innerHTML=`✓ Cuenta <span class="mono">${esc(d.account_id.slice(0,8))}…</span> creada y vinculada. ${d.funded?"Fondeada con $50 000 de prueba.":"⚠ "+esc(d.fundMsg||"Fondeo pendiente.")}`;
+      ui.toast("Cuenta de prueba lista","ok");
+    }catch(e){ msg.innerHTML=`<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+    finally{ btn.disabled=false; btn.textContent=prev; }
   },
 
   // notificaciones
@@ -1736,6 +1875,7 @@ function icon(n){
     user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
     bell:'<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 19a2 2 0 0 0 3 0"/>',
     bot:'<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.2"/><path d="M9 13.5h.01M15 13.5h.01"/>',
+    trade:'<path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/>',
   }[n]||"";
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 }
