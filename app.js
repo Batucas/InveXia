@@ -510,7 +510,7 @@ function allocBars(a){
 }
 // Radar de 5 componentes (SVG)
 function radarChart(components){
-  const cx=150, cy=150, R=92, N=components.length;
+  const cx=170, cy=148, R=86, N=components.length;
   const ang=(i)=> -Math.PI/2 + i*2*Math.PI/N;
   const pt=(i,r)=>[cx+Math.cos(ang(i))*r, cy+Math.sin(ang(i))*r];
 
@@ -531,16 +531,18 @@ function radarChart(components){
   components.forEach((c,i)=>{
     const [dx,dy]=pt(i,R*c.v01);
     dots+=`<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="3.4" fill="var(--blue-400)" stroke="var(--navy-950)" stroke-width="1.5"/>`;
-    const [lx,ly]=pt(i,R+22);
-    const anchor = lx<cx-5?"end":(lx>cx+5?"start":"middle");
+    const [ax,ay]=pt(i,R);
+    const isLeft=ax<cx-5, isRight=ax>cx+5;
+    const anchor = isLeft?"end":(isRight?"start":"middle");
+    const lx = ax + (isLeft?-8:(isRight?8:0));
+    const ly = ay + (ay<cy-5?-6:(ay>cy+5?16:-6));
     const lines=Array.isArray(c.label)?c.label:[c.label];
-    const y0=ly-(lines.length-1)*6;
-    const tspans=lines.map((t,k)=>`<tspan x="${lx.toFixed(1)}" dy="${k===0?0:12}">${esc(t)}</tspan>`).join("");
-    labels+=`<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" text-anchor="${anchor}" fill="var(--muted)" font-size="10" font-family="Inter">${tspans}</text>`;
-    labels+=`<text x="${lx.toFixed(1)}" y="${(y0+ (lines.length)*12 -1).toFixed(1)}" text-anchor="${anchor}" fill="var(--blue-300)" font-size="9.5" font-family="JetBrains Mono">${c.level}/5</text>`;
+    const tspans=lines.map((t,k)=>`<tspan x="${lx.toFixed(1)}" dy="${k===0?0:11}">${esc(t)}</tspan>`).join("");
+    labels+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" fill="var(--muted)" font-size="10" font-family="Inter">${tspans}</text>`;
+    labels+=`<text x="${lx.toFixed(1)}" y="${(ly+lines.length*11).toFixed(1)}" text-anchor="${anchor}" fill="var(--blue-300)" font-size="9.5" font-family="JetBrains Mono">${c.level}/5</text>`;
   });
 
-  return `<svg viewBox="0 0 300 300" width="100%" style="display:block">
+  return `<svg viewBox="0 0 340 300" width="100%" style="display:block">
     ${rings}${axes}
     <polygon points="${dpts}" fill="var(--blue-500)" fill-opacity=".22" stroke="var(--blue-400)" stroke-width="2"/>
     ${dots}${labels}
