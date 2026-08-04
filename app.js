@@ -251,6 +251,11 @@ async function refreshBadge(){
   else b.classList.add("hidden");
 }
 window.addEventListener("hashchange",route);
+// cerrar el buscador de activos al hacer clic fuera
+document.addEventListener("click",(e)=>{
+  const box=document.getElementById("symResults");
+  if(box && !box.classList.contains("hidden") && !e.target.closest(".search-wrap")) box.classList.add("hidden");
+});
 function route(){
   if(!state.session) return;
   const parts=(location.hash.replace(/^#\//,"")||"").split("/");
@@ -644,11 +649,17 @@ async function loadTrade(){
   const grid=el(`<div class="pf-grid"></div>`);
   // panel de compra
   grid.append(el(`<div class="card">
-    <h3>Comprar</h3><p class="card-sub">Orden de mercado. Escribe cualquier símbolo: acciones y ETFs de EE.UU. (ej. AAPL, TSLA, VOO) o cripto como par (ej. BTC/USD).</p>
-    <div class="field"><label>Símbolo (ticker)</label>
-      <input id="buySym" class="input mono" list="symList" placeholder="Ej. SPY, NVDA, BTC/USD"
-        oninput="this.value=this.value.toUpperCase()" autocomplete="off">
-      <datalist id="symList">${TRADE_SYMBOLS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</datalist>
+    <h3>Comprar</h3><p class="card-sub">Orden de mercado. Busca entre miles de acciones y ETFs de EE.UU., o usa una cripto (botones rápidos).</p>
+    <div class="field"><label>Buscar activo</label>
+      <div class="search-wrap">
+        <input id="buySym" class="input mono" placeholder="Escribe símbolo o nombre: Apple, NVDA, VOO…"
+          autocomplete="off" oninput="app.searchAssets(this.value)" onfocus="app.searchAssets(this.value)">
+        <div id="symResults" class="search-results hidden"></div>
+      </div>
+      <div class="flex" style="gap:.35rem;flex-wrap:wrap;margin-top:.5rem">
+        <span style="font-size:.72rem;color:var(--faint);align-self:center">Cripto:</span>
+        ${["BTC/USD","ETH/USD","SOL/USD"].map(c=>`<button class="chip" onclick="app.pickSym('${c}')">${c}</button>`).join("")}
+      </div>
     </div>
     <div class="field"><label>Monto a invertir (${cur})</label>
       <input id="buyAmt" class="input mono" type="number" min="1" step="any" placeholder="100"></div>
@@ -1580,6 +1591,33 @@ const app = {
   },
 
   // operar (Alpaca sandbox)
+  searchAssets(q){
+    q=(q||"").trim();
+    clearTimeout(state.cache.searchT);
+    const box=$("#symResults"); if(!box) return;
+    if(q.length<1){ box.classList.add("hidden"); box.innerHTML=""; return; }
+    state.cache.searchT=setTimeout(async ()=>{
+      try{
+        const { data:{ session } }=await sb.auth.getSession();
+        const r=await fetch("/api/alpaca-assets?q="+encodeURIComponent(q),{ headers:{ Authorization:"Bearer "+session.access_token } });
+        const d=await r.json();
+        if(!d.ok || !d.results.length){
+          box.innerHTML=`<div class="sr-empty">Sin coincidencias para "${esc(q)}"</div>`;
+          box.classList.remove("hidden"); return;
+        }
+        box.innerHTML=d.results.map(a=>`<div class="sr-item" onclick="app.pickSym('${esc(a.symbol)}')">
+          <div><b class="mono">${esc(a.symbol)}</b> <span class="sr-name">${esc(a.name)}</span></div>
+          <span class="sr-ex">${a.fractionable?"":'<span class="sr-whole">solo unidades enteras</span> '}${esc(a.exchange||"")}</span>
+        </div>`).join("");
+        box.classList.remove("hidden");
+      }catch(e){ box.classList.add("hidden"); }
+    }, 250);
+  },
+  pickSym(sym){
+    const inp=$("#buySym"); if(inp) inp.value=sym;
+    const box=$("#symResults"); if(box){ box.classList.add("hidden"); box.innerHTML=""; }
+    $("#buyAmt")?.focus();
+  },
   async buyAsset(){
     const sym=($("#buySym").value||"").trim().toUpperCase(), amt=parseFloat($("#buyAmt").value);
     const box=$("#buyMsg"); box.className="msg-line";
