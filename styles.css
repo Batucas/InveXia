@@ -481,3 +481,18 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 /* --- sección Operar --- */
 #buyMsg{min-height:1.1rem;margin-top:.7rem}
 .notice b{color:var(--text)}
+
+/* ============================================================
+   v2.6 · Radar de perfil + sugerencia con IA
+   ============================================================ */
+.radar{background:var(--navy-950);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:1.4rem 1rem .8rem;max-width:360px;margin:0 auto}
+
+.ai-suggest{margin-top:1rem}
+.ai-suggest .ai-head{display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem}
+.ai-suggest .ai-head .tag{font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--blue-400);font-weight:600}
+.ai-box{background:linear-gradient(180deg,rgba(46,125,246,.07),var(--navy-850));
+  border:1px solid rgba(46,125,246,.22);border-radius:var(--r-md);padding:1rem 1.1rem;
+  font-size:.92rem;line-height:1.55;color:var(--text)}
+.ai-box p{margin:0 0 .7rem}.ai-box p:last-child{margin:0}
+.ai-box.loading{color:var(--muted);display:flex;align-items:center;gap:.6rem}

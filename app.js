@@ -75,6 +75,22 @@ const num=(v)=>{const n=parseFloat(v);return isFinite(n)?n:null;};
 const sgn=(v)=>v>0?"pos":(v<0?"neg":"");
 
 function scoreToBand(score,q){ return Math.min(5, Math.floor(((score-q)/(q*5-q))*5)+1); }
+
+// Cinco componentes del perfil (0..1), derivados de las 10 respuestas.
+const RADAR_DEFS = [
+  { key:"tolerancia",   label:["Tolerancia","a pérdidas"],  q:["W1","W5"] },
+  { key:"crecimiento",  label:["Apetito de","crecimiento"],  q:["W2","W4"] },
+  { key:"experiencia",  label:["Experiencia"],               q:["W3"] },
+  { key:"horizonte",    label:["Horizonte"],                 q:["C1"] },
+  { key:"capacidad",    label:["Capacidad","financiera"],    q:["C2","C3","C4","C5"] },
+];
+function computeRadar(ans){
+  return RADAR_DEFS.map(d=>{
+    const vals=d.q.map(k=>ans[k]||0).filter(v=>v>0);
+    const avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:1;   // 1..5
+    return { key:d.key, label:d.label, level:Math.round(avg*10)/10, v01:Math.max(0,Math.min(1,(avg-1)/4)) };
+  });
+}
 function computeProfile(ans){
   const ws=WILLINGNESS.reduce((a,x)=>a+(ans[x.id]||0),0);
   const cs=CAPACITY.reduce((a,x)=>a+(ans[x.id]||0),0);
@@ -362,7 +378,7 @@ async function viewRisk(){
   const m=$("#main");
   if(ra && !state.cache.retake){
     m.innerHTML=head("Perfil de inversor","Tu perfil de riesgo","Calculado el "+fmtDate(ra.created_at)+".");
-    m.append(renderResult(ra));
+    m.append(renderResult(ra)); loadSuggestion();
     $("#headExtra").append(el(`<button class="btn btn-ghost btn-sm" onclick="app.retake()">Volver a responder</button>`));
     return;
   }
@@ -431,9 +447,9 @@ function renderResult(ra){
   return el(`<div>
     <div class="quad-wrap">
       <div class="card">
-        <h3>Mapa disposición × capacidad</h3>
-        <p class="card-sub">Tu perfil final es el más prudente entre ambos ejes, acotado por tu horizonte.</p>
-        <div class="quad">${quadrant(ra)}</div>
+        <h3>Tu perfil en cinco dimensiones</h3>
+        <p class="card-sub">Cada eje muestra un componente de tu actitud y tu situación frente al riesgo.</p>
+        <div class="radar">${radarChart(computeRadar(ra.answers||{}))}</div>
       </div>
       <div class="card">
         <div class="eyebrow" style="color:var(--blue-400);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;font-weight:600">Perfil final</div>
@@ -453,6 +469,7 @@ function renderResult(ra){
         <div class="divide"></div>
         <div class="nav-label" style="padding:0 0 .5rem">Asignación sugerida</div>
         ${allocBars(b.alloc)}
+        <div id="aiSuggest" class="ai-suggest"></div>
         <p class="card-sub" style="margin-top:1rem">Rangos de referencia. Tu asesor define la cartera final e instrumentos.</p>
       </div>
     </div>
@@ -462,6 +479,22 @@ function renderResult(ra){
       <button class="btn btn-ghost btn-sm" onclick="location.hash='#/simulador'">Proyectar mis aportes →</button>
     </div>
   </div>`);
+}
+async function loadSuggestion(){
+  const box=$("#aiSuggest"); if(!box) return;
+  box.innerHTML=`<div class="ai-head"><span class="tag">Sugerencia de tu asesor</span></div>
+    <div class="ai-box loading"><span class="spinner" style="border-color:rgba(120,150,200,.3);border-top-color:var(--blue-400)"></span> Preparando tu recomendación…</div>`;
+  try{
+    const { data:{ session } }=await sb.auth.getSession();
+    const r=await fetch("/api/suggest-portfolio",{ method:"POST",
+      headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token } });
+    const ct=r.headers.get("content-type")||"";
+    if(!ct.includes("application/json")) throw 0;
+    const d=await r.json();
+    if(!d.ok) throw 0;
+    const paras=d.suggestion.split(/\n+/).filter(Boolean).map(p=>`<p>${esc(p)}</p>`).join("");
+    box.innerHTML=`<div class="ai-head"><span class="tag">Sugerencia de tu asesor</span></div><div class="ai-box">${paras}</div>`;
+  }catch(e){ box.innerHTML=""; }   // si falla, simplemente no se muestra
 }
 function axisRow(label,band){
   const col=cssv(BANDS[band].cvar);
@@ -475,21 +508,43 @@ function allocBars(a){
      <div class="bar"><i style="width:${v}%;background:${CLASSES[k].color}"></i></div>
      <span class="pct">${v}%</span></div>`).join("");
 }
-function quadrant(ra){
-  const x=(ra.capacity_band-.5)*20, y=100-(ra.willingness_band-.5)*20;
-  const cells=[];
-  for(let cap=1;cap<=5;cap++) for(let wil=1;wil<=5;wil++){
-    const band=Math.min(wil,cap,HORIZON_CAP[ra.horizon_band]);
-    cells.push(`<rect x="${(cap-1)*20}" y="${100-wil*20}" width="20" height="20"
-      fill="${cssv(BANDS[band].cvar)}" opacity="${band===ra.final_band?.34:.12}"/>`);
-  }
-  return `<svg viewBox="-16 -6 128 128" width="100%" style="display:block">${cells.join("")}
-    <line x1="0" y1="0" x2="0" y2="100" stroke="var(--line-strong)" stroke-width=".6"/>
-    <line x1="0" y1="100" x2="100" y2="100" stroke="var(--line-strong)" stroke-width=".6"/>
-    <text x="50" y="118" fill="var(--faint)" font-size="5" text-anchor="middle" font-family="Inter">Capacidad de riesgo →</text>
-    <text x="-11" y="50" fill="var(--faint)" font-size="5" text-anchor="middle" font-family="Inter" transform="rotate(-90 -11 50)">Disposición al riesgo →</text>
-    <circle cx="${x}" cy="${y}" r="4.4" fill="#fff" stroke="var(--blue-500)" stroke-width="1.6"/>
-    <circle cx="${x}" cy="${y}" r="9" fill="none" stroke="#fff" stroke-width=".6" opacity=".5"/></svg>`;
+// Radar de 5 componentes (SVG)
+function radarChart(components){
+  const cx=150, cy=150, R=92, N=components.length;
+  const ang=(i)=> -Math.PI/2 + i*2*Math.PI/N;
+  const pt=(i,r)=>[cx+Math.cos(ang(i))*r, cy+Math.sin(ang(i))*r];
+
+  // anillos de referencia
+  let rings="";
+  [0.25,0.5,0.75,1].forEach(f=>{
+    const pts=components.map((_,i)=>pt(i,R*f).map(n=>n.toFixed(1)).join(",")).join(" ");
+    rings+=`<polygon points="${pts}" fill="none" stroke="var(--line)" stroke-width="1"/>`;
+  });
+  // ejes
+  let axes="";
+  components.forEach((_,i)=>{ const [x,y]=pt(i,R); axes+=`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`; });
+
+  // polígono de datos
+  const dpts=components.map((c,i)=>pt(i,R*c.v01).map(n=>n.toFixed(1)).join(",")).join(" ");
+  // vértices + etiquetas
+  let dots="", labels="";
+  components.forEach((c,i)=>{
+    const [dx,dy]=pt(i,R*c.v01);
+    dots+=`<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="3.4" fill="var(--blue-400)" stroke="var(--navy-950)" stroke-width="1.5"/>`;
+    const [lx,ly]=pt(i,R+22);
+    const anchor = lx<cx-5?"end":(lx>cx+5?"start":"middle");
+    const lines=Array.isArray(c.label)?c.label:[c.label];
+    const y0=ly-(lines.length-1)*6;
+    const tspans=lines.map((t,k)=>`<tspan x="${lx.toFixed(1)}" dy="${k===0?0:12}">${esc(t)}</tspan>`).join("");
+    labels+=`<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" text-anchor="${anchor}" fill="var(--muted)" font-size="10" font-family="Inter">${tspans}</text>`;
+    labels+=`<text x="${lx.toFixed(1)}" y="${(y0+ (lines.length)*12 -1).toFixed(1)}" text-anchor="${anchor}" fill="var(--blue-300)" font-size="9.5" font-family="JetBrains Mono">${c.level}/5</text>`;
+  });
+
+  return `<svg viewBox="0 0 300 300" width="100%" style="display:block">
+    ${rings}${axes}
+    <polygon points="${dpts}" fill="var(--blue-500)" fill-opacity=".22" stroke="var(--blue-400)" stroke-width="2"/>
+    ${dots}${labels}
+  </svg>`;
 }
 
 /* ============================================================
@@ -543,8 +598,11 @@ function perfOf(holds,quotes){
    ============================================================ */
 const TRADE_SYMBOLS = [
   ["SPY","S&P 500 (SPY)"],["VOO","Vanguard S&P 500 (VOO)"],["QQQ","Nasdaq 100 (QQQ)"],
-  ["VTI","Total Market (VTI)"],["AAPL","Apple (AAPL)"],["MSFT","Microsoft (MSFT)"],
-  ["BTC/USD","Bitcoin (BTC)"],["ETH/USD","Ethereum (ETH)"],
+  ["VTI","Total Market (VTI)"],["DIA","Dow Jones (DIA)"],["IWM","Russell 2000 (IWM)"],
+  ["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","Nvidia"],["AMZN","Amazon"],
+  ["GOOGL","Alphabet"],["TSLA","Tesla"],["META","Meta"],["NFLX","Netflix"],
+  ["GLD","Oro (GLD)"],["TLT","Bonos largos EE.UU. (TLT)"],
+  ["BTC/USD","Bitcoin"],["ETH/USD","Ethereum"],["SOL/USD","Solana"],
 ];
 async function viewTrade(){
   const m=$("#main");
@@ -584,9 +642,12 @@ async function loadTrade(){
   const grid=el(`<div class="pf-grid"></div>`);
   // panel de compra
   grid.append(el(`<div class="card">
-    <h3>Comprar</h3><p class="card-sub">Orden de mercado. Para ETFs y acciones caras puedes invertir por monto (permite fracciones).</p>
-    <div class="field"><label>Activo</label><select id="buySym" class="input">
-      ${TRADE_SYMBOLS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></div>
+    <h3>Comprar</h3><p class="card-sub">Orden de mercado. Escribe cualquier símbolo: acciones y ETFs de EE.UU. (ej. AAPL, TSLA, VOO) o cripto como par (ej. BTC/USD).</p>
+    <div class="field"><label>Símbolo (ticker)</label>
+      <input id="buySym" class="input mono" list="symList" placeholder="Ej. SPY, NVDA, BTC/USD"
+        oninput="this.value=this.value.toUpperCase()" autocomplete="off">
+      <datalist id="symList">${TRADE_SYMBOLS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</datalist>
+    </div>
     <div class="field"><label>Monto a invertir (${cur})</label>
       <input id="buyAmt" class="input mono" type="number" min="1" step="any" placeholder="100"></div>
     <button id="buyBtn" class="btn btn-primary" style="width:auto" onclick="app.buyAsset()">Comprar</button>
@@ -1213,7 +1274,7 @@ async function viewAdminClient(uid){
       ${ra.monthly_contribution?`<div class="kv"><span>Aporte mensual</span><b class="mono">${money(ra.monthly_contribution,cur)}</b></div>`:""}
       <div class="divide"></div>
       <div class="grid">${axisRow("Disposición",ra.willingness_band)}${axisRow("Capacidad",ra.capacity_band)}${axisRow("Horizonte",ra.horizon_band)}</div>
-      <div class="divide"></div><div class="quad">${quadrant(ra)}</div></div>`));
+      <div class="divide"></div><div class="radar">${radarChart(computeRadar(ra.answers||{}))}</div></div>`));
   } else {
     grid.append(el(`<div class="card empty">${icon("gauge")}<p style="margin-top:.4rem">Este cliente aún no completó su perfil de riesgo.</p></div>`));
   }
@@ -1464,7 +1525,7 @@ const app = {
     if(error) return ui.toast("No se pudo guardar: "+error.message,"err");
     state.cache.retake=false; state.cache.lastRa=data;
     const m=$("#main"); m.innerHTML=head("Perfil de inversor","Tu perfil de riesgo","Guardado el "+fmtDate(new Date())+".");
-    m.append(renderResult(data));
+    m.append(renderResult(data)); loadSuggestion();
     ui.toast("Perfil calculado y guardado","ok");
   },
   exportPDF(){ window.print(); },
@@ -1518,8 +1579,9 @@ const app = {
 
   // operar (Alpaca sandbox)
   async buyAsset(){
-    const sym=$("#buySym").value, amt=parseFloat($("#buyAmt").value);
+    const sym=($("#buySym").value||"").trim().toUpperCase(), amt=parseFloat($("#buyAmt").value);
     const box=$("#buyMsg"); box.className="msg-line";
+    if(!sym){ box.textContent="Escribe un símbolo (ej. SPY o BTC/USD)."; box.classList.add("err"); return; }
     if(!amt||amt<=0){ box.textContent="Indica un monto válido."; box.classList.add("err"); return; }
     const btn=$("#buyBtn"); btn.disabled=true; const prev=btn.textContent; btn.innerHTML='<span class="spinner"></span>';
     try{
