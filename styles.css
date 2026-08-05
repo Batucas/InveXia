@@ -519,3 +519,54 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .chip{background:var(--navy-800);border:1px solid var(--line-strong);color:var(--blue-300);
   border-radius:20px;padding:.25rem .7rem;font-size:.78rem;font-family:'JetBrains Mono';cursor:pointer;transition:.14s}
 .chip:hover{border-color:var(--blue-500);background:rgba(46,125,246,.14)}
+
+/* ============================================================
+   v2.8 · Módulo Ajuste de portafolio (premium)
+   ============================================================ */
+/* toggle */
+.tgl{position:relative;display:inline-block;width:46px;height:26px;flex:0 0 auto}
+.tgl input{opacity:0;width:0;height:0}
+.tgl-track{position:absolute;inset:0;background:var(--navy-700);border:1px solid var(--line-strong);
+  border-radius:20px;cursor:pointer;transition:.2s}
+.tgl-track::before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;
+  background:var(--muted);border-radius:50%;transition:.2s}
+.tgl input:checked+.tgl-track{background:rgba(46,125,246,.3);border-color:var(--blue-500)}
+.tgl input:checked+.tgl-track::before{transform:translateX(20px);background:var(--blue-300)}
+
+/* lista de activos añadidos */
+.adj-list{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.9rem}
+.adj-item{display:flex;align-items:center;gap:.6rem;background:var(--navy-850);
+  border:1px solid var(--line-strong);border-radius:20px;padding:.3rem .5rem .3rem .8rem}
+.adj-item b{color:var(--blue-300)}.adj-item span{font-size:.8rem;color:var(--muted)}
+.adj-item .x{background:none;border:none;color:var(--faint);cursor:pointer;font-size:.85rem;padding:0 .2rem}
+.adj-item .x:hover{color:var(--bad)}
+
+/* métricas del diagnóstico */
+.qmetrics{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;margin:1rem 0}
+.qmetrics>div{background:var(--navy-950);border:1px solid var(--line);border-radius:var(--r-sm);padding:.7rem .8rem}
+.qmetrics span{display:block;font-size:.72rem;color:var(--muted);margin-bottom:.2rem}
+.qmetrics b{font-size:1.25rem;font-family:'JetBrains Mono'}
+.qmetrics b.pos{color:var(--good)}.qmetrics b.neg{color:var(--bad)}
+
+.risk-banner{border-radius:var(--r-md);padding:.85rem 1rem;font-size:.9rem;line-height:1.5;margin-top:.4rem}
+.risk-banner.ok{background:rgba(34,197,94,.09);border:1px solid rgba(34,197,94,.3);color:var(--text)}
+.risk-banner.bad{background:rgba(251,191,36,.09);border:1px solid rgba(251,191,36,.32);color:var(--text)}
+
+/* tarjetas de carteras recomendadas */
+.qcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:1rem;margin-top:1rem}
+.qcard{background:var(--navy-850);border:1px solid var(--line);border-radius:var(--r-md);padding:1rem}
+.qcard h4{margin:0 0 .2rem;font-size:.92rem;color:var(--text)}
+.qdesc{font-size:.76rem;color:var(--muted);margin:0 0 .7rem;line-height:1.4;min-height:2.1em}
+.qtbl{width:100%;border-collapse:collapse}
+.qtbl td{padding:.28rem 0;border-bottom:1px solid var(--line);font-size:.85rem}
+.qtbl tr:last-child td{border-bottom:0}
+.qmini{display:flex;justify-content:space-between;margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--line-strong);font-size:.8rem;color:var(--muted)}
+.qmini b{color:var(--blue-300);font-family:'JetBrains Mono'}
+
+/* plan de ajuste */
+.qtbl.plan{margin-top:.9rem}
+.qtbl.plan th{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:.3rem 0;text-align:left;border-bottom:1px solid var(--line-strong)}
+.act{font-size:.72rem;font-weight:600;padding:.16rem .55rem;border-radius:20px;background:var(--navy-700);white-space:nowrap}
+.act.pos{background:rgba(34,197,94,.16);color:var(--good)}
+.act.neg{background:rgba(239,68,68,.16);color:var(--bad)}
+.act.warn-t{background:rgba(251,191,36,.16);color:var(--warn)}

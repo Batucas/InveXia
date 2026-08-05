@@ -214,6 +214,7 @@ const NAV_CLIENT=[
   ["riesgo","Perfil de riesgo",icon("gauge")],
   ["cartera","Mi cartera",icon("pie")],
   ["operar","Operar",icon("trade")],
+  ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["simulador","Simulador",icon("chart")],
   ["asistente","Asistente IA",icon("bot")],
   ["mercado","Mercado e ideas",icon("news")],
@@ -233,7 +234,7 @@ const NAV_ADMIN=[
 function buildNav(admin){
   const nav=$("#nav"); nav.innerHTML="";
   nav.append(el(`<div class="nav-label">${admin?"Administración":"Mi cuenta"}</div>`));
-  (admin?NAV_ADMIN:NAV_CLIENT).forEach(([id,label,ic])=>{
+  (admin?NAV_ADMIN:NAV_CLIENT).filter(([,,,flag])=>!flag||(flag==="premium"&&state.profile.premium_portfolio)).forEach(([id,label,ic])=>{
     const a=el(`<a data-v="${id}">${ic}<span>${label}</span>${id==="notificaciones"?'<span class="badge hidden" id="notifBadge">0</span>':""}</a>`);
     a.onclick=()=>{ location.hash="#/"+id; $("#sidebar").classList.remove("open"); };
     nav.append(a);
@@ -288,6 +289,7 @@ async function render(){
       if(state.view==="riesgo")     return void await viewRisk();
       if(state.view==="cartera")    return void await viewPortfolio();
       if(state.view==="operar")     return void await viewTrade();
+      if(state.view==="ajuste")     return void await viewPortfolioAdjust();
       if(state.view==="simulador")  return void await viewSimulator();
       if(state.view==="mercado")    return void await viewFeed();
       if(state.view==="cursos")     return void await viewCoursesClient();
@@ -598,6 +600,166 @@ function perfOf(holds,quotes){
   return { rows, value, cost, executed,
            pnl: executed?value-cost:null,
            pnlPct: (executed&&cost>0)?((value/cost)-1)*100:null };
+}
+
+/* ============================================================
+   CLIENTE · Ajuste de portafolio (premium)
+   ============================================================ */
+async function viewPortfolioAdjust(){
+  const m=$("#main");
+  m.innerHTML=head("Premium","Ajuste de portafolio","Diagnostica tu cartera y descubre cómo optimizarla.");
+
+  if(!state.profile.premium_portfolio){
+    m.append(el(`<div class="card empty">${icon("tune")}<h3 style="margin-top:.5rem">Servicio no habilitado</h3>
+      <p>El ajuste de portafolio es un servicio premium. Escríbele a tu asesor para activarlo.</p>
+      <button class="btn btn-ghost btn-sm" style="width:auto;margin-top:.6rem" onclick="location.hash='#/mensajes'">Contactar a mi asesor</button></div>`));
+    return;
+  }
+  // requiere perfil de riesgo
+  const ra=await latestAssessment(state.profile.id);
+  if(!ra){
+    m.append(el(`<div class="card empty">${icon("gauge")}<h3 style="margin-top:.5rem">Primero, tu perfil de riesgo</h3>
+      <p>Necesitamos conocer tu perfil para evaluar si tu cartera está alineada con tu tolerancia al riesgo.</p>
+      <button class="btn btn-primary btn-sm" style="width:auto;margin-top:.6rem" onclick="location.hash='#/riesgo'">Completar perfil de riesgo</button></div>`));
+    return;
+  }
+
+  state.cache.adj = state.cache.adj || [];
+  m.append(el(`<div class="card">
+    <h3>Tu cartera actual</h3>
+    <p class="card-sub">Añade los activos que tienes hoy. El monto o peso es opcional: si no lo pones, asumimos partes iguales.</p>
+    <div class="search-wrap" style="max-width:420px">
+      <input id="adjSym" class="input mono" placeholder="Buscar activo: Apple, NVDA, VOO…" autocomplete="off"
+        oninput="app.searchAdj(this.value)" onfocus="app.searchAdj(this.value)">
+      <div id="adjResults" class="search-results hidden"></div>
+    </div>
+    <div class="flex" style="gap:.6rem;margin-top:.6rem;flex-wrap:wrap">
+      <input id="adjVal" class="input mono" type="number" min="0" step="any" placeholder="Monto USD (opcional)" style="max-width:200px">
+      <button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.addAdj()">+ Añadir</button>
+    </div>
+    <div id="adjList" class="adj-list"></div>
+    <button id="adjRun" class="btn btn-primary" style="width:auto;margin-top:1rem" onclick="app.runAnalyze()">Analizar mi cartera</button>
+  </div>`));
+  m.append(el(`<div id="adjOut"></div>`));
+  renderAdjList();
+}
+function renderAdjList(){
+  const box=$("#adjList"); if(!box) return;
+  const list=state.cache.adj;
+  if(!list.length){ box.innerHTML=`<p class="card-sub" style="margin:.6rem 0 0">Aún no has añadido activos.</p>`; return; }
+  box.innerHTML="";
+  list.forEach((h,i)=>box.append(el(`<div class="adj-item">
+    <b class="mono">${esc(h.symbol)}</b>
+    <span>${h.value?("$"+Math.round(h.value).toLocaleString("en-US")):"<i style='color:var(--faint)'>peso igual</i>"}</span>
+    <button class="x" onclick="app.rmAdj(${i})">✕</button></div>`)));
+}
+
+async function runAnalyzeRender(d){
+  const out=$("#adjOut"); const cur=d.current.metrics, curW=d.current.weights;
+  const fmtPeso=w=>`${(w*100).toFixed(1)}%`;
+  const statRow=(mm)=>`<div class="qmetrics">
+    <div><span>Sharpe</span><b class="${mm.sharpe>=1?"pos":(mm.sharpe<0?"neg":"")}">${mm.sharpe.toFixed(2)}</b></div>
+    <div><span>Sortino</span><b>${mm.sortino.toFixed(2)}</b></div>
+    <div><span>Calmar</span><b>${mm.calmar.toFixed(2)}</b></div>
+    <div><span>Volatilidad</span><b>${(mm.annVol*100).toFixed(1)}%</b></div>
+    <div><span>Retorno anual*</span><b>${(mm.annReturn*100).toFixed(1)}%</b></div>
+    <div><span>Máx. caída</span><b class="neg">${(mm.maxDrawdown*100).toFixed(1)}%</b></div>
+  </div>`;
+
+  out.innerHTML="";
+  // 1. diagnóstico
+  const diag=el(`<div class="card"><h3>Diagnóstico de tu cartera actual</h3>
+    ${d.failed.length?`<div class="notice warn">No se encontró histórico de: ${d.failed.join(", ")}. Se analizó el resto.</div>`:""}
+    ${statRow(cur)}
+    <div class="risk-banner ${d.overRisk?"bad":"ok"}">
+      ${d.overRisk
+        ? `⚠ Tu cartera tiene una volatilidad de <b>${(cur.annVol*100).toFixed(1)}%</b>, por encima de lo esperado para tu perfil <b>${esc(d.bandLabel)}</b> (~${(d.bandVol*100).toFixed(0)}%). Estás asumiendo más riesgo del que tu perfil sugiere.`
+        : `✓ La volatilidad de tu cartera (<b>${(cur.annVol*100).toFixed(1)}%</b>) está alineada con tu perfil <b>${esc(d.bandLabel)}</b>.`}
+    </div>
+    <p class="card-sub" style="margin-top:.7rem;font-size:.74rem">*Retorno anualizado histórico sobre ${d.years} años (${d.points} días). Rendimientos pasados no garantizan resultados futuros. Tasa libre de riesgo: ${(d.rf*100).toFixed(0)}%.</p>`);
+  out.append(diag);
+
+  // 2. tres carteras recomendadas
+  const methods=[
+    ["Markowitz — Máx. Sharpe", d.markowitz.maxSharpe, d.symbols, "Maximiza retorno por unidad de riesgo."],
+    ["Markowitz — Mín. Varianza", d.markowitz.minVol, d.symbols, "La cartera más estable posible."],
+    ["HRP (López de Prado)", d.hrp, d.symbols, "Diversifica por clusters de correlación; más robusta."],
+    ["Core-Satellite", d.coreSatellite, d.coreSatellite.symbols, "Núcleo estable + satélites tácticos acotados."],
+  ];
+  const cards=el(`<div class="qcards"></div>`);
+  methods.forEach(([name,pack,syms,desc])=>{
+    const w=pack.weights, mm=pack.metrics;
+    const rows=syms.map((s,i)=>w[i]>0.001?`<tr><td class="mono">${esc(s)}${(name==="Core-Satellite"&&s===pack.coreSym)?' <span style="color:var(--blue-300);font-size:.7rem">núcleo</span>':""}</td><td style="text-align:right" class="mono">${fmtPeso(w[i])}</td></tr>`:"").join("");
+    cards.append(el(`<div class="qcard">
+      <h4>${name}</h4><p class="qdesc">${desc}</p>
+      <table class="qtbl"><tbody>${rows}</tbody></table>
+      <div class="qmini"><span>Sharpe <b>${mm.sharpe.toFixed(2)}</b></span><span>Vol <b>${(mm.annVol*100).toFixed(0)}%</b></span></div>
+    </div>`));
+  });
+  out.append(el(`<div class="card"><h3>Carteras recomendadas</h3>
+    <p class="card-sub">Tres enfoques distintos calculados sobre tus mismos activos. ${d.coreSatellite.extraCore?`El Core-Satellite sugiere añadir <b>${esc(d.coreSatellite.coreSym)}</b> como núcleo.`:""}</p></div>`));
+  out.append(cards);
+
+  // 3. frontera de Markowitz (scatter)
+  out.append(el(`<div class="card"><h3>Frontera eficiente (Markowitz)</h3>
+    <p class="card-sub">Cada punto es una combinación posible de tus activos. La estrella marca la de mejor Sharpe.</p>
+    ${frontierChart(d.markowitz.cloud, d.markowitz.maxSharpe.metrics, d.markowitz.minVol.metrics, cur)}</div>`));
+
+  // 4. plan de ajuste con pestañas
+  const planMethods=[
+    ["hrp","HRP",d.symbols,d.hrp.weights],
+    ["mk","Máx. Sharpe",d.symbols,d.markowitz.maxSharpe.weights],
+    ["cs","Core-Satellite",d.coreSatellite.symbols,d.coreSatellite.weights],
+  ];
+  const tabs=planMethods.map((p,i)=>`<button class="tab ${i===0?"active":""}" onclick="app.planTab('${p[0]}')">${p[1]}</button>`).join("");
+  const plan=el(`<div class="card"><h3>Plan de ajuste</h3>
+    <p class="card-sub">Qué hacer con cada activo para pasar de tu cartera actual a la recomendada.</p>
+    <div class="tabs">${tabs}</div><div id="planBody"></div></div>`);
+  out.append(plan);
+  // pesos actuales indexados por símbolo (para alinear con universos distintos)
+  const curBySym=Object.fromEntries(d.symbols.map((s,i)=>[s,curW[i]]));
+  state.cache.adjResult={ curBySym, plans:Object.fromEntries(planMethods.map(p=>[p[0],{symbols:p[2],target:p[3]}])) };
+  app.planTab("hrp");
+}
+function planRows(symbols,current,target){
+  const ACT={vender:["Vender","neg"],reducir:["Reducir","warn-t"],mantener:["Mantener",""],incrementar:["Incrementar","pos"],añadir:["Añadir","pos"]};
+  return symbols.map((s,i)=>{
+    const c=current[i]||0,t=target[i]||0,d=t-c;
+    let a; if(t===0&&c>0)a="vender"; else if(c===0&&t>0)a="añadir"; else if(d<-0.03)a="reducir"; else if(d>0.03)a="incrementar"; else a="mantener";
+    const [lbl,cls]=ACT[a];
+    return `<tr><td class="mono">${esc(s)}</td>
+      <td style="text-align:right" class="mono">${(c*100).toFixed(0)}%</td>
+      <td style="text-align:center;color:var(--faint)">→</td>
+      <td style="text-align:right" class="mono">${(t*100).toFixed(0)}%</td>
+      <td style="text-align:right"><span class="act ${cls}">${lbl}</span></td></tr>`;
+  }).join("");
+}
+// Scatter de frontera eficiente
+function frontierChart(cloud,maxSh,minV,cur){
+  if(!cloud||!cloud.length) return "";
+  const W=520,H=300,pad=48;
+  const vols=cloud.map(p=>p[0]).concat([cur.annVol]), rets=cloud.map(p=>p[1]).concat([cur.annReturn]);
+  const vMin=Math.min(...vols)*0.9, vMax=Math.max(...vols)*1.05;
+  const rMin=Math.min(...rets)*1.05, rMax=Math.max(...rets)*1.05;
+  const X=v=>pad+(v-vMin)/(vMax-vMin)*(W-pad*1.4);
+  const Y=r=>H-pad-(r-rMin)/(rMax-rMin)*(H-pad*1.6);
+  const dots=cloud.map(p=>`<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="1.6" fill="var(--blue-500)" opacity=".28"/>`).join("");
+  const star=(x,y,c,r=7)=>{let pts="";for(let k=0;k<10;k++){const ang=-Math.PI/2+k*Math.PI/5,rr=k%2?r*.45:r;pts+=`${(x+Math.cos(ang)*rr).toFixed(1)},${(y+Math.sin(ang)*rr).toFixed(1)} `;}return `<polygon points="${pts}" fill="${c}"/>`;};
+  const gx=[vMin,(vMin+vMax)/2,vMax], gy=[rMin,(rMin+rMax)/2,rMax];
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+    ${gx.map(v=>`<text x="${X(v).toFixed(1)}" y="${H-pad+16}" font-size="10" fill="var(--faint)" text-anchor="middle" font-family="JetBrains Mono">${(v*100).toFixed(0)}%</text>`).join("")}
+    ${gy.map(r=>`<text x="${pad-8}" y="${Y(r).toFixed(1)}" font-size="10" fill="var(--faint)" text-anchor="end" font-family="JetBrains Mono">${(r*100).toFixed(0)}%</text>`).join("")}
+    <text x="${W/2}" y="${H-6}" font-size="11" fill="var(--muted)" text-anchor="middle" font-family="Inter">Volatilidad (riesgo) →</text>
+    <text x="14" y="${H/2}" font-size="11" fill="var(--muted)" text-anchor="middle" font-family="Inter" transform="rotate(-90 14 ${H/2})">Retorno →</text>
+    ${dots}
+    ${star(X(cur.annVol),Y(cur.annReturn),"var(--faint)",6)}
+    ${star(X(minV.annVol),Y(minV.annReturn),"var(--blue-300)",7)}
+    ${star(X(maxSh.annVol),Y(maxSh.annReturn),"var(--gold)",9)}
+    <g font-family="Inter" font-size="10">
+      <rect x="${W-150}" y="16" width="10" height="10" fill="var(--gold)"/><text x="${W-135}" y="25" fill="var(--muted)">Máx. Sharpe</text>
+      <rect x="${W-150}" y="32" width="10" height="10" fill="var(--blue-300)"/><text x="${W-135}" y="41" fill="var(--muted)">Mín. varianza</text>
+      <rect x="${W-150}" y="48" width="10" height="10" fill="var(--faint)"/><text x="${W-135}" y="57" fill="var(--muted)">Tu cartera</text>
+    </g></svg>`;
 }
 
 /* ============================================================
@@ -1334,6 +1496,15 @@ async function viewAdminClient(uid){
     </div>
   </div>`));
 
+  // servicio premium
+  m.append(el(`<div class="card mt2">
+    <div class="flex between" style="align-items:flex-start">
+      <div><h3>Ajuste de portafolio (premium)</h3>
+        <p class="card-sub" style="margin:0">Habilita el diagnóstico cuantitativo (Markowitz, HRP, Core-Satellite) para este cliente.</p></div>
+      <label class="tgl"><input type="checkbox" id="premChk" ${client.premium_portfolio?"checked":""} onchange="app.togglePremium('${uid}',this.checked)"><span class="tgl-track"></span></label>
+    </div>
+  </div>`));
+
   // zona de peligro
   m.append(el(`<div class="card danger mt2">
     <h3>Zona de peligro</h3>
@@ -1588,6 +1759,70 @@ const app = {
     if(error) return ui.toast(error.message,"err");
     await loadThread(clientId);
     refreshBadge();
+  },
+
+  // ajuste de portafolio (premium)
+  searchAdj(q){
+    q=(q||"").trim(); clearTimeout(state.cache.adjT);
+    const box=$("#adjResults"); if(!box) return;
+    if(q.length<1){ box.classList.add("hidden"); box.innerHTML=""; return; }
+    state.cache.adjT=setTimeout(async ()=>{
+      try{
+        const { data:{ session } }=await sb.auth.getSession();
+        const r=await fetch("/api/alpaca-assets?q="+encodeURIComponent(q),{ headers:{ Authorization:"Bearer "+session.access_token } });
+        const d=await r.json();
+        if(!d.ok||!d.results.length){ box.innerHTML=`<div class="sr-empty">Sin coincidencias</div>`; box.classList.remove("hidden"); return; }
+        box.innerHTML=d.results.map(a=>`<div class="sr-item" onclick="app.pickAdj('${esc(a.symbol)}')">
+          <div><b class="mono">${esc(a.symbol)}</b> <span class="sr-name">${esc(a.name)}</span></div></div>`).join("");
+        box.classList.remove("hidden");
+      }catch(e){ box.classList.add("hidden"); }
+    },250);
+  },
+  pickAdj(sym){ const i=$("#adjSym"); if(i)i.value=sym; const b=$("#adjResults"); if(b){b.classList.add("hidden");b.innerHTML="";} $("#adjVal")?.focus(); },
+  addAdj(){
+    const sym=($("#adjSym").value||"").trim().toUpperCase();
+    if(!sym) return ui.toast("Escribe un símbolo","err");
+    const val=parseFloat($("#adjVal").value)||0;
+    state.cache.adj=state.cache.adj||[];
+    if(state.cache.adj.some(h=>h.symbol===sym)) return ui.toast("Ya está en la lista","err");
+    state.cache.adj.push({symbol:sym,value:val>0?val:null});
+    $("#adjSym").value=""; $("#adjVal").value="";
+    renderAdjList();
+  },
+  rmAdj(i){ state.cache.adj.splice(i,1); renderAdjList(); },
+  async runAnalyze(){
+    const list=state.cache.adj||[];
+    if(list.length<2) return ui.toast("Añade al menos 2 activos","err");
+    const btn=$("#adjRun"); btn.disabled=true; const prev=btn.textContent; btn.innerHTML='<span class="spinner"></span> Analizando (descargando históricos)…';
+    const out=$("#adjOut"); out.innerHTML=`<div class="card">${loading()}<p class="card-sub" style="text-align:center">Descargando 3 años de históricos y calculando carteras…</p></div>`;
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const r=await fetch("/api/portfolio-analyze",{ method:"POST",
+        headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token },
+        body:JSON.stringify({ holdings:list }) });
+      const ct=r.headers.get("content-type")||"";
+      if(!ct.includes("application/json")) throw new Error("La función /api/portfolio-analyze no está desplegada.");
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.message||d.error||"No se pudo analizar");
+      await runAnalyzeRender(d);
+    }catch(e){ out.innerHTML=`<div class="card"><div class="notice warn" style="margin:0">${esc(e.message)}</div></div>`; }
+    finally{ btn.disabled=false; btn.textContent=prev; }
+  },
+  planTab(key){
+    const r=state.cache.adjResult; if(!r) return;
+    document.querySelectorAll(".tabs .tab").forEach(t=>t.classList.remove("active"));
+    const idx={hrp:0,mk:1,cs:2}[key]; const tabs=document.querySelectorAll(".tabs .tab");
+    if(tabs[idx]) tabs[idx].classList.add("active");
+    const plan=r.plans[key];
+    const cur=plan.symbols.map(s=>r.curBySym[s]||0);   // alinear actual al universo del método
+    $("#planBody").innerHTML=`<table class="qtbl plan"><thead><tr><th>Activo</th><th style="text-align:right">Actual</th><th></th><th style="text-align:right">Objetivo</th><th style="text-align:right">Acción</th></tr></thead><tbody>${planRows(plan.symbols,cur,plan.target)}</tbody></table>`;
+  },
+
+  // admin: activar/desactivar premium
+  async togglePremium(uid,on){
+    const {error}=await sb.from("profiles").update({premium_portfolio:on}).eq("id",uid);
+    if(error){ ui.toast(error.message,"err"); const c=$("#premChk"); if(c)c.checked=!on; return; }
+    ui.toast(on?"Ajuste de portafolio habilitado":"Servicio deshabilitado","ok");
   },
 
   // operar (Alpaca sandbox)
@@ -1996,6 +2231,7 @@ function icon(n){
     bell:'<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 19a2 2 0 0 0 3 0"/>',
     bot:'<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.2"/><path d="M9 13.5h.01M15 13.5h.01"/>',
     trade:'<path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/>',
+    tune:'<circle cx="7" cy="8" r="2.2"/><circle cx="16" cy="16" r="2.2"/><path d="M9 8h11M4 8h1M15 16h5M4 16h9"/>',
   }[n]||"";
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 }
