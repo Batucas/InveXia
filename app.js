@@ -191,9 +191,10 @@ async function loadProfile(){
     state.profile.phone=metaPhone;
   }
 }
-function showAuth(){ $("#app").classList.add("hidden"); $("#auth").classList.remove("hidden"); }
+function showAuth(){ $("#app").classList.add("hidden"); $("#auth").classList.remove("hidden"); $("#bellBtn")?.classList.add("hidden"); $("#bellPanel")?.classList.add("hidden"); }
 function enterApp(){
   $("#auth").classList.add("hidden"); $("#app").classList.remove("hidden");
+  $("#bellBtn")?.classList.remove("hidden");
   const p=state.profile, admin=p.role==="admin";
   $("#uName").textContent=p.full_name||"—";
   $("#uRole").textContent=admin?"Administrador":"Cliente";
@@ -210,7 +211,6 @@ function enterApp(){
    ============================================================ */
 const NAV_CLIENT=[
   ["inicio","Inicio",icon("home")],
-  ["notificaciones","Notificaciones",icon("bell")],
   ["riesgo","Perfil de riesgo",icon("gauge")],
   ["cartera","Mi cartera",icon("pie")],
   ["operar","Operar",icon("trade")],
@@ -225,7 +225,6 @@ const NAV_CLIENT=[
 ];
 const NAV_ADMIN=[
   ["clientes","Clientes",icon("users")],
-  ["notificaciones","Notificaciones",icon("bell")],
   ["publicaciones","Noticias e ideas",icon("news")],
   ["cursos","Cursos",icon("book")],
   ["calendario","Calendario",icon("cal")],
@@ -234,28 +233,52 @@ const NAV_ADMIN=[
 function buildNav(admin){
   const nav=$("#nav"); nav.innerHTML="";
   nav.append(el(`<div class="nav-label">${admin?"Administración":"Mi cuenta"}</div>`));
-  (admin?NAV_ADMIN:NAV_CLIENT).filter(([,,,flag])=>!flag||(flag==="premium"&&state.profile.premium_portfolio)).forEach(([id,label,ic])=>{
-    const a=el(`<a data-v="${id}">${ic}<span>${label}</span>${id==="notificaciones"?'<span class="badge hidden" id="notifBadge">0</span>':""}</a>`);
+  (admin?NAV_ADMIN:NAV_CLIENT).forEach(([id,label,ic,flag])=>{
+    const badge = flag==="premium" ? '<span class="pill-premium">PREMIUM</span>'
+                : id==="mensajes"   ? '<span class="nav-dot hidden" id="msgDot">0</span>' : "";
+    const a=el(`<a data-v="${id}">${ic}<span>${label}</span>${badge}</a>`);
     a.onclick=()=>{ location.hash="#/"+id; $("#sidebar").classList.remove("open"); };
     nav.append(a);
   });
-  refreshBadge();
+  refreshBadges();
   clearInterval(state.cache.badgeTimer);
-  state.cache.badgeTimer=setInterval(refreshBadge,30000);
+  state.cache.badgeTimer=setInterval(refreshBadges,30000);
 }
-async function refreshBadge(){
-  if(!state.session) return;
-  const { count }=await sb.from("notifications").select("id",{count:"exact",head:true})
+async function refreshBadges(){
+  if(!state.session||!state.profile) return;
+  const admin = state.profile.role==="admin";
+
+  // --- notificaciones sin leer (campana) ---
+  const { count:notifCount }=await sb.from("notifications").select("id",{count:"exact",head:true})
     .eq("user_id",state.profile.id).eq("read",false);
-  const b=$("#notifBadge"); if(!b) return;
-  if(count>0){ b.textContent=count>99?"99+":count; b.classList.remove("hidden"); }
-  else b.classList.add("hidden");
+  const bell=$("#bellBadge");
+  if(bell){
+    if(notifCount>0){ bell.textContent=notifCount>99?"99+":notifCount; bell.classList.remove("hidden"); }
+    else bell.classList.add("hidden");
+  }
+
+  // --- mensajes sin leer (punto sobre Mensajes) ---
+  let q=sb.from("messages").select("id",{count:"exact",head:true}).eq("read",false);
+  q = admin ? q.eq("sender_role","client")
+            : q.eq("client_id",state.profile.id).eq("sender_role","admin");
+  const { count:msgCount }=await q;
+  const dot=$("#msgDot");
+  if(dot){
+    if(msgCount>0){ dot.textContent=msgCount>9?"9+":msgCount; dot.classList.remove("hidden"); }
+    else dot.classList.add("hidden");
+  }
 }
+// alias por compatibilidad con llamadas existentes
+const refreshBadge = refreshBadges;
 window.addEventListener("hashchange",route);
 // cerrar el buscador de activos al hacer clic fuera
 document.addEventListener("click",(e)=>{
   const box=document.getElementById("symResults");
   if(box && !box.classList.contains("hidden") && !e.target.closest(".search-wrap")) box.classList.add("hidden");
+  // cerrar la campana al hacer clic fuera
+  const panel=document.getElementById("bellPanel");
+  if(panel && !panel.classList.contains("hidden") && !e.target.closest(".bell-panel") && !e.target.closest(".bell-btn"))
+    panel.classList.add("hidden");
 });
 function route(){
   if(!state.session) return;
@@ -1149,14 +1172,15 @@ async function viewFeed(){
    Imágenes (Supabase Storage · bucket "media")
    ============================================================ */
 const MAX_IMG = 5 * 1024 * 1024;
-function imagePicker(id){
+function imagePicker(id,initUrl){
+  const has=!!initUrl;
   return `<div class="imgpick" id="wrap_${id}">
-    <div class="imgpick-preview" id="prev_${id}"><span>Sin imagen</span></div>
+    <div class="imgpick-preview ${has?"has":""}" id="prev_${id}">${has?`<img src="${esc(initUrl)}" alt="">`:'<span>Sin imagen</span>'}</div>
     <div class="imgpick-ctrl">
       <label class="btn btn-ghost btn-sm" style="cursor:pointer">Subir imagen
         <input type="file" accept="image/*" hidden onchange="app.pickImage('${id}',this)"></label>
       <button type="button" class="btn btn-ghost btn-sm" onclick="app.clearImage('${id}')">Quitar</button>
-      <input class="input mono" id="url_${id}" placeholder="…o pega una URL de imagen"
+      <input class="input mono" id="url_${id}" value="${esc(initUrl||"")}" placeholder="…o pega una URL de imagen"
         oninput="app.previewImage('${id}',this.value)">
       <span class="imgpick-hint">JPG, PNG, WebP o GIF · máx. 5 MB</span>
     </div></div>`;
@@ -1198,6 +1222,7 @@ function ideaCard(p){
         ${p.horizon?`<div><div class="k-mini">Horizonte</div><b>${esc(p.horizon)}</b></div>`:""}
         <div><div class="k-mini">Publicada</div><b class="mono">${fmtDate(p.created_at)}</b></div>
       </div>
+      ${p.potential?`<div class="potential-box"><div class="k-mini" style="color:var(--gold)">Potencial de crecimiento / rentabilidad</div><p>${esc(p.potential)}</p></div>`:""}
       ${p.source_url?`<a class="btn btn-ghost btn-sm mt" href="${esc(p.source_url)}" target="_blank" rel="noopener">Ver fuente</a>`:""}
     </div></div>`);
 }
@@ -1244,6 +1269,8 @@ async function viewClientMessages(){
     <div class="composer"><input id="msgIn" class="input" placeholder="Escribe un mensaje…" onkeydown="if(event.key==='Enter')app.sendMsg('${state.profile.id}')">
     <button class="btn btn-primary" style="width:auto" onclick="app.sendMsg('${state.profile.id}')">Enviar</button></div></div>`));
   await loadThread(state.profile.id);
+  await sb.from("messages").update({read:true}).eq("client_id",state.profile.id).eq("sender_role","admin").eq("read",false);
+  refreshBadges();
 }
 
 /* ============================================================
@@ -1583,6 +1610,7 @@ async function viewPostsAdmin(){
       <b style="margin-top:.3rem">${esc(p.title)}</b>
       <span>${p.published?"Publicada":"Borrador"} · ${fmtDate(p.created_at)}</span></div>
     <div class="flex">
+      <button class="btn btn-ghost btn-sm" onclick="app.editPost('${p.id}')">Editar</button>
       <button class="btn btn-ghost btn-sm" onclick="app.togglePost('${p.id}',${!p.published})">${p.published?"Ocultar":"Publicar"}</button>
       ${p.kind==="idea"?`<button class="btn btn-ghost btn-sm" onclick="app.closeIdea('${p.id}','${p.status==="abierta"?"cerrada":"abierta"}')">${p.status==="abierta"?"Cerrar idea":"Reabrir"}</button>`:""}
       <button class="btn btn-ghost btn-sm" onclick="app.delPost('${p.id}')">Eliminar</button></div></div>`)));
@@ -1654,6 +1682,7 @@ async function adminThread(uid,prof){
     <button class="btn btn-primary" style="width:auto" onclick="app.sendMsg('${uid}')">Enviar</button></div></div>`));
   await loadThread(uid);
   await sb.from("messages").update({read:true}).eq("client_id",uid).eq("sender_role","client").eq("read",false);
+  refreshBadges();
 }
 
 /* ============================================================
@@ -1920,14 +1949,45 @@ const app = {
     finally{ btn.disabled=false; btn.textContent=prev; }
   },
 
+  // campana de notificaciones (esquina)
+  async toggleBell(ev){
+    if(ev) ev.stopPropagation();
+    const panel=$("#bellPanel");
+    if(!panel.classList.contains("hidden")){ panel.classList.add("hidden"); return; }
+    panel.classList.remove("hidden");
+    panel.innerHTML=`<div class="bell-head"><b>Notificaciones</b></div><div class="bell-list">${loading()}</div>`;
+    const ns=await sb.from("notifications").select("*").eq("user_id",state.profile.id)
+      .order("created_at",{ascending:false}).limit(12).then(r=>r.data||[]);
+    const unread=ns.filter(n=>!n.read).length;
+    const ICONS={mensaje:"chat",evento:"cal",cartera:"pie",curso:"book",general:"bell"};
+    let body;
+    if(!ns.length){
+      body=`<div class="bell-empty">${icon("bell")}<p>No tienes notificaciones.</p></div>`;
+    } else {
+      body=ns.map((n,i)=>`<div class="bell-item ${n.read?"":"unread"}" data-ni="${i}">
+        <div class="bi-ic">${icon(ICONS[n.kind]||"bell")}</div>
+        <div class="bi-main"><b>${esc(n.title)}</b><span>${esc(n.body||"")}</span>
+          <i>${fmtTime(n.created_at)}</i></div></div>`).join("");
+    }
+    panel.innerHTML=`<div class="bell-head"><b>Notificaciones</b>
+      ${unread?`<button onclick="app.readAll()">Marcar leídas</button>`:""}</div>
+      <div class="bell-list">${body}</div>`;
+    panel.querySelectorAll("[data-ni]").forEach(elm=>{
+      elm.onclick=()=>app.openNotif(ns[+elm.dataset.ni]);
+    });
+  },
+
   // notificaciones
   async openNotif(n){
-    if(!n.read){ await sb.from("notifications").update({read:true}).eq("id",n.id); refreshBadge(); }
+    $("#bellPanel")?.classList.add("hidden");
+    if(!n.read){ await sb.from("notifications").update({read:true}).eq("id",n.id); refreshBadges(); }
     if(n.link) location.hash=n.link; else render();
   },
   async readAll(){
     await sb.from("notifications").update({read:true}).eq("user_id",state.profile.id).eq("read",false);
-    refreshBadge(); ui.toast("Marcadas como leídas","ok"); render();
+    refreshBadges();
+    $("#bellPanel")?.classList.add("hidden");
+    ui.toast("Marcadas como leídas","ok");
   },
 
   // asistente IA
@@ -2044,43 +2104,67 @@ const app = {
   clearImage(id){ $("#url_"+id).value=""; app.previewImage(id,""); },
 
   // publicaciones
-  postForm(){
-    const box=$("#postForm"); if(box.dataset.open){ box.innerHTML=""; box.dataset.open=""; return; }
+  postForm(post){
+    const box=$("#postForm");
+    if(box.dataset.open && !post){ box.innerHTML=""; box.dataset.open=""; return; }
     box.dataset.open="1";
+    const p=post||{};
+    const isIdea=p.kind==="idea";
     box.innerHTML=`<div class="card">
+      ${post?`<div class="flex between"><b>Editar publicación</b><button class="btn btn-ghost btn-sm" onclick="app.postForm()">Cancelar</button></div><div class="divide"></div>`:""}
+      <input type="hidden" id="pId" value="${esc(p.id||"")}">
       <div class="field" style="max-width:200px"><label>Tipo</label>
-        <select id="pKind" class="input" onchange="app.postKindChange()"><option value="noticia">Noticia</option><option value="idea">Idea de inversión</option></select></div>
-      <div class="field"><label>Imagen de portada</label>${imagePicker("post")}</div>
-      <div class="field"><label>Título</label><input id="pTitle" class="input"></div>
-      <div class="field"><label>Contenido / tesis</label><textarea id="pBody" class="input"></textarea></div>
-      <div class="field"><label>Enlace a la fuente (opcional)</label><input id="pUrl" class="input" placeholder="https://…"></div>
-      <div id="ideaFields" class="hidden">
+        <select id="pKind" class="input" onchange="app.postKindChange()">
+          <option value="noticia" ${p.kind==="noticia"?"selected":""}>Noticia</option>
+          <option value="idea" ${isIdea?"selected":""}>Idea de inversión</option></select></div>
+      <div class="field"><label>Imagen de portada</label>${imagePicker("post",p.image_url)}</div>
+      <div class="field"><label>Título</label><input id="pTitle" class="input" value="${esc(p.title||"")}"></div>
+      <div class="field"><label>Contenido / tesis</label><textarea id="pBody" class="input">${esc(p.body||"")}</textarea></div>
+      <div class="field"><label>Enlace a la fuente (opcional)</label><input id="pUrl" class="input" placeholder="https://…" value="${esc(p.source_url||"")}"></div>
+      <div id="ideaFields" class="${isIdea?"":"hidden"}">
         <div class="divide"></div>
         <div class="flex" style="gap:.8rem;flex-wrap:wrap">
-          <div class="field" style="flex:1;min-width:110px"><label>Ticker</label><input id="pTicker" class="input mono" placeholder="AAPL"></div>
+          <div class="field" style="flex:1;min-width:110px"><label>Ticker</label><input id="pTicker" class="input mono" placeholder="AAPL" value="${esc(p.ticker||"")}"></div>
           <div class="field" style="flex:1;min-width:120px"><label>Dirección</label>
-            <select id="pDir" class="input"><option value="compra">Compra</option><option value="venta">Venta</option><option value="mantener">Mantener</option></select></div>
-          <div class="field" style="flex:1;min-width:120px"><label>Precio objetivo</label><input id="pTarget" class="input mono" type="number" step="any"></div>
-          <div class="field" style="flex:1;min-width:120px"><label>Horizonte</label><input id="pHor" class="input" placeholder="6–12 meses"></div>
-        </div></div>
-      <div class="flex mt"><label class="flex" style="gap:.4rem;color:var(--muted);font-size:.85rem"><input type="checkbox" id="pPub" checked> Publicar de inmediato</label>
-        <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="app.savePost()">Guardar publicación</button></div></div>`;
+            <select id="pDir" class="input">
+              <option value="compra" ${p.direction==="compra"?"selected":""}>Compra</option>
+              <option value="venta" ${p.direction==="venta"?"selected":""}>Venta</option>
+              <option value="mantener" ${p.direction==="mantener"?"selected":""}>Mantener</option></select></div>
+          <div class="field" style="flex:1;min-width:120px"><label>Precio objetivo</label><input id="pTarget" class="input mono" type="number" step="any" value="${p.target_price??""}"></div>
+          <div class="field" style="flex:1;min-width:120px"><label>Horizonte</label><input id="pHor" class="input" placeholder="6–12 meses" value="${esc(p.horizon||"")}"></div>
+        </div>
+        <div class="field"><label>Potencial de crecimiento / rentabilidad</label>
+          <textarea id="pPotential" class="input" placeholder="Ej. Alto — se estima un potencial de +25% a 12 meses si se cumple la tesis. Riesgo principal: …">${esc(p.potential||"")}</textarea></div>
+      </div>
+      <div class="flex mt"><label class="flex" style="gap:.4rem;color:var(--muted);font-size:.85rem"><input type="checkbox" id="pPub" ${(p.published??true)?"checked":""}> Publicar de inmediato</label>
+        <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="app.savePost()">${post?"Guardar cambios":"Guardar publicación"}</button></div></div>`;
+    if(post) box.scrollIntoView({behavior:"smooth",block:"start"});
+  },
+  async editPost(id){
+    const p=await sb.from("posts").select("*").eq("id",id).single().then(r=>r.data);
+    if(!p) return ui.toast("No se encontró la publicación","err");
+    app.postForm(p);
   },
   postKindChange(){ $("#ideaFields").classList.toggle("hidden", $("#pKind").value!=="idea"); },
   async savePost(){
     const t=$("#pTitle").value.trim(); if(!t) return ui.toast("Ponle un título","err");
     const kind=$("#pKind").value;
     const row={ kind, title:t, body:$("#pBody").value.trim(), source_url:$("#pUrl").value.trim()||null,
-      image_url:$("#url_post").value.trim()||null,
-      published:$("#pPub").checked, created_by:state.profile.id };
+      image_url:$("#url_post").value.trim()||null, published:$("#pPub").checked };
     if(kind==="idea"){
       row.ticker=$("#pTicker").value.trim().toUpperCase()||null;
       row.direction=$("#pDir").value; row.target_price=num($("#pTarget").value);
-      row.horizon=$("#pHor").value.trim()||null; row.status="abierta";
+      row.horizon=$("#pHor").value.trim()||null;
+      row.potential=$("#pPotential").value.trim()||null;
+    } else {
+      row.ticker=null; row.potential=null;
     }
-    const {error}=await sb.from("posts").insert(row);
+    const id=$("#pId").value;
+    let error;
+    if(id){ ({error}=await sb.from("posts").update(row).eq("id",id)); }
+    else { row.created_by=state.profile.id; row.status="abierta"; ({error}=await sb.from("posts").insert(row)); }
     if(error) return ui.toast(error.message,"err");
-    ui.toast("Publicación creada","ok"); render();
+    ui.toast(id?"Cambios guardados":"Publicación creada","ok"); render();
   },
   async togglePost(id,pub){ await sb.from("posts").update({published:pub}).eq("id",id); render(); },
   async closeIdea(id,status){ await sb.from("posts").update({status}).eq("id",id); render(); },
