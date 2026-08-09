@@ -1,0 +1,38 @@
+# ============================================================
+#  InveXia · QuantNet — Pipeline automático diario
+#  ------------------------------------------------------------
+#  Corre quantnet_pipeline.py todos los días y sube los datos
+#  reales a Supabase Storage. No necesitas hacer nada manual.
+#
+#  Ubicación obligatoria: .github/workflows/quantnet.yml
+# ============================================================
+
+name: QuantNet diario
+
+on:
+  # Horario automático (hora UTC). 03:00 UTC = 23:00 en Bolivia (UTC-4).
+  schedule:
+    - cron: "0 3 * * *"
+  # Botón para correrlo manualmente cuando quieras (pestaña Actions).
+  workflow_dispatch:
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install yfinance numpy pandas requests
+
+      - name: Ejecutar el pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python quantnet_pipeline.py
