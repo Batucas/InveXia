@@ -621,3 +621,6 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .potential-box{margin-top:.9rem;background:linear-gradient(180deg,rgba(245,196,81,.08),transparent);
   border:1px solid rgba(245,196,81,.28);border-left:3px solid var(--gold);border-radius:var(--r-sm);padding:.7rem .85rem}
 .potential-box p{margin:.3rem 0 0;font-size:.86rem;line-height:1.5;color:var(--text)}
+
+/* --- QuantNet (iframe del terminal) --- */
+.quantnet-frame{width:100%;height:calc(100vh - 130px);min-height:560px;border:0;display:block;background:#0a0e15}

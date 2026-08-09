@@ -215,6 +215,7 @@ const NAV_CLIENT=[
   ["cartera","Mi cartera",icon("pie")],
   ["operar","Operar",icon("trade")],
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
+  ["quantnet","Red de mercado",icon("net"),"premium"],
   ["simulador","Simulador",icon("chart")],
   ["asistente","Asistente IA",icon("bot")],
   ["mercado","Mercado e ideas",icon("news")],
@@ -313,6 +314,7 @@ async function render(){
       if(state.view==="cartera")    return void await viewPortfolio();
       if(state.view==="operar")     return void await viewTrade();
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
+      if(state.view==="quantnet")   return void await viewQuantNet();
       if(state.view==="simulador")  return void await viewSimulator();
       if(state.view==="mercado")    return void await viewFeed();
       if(state.view==="cursos")     return void await viewCoursesClient();
@@ -623,6 +625,36 @@ function perfOf(holds,quotes){
   return { rows, value, cost, executed,
            pnl: executed?value-cost:null,
            pnlPct: (executed&&cost>0)?((value/cost)-1)*100:null };
+}
+
+/* ============================================================
+   CLIENTE · QuantNet — Red de mercado (premium)
+   ============================================================ */
+async function viewQuantNet(){
+  const m=$("#main");
+  m.innerHTML=head("Premium","Red de mercado","Estructura de correlaciones del mercado como una red viva.");
+  const admin=state.profile.role==="admin";
+  if(!admin && !state.profile.premium_quantnet){
+    m.append(el(`<div class="card empty">${icon("net")}<h3 style="margin-top:.5rem">Servicio no habilitado</h3>
+      <p>QuantNet es un servicio premium. Escríbele a tu asesor para activarlo.</p>
+      <button class="btn btn-ghost btn-sm" style="width:auto;margin-top:.6rem" onclick="location.hash='#/mensajes'">Contactar a mi asesor</button></div>`));
+    return;
+  }
+  const wrap=el(`<div class="card" style="padding:0;overflow:hidden">${loading()}</div>`);
+  m.append(wrap);
+  try{
+    const { data:{ session } }=await sb.auth.getSession();
+    const r=await fetch("/api/quantnet-url",{ headers:{ Authorization:"Bearer "+session.access_token } });
+    const ct=r.headers.get("content-type")||"";
+    if(!ct.includes("application/json")) throw new Error("La función /api/quantnet-url no está desplegada.");
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.message||d.error||"No disponible");
+    const src=`quantnet.html?role=${encodeURIComponent(d.role)}&data=${encodeURIComponent(d.url)}`;
+    wrap.style.padding="0";
+    wrap.innerHTML=`<iframe src="${esc(src)}" class="quantnet-frame" title="QuantNet" loading="lazy"></iframe>`;
+  }catch(e){
+    wrap.innerHTML=`<div class="notice warn" style="margin:1rem">${esc(e.message)}${/pipeline|datos public/i.test(e.message)?" — el pipeline aún no ha subido datos.":""}</div>`;
+  }
 }
 
 /* ============================================================
@@ -1530,6 +1562,12 @@ async function viewAdminClient(uid){
         <p class="card-sub" style="margin:0">Habilita el diagnóstico cuantitativo (Markowitz, HRP, Core-Satellite) para este cliente.</p></div>
       <label class="tgl"><input type="checkbox" id="premChk" ${client.premium_portfolio?"checked":""} onchange="app.togglePremium('${uid}',this.checked)"><span class="tgl-track"></span></label>
     </div>
+    <div class="divide"></div>
+    <div class="flex between" style="align-items:flex-start">
+      <div><h3 style="margin:0">Red de mercado · QuantNet (premium)</h3>
+        <p class="card-sub" style="margin:0">Habilita el terminal de red de correlaciones para este cliente.</p></div>
+      <label class="tgl"><input type="checkbox" id="qnChk" ${client.premium_quantnet?"checked":""} onchange="app.toggleQuantnet('${uid}',this.checked)"><span class="tgl-track"></span></label>
+    </div>
   </div>`));
 
   // zona de peligro
@@ -1852,6 +1890,11 @@ const app = {
     const {error}=await sb.from("profiles").update({premium_portfolio:on}).eq("id",uid);
     if(error){ ui.toast(error.message,"err"); const c=$("#premChk"); if(c)c.checked=!on; return; }
     ui.toast(on?"Ajuste de portafolio habilitado":"Servicio deshabilitado","ok");
+  },
+  async toggleQuantnet(uid,on){
+    const {error}=await sb.from("profiles").update({premium_quantnet:on}).eq("id",uid);
+    if(error){ ui.toast(error.message,"err"); const c=$("#qnChk"); if(c)c.checked=!on; return; }
+    ui.toast(on?"QuantNet habilitado":"QuantNet deshabilitado","ok");
   },
 
   // operar (Alpaca sandbox)
@@ -2316,6 +2359,7 @@ function icon(n){
     bot:'<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.2"/><path d="M9 13.5h.01M15 13.5h.01"/>',
     trade:'<path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/>',
     tune:'<circle cx="7" cy="8" r="2.2"/><circle cx="16" cy="16" r="2.2"/><path d="M9 8h11M4 8h1M15 16h5M4 16h9"/>',
+    net:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="17" r="2"/><path d="M8 7l8 0M7 8l0 8M8 17l7-1M8 7l8 9"/>',
   }[n]||"";
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 }

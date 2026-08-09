@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuantNet · Terminal de Red Financiera</title>
+<style>
+:root{
+  --bg:#03070e;
+  --panel:#0a1524;
+  --panel-2:#0e1d30;
+  --line:#182c45;
+  --line-soft:#12233a;
+  --ink:#dce6f2;
+  --ink-dim:#7e93ad;
+  --ink-faint:#4f6480;
+  --gold:#c9a227;
+  --gold-hi:#f0d375;
+  --alert:#e0603f;
+  --ok:#3ecf8e;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --sans:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+  --colL:216px;
+  --colR:336px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+#app{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr auto;min-height:0}
+header{display:flex;align-items:center;gap:18px;padding:0 16px;height:46px;background:linear-gradient(180deg,#0b1826,#06101c);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;gap:9px}
+.brand b{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.16em;color:var(--gold-hi)}
+.brand span{font-size:10px;letter-spacing:.22em;color:var(--ink-faint);text-transform:uppercase}
+.hdr-meta{display:flex;gap:18px;margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+.hdr-meta i{font-style:normal;color:var(--ink-faint);margin-right:6px}
+.tag-sim{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:#0a1524;background:var(--gold);padding:3px 8px;border-radius:2px;font-weight:700}
+main{display:grid;grid-template-columns:var(--colL) 10px 1fr 10px var(--colR);min-height:0;overflow:hidden}
+.gutter{background:var(--line);cursor:col-resize;position:relative;min-width:0;display:flex;align-items:center;justify-content:center}
+.gutter:hover,.gutter.act{background:#25405f}
+.gtoggle{
+  position:absolute;top:50%;transform:translateY(-50%);
+  width:14px;height:46px;border-radius:3px;
+  font-size:11px;line-height:1;color:var(--ink-dim);
+  background:#1f364f;border:1px solid #2c4a6c;cursor:pointer;z-index:4;
+}
+.gtoggle:hover{background:var(--gold);color:#0a1524;border-color:var(--gold)}
+.rail{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;padding:14px 13px 48px;min-height:0;min-width:0;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#25405f transparent}
+.rail::-webkit-scrollbar{width:9px}
+.rail::-webkit-scrollbar-track{background:#07111d}
+.rail::-webkit-scrollbar-thumb{background:#25405f;border-radius:5px;border:2px solid #07111d}
+.rail::-webkit-scrollbar-thumb:hover{background:var(--gold)}
+.scrolldn{
+  position:sticky;bottom:0;display:none;width:100%;padding:7px 0;margin-top:6px;
+  background:linear-gradient(180deg,rgba(10,21,36,0),#0a1524 38%);
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--gold-hi);
+  border-top:1px solid var(--line);
+}
+.scrolldn[data-show=true]{display:block}
+.rail-r{border-right:none;border-left:1px solid var(--line);padding:0;display:flex;flex-direction:column;min-height:0}
+.grp{margin-bottom:19px}
+.grp>h4{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid var(--line-soft)}
+label.fld{display:block;margin-bottom:9px}
+label.fld>span{display:block;font-size:10.5px;color:var(--ink-dim);margin-bottom:4px}
+select,input[type=text]{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:3px;padding:5px 7px;font-family:var(--mono);font-size:11.5px}
+input[type=range]{width:100%;accent-color:var(--gold)}
+.seg{display:flex;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.seg button{flex:1;padding:5px 0;font-family:var(--mono);font-size:10px;color:var(--ink-dim);background:var(--panel-2);border-right:1px solid var(--line)}
+.seg button:last-child{border-right:none}
+.seg button[aria-pressed=true]{background:var(--gold);color:#0a1524;font-weight:700}
+.chk{display:flex;align-items:center;gap:7px;margin-bottom:7px;font-size:11.5px;color:var(--ink-dim);cursor:pointer}
+.chk input{accent-color:var(--gold)}
+.readout{font-family:var(--mono);font-size:11px;color:var(--gold-hi);float:right}
+.btn{width:100%;padding:6px;border:1px solid var(--line);border-radius:3px;background:var(--panel-2);font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--ink-dim);margin-bottom:6px}
+.btn:hover{border-color:var(--gold);color:var(--gold-hi)}
+.btn.hero{border-color:var(--gold);color:var(--gold-hi);background:rgba(201,162,39,.1)}
+.leg{display:flex;align-items:center;gap:7px;margin-bottom:4px;font-size:10.5px;color:var(--ink-dim)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.ramp{height:9px;border-radius:2px;background:linear-gradient(90deg,#0b3346,#1b9aaa,#3fd0a0,#b8e34a,#fff6a8);margin:4px 0 3px}
+.ramp-lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--ink-faint)}
+.stage{position:relative;min-width:0;background:radial-gradient(ellipse at 50% 44%,#071523 0%,#03070e 70%)}
+canvas{display:block;width:100%;height:100%}
+.stage-hud{position:absolute;left:14px;bottom:12px;font-family:var(--mono);font-size:10px;color:var(--ink-faint);line-height:1.7;pointer-events:none}
+.stage-hud kbd{color:var(--ink-dim);border:1px solid var(--line);border-radius:2px;padding:0 3px}
+#tip{position:absolute;pointer-events:none;display:none;z-index:9;background:#07182b;border:1px solid var(--gold);border-radius:3px;padding:6px 9px;font-family:var(--mono);font-size:11px;box-shadow:0 6px 22px rgba(0,0,0,.7);white-space:nowrap}
+#tip b{color:var(--gold-hi)}
+.ctrlbar{background:var(--panel);border-top:1px solid var(--line);
+  padding:4px 18px 9px;display:flex;flex-direction:column;gap:5px;flex:none}
+.ctrlbar.min{padding:0 18px}
+.ctrlbar.min .ctrlrow{display:none}
+.barhead{display:flex;justify-content:flex-end;align-items:center;height:17px}
+.barhead button{font-family:var(--mono);font-size:9px;letter-spacing:.13em;color:var(--ink-faint);padding:0 4px}
+.barhead button:hover{color:var(--gold-hi)}
+.ctrlrow{display:flex;align-items:center;gap:12px}
+.ctrlrow input[type=range]{flex:1}
+.ctrlrow .stamp{font-family:var(--mono);font-size:13px;color:var(--gold-hi);min-width:82px;letter-spacing:.05em}
+.ctrlrow .rlabel{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--ink-faint);min-width:82px}
+.ctrlrow .rlabel b{color:var(--gold-hi);font-weight:400}
+.minibtn{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--ink-dim);
+  border:1px solid var(--line);border-radius:3px;padding:4px 10px;background:var(--panel-2);white-space:nowrap}
+.minibtn:hover{border-color:var(--gold);color:var(--gold-hi)}
+.minibtn[aria-pressed=true]{background:var(--gold);color:#0a1524;font-weight:700}
+.tabs{display:flex;border-bottom:1px solid var(--line);background:var(--panel);flex:none}
+.tabs button{flex:1;padding:11px 0;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--ink-faint);border-bottom:2px solid transparent}
+.tabs button[aria-selected=true]{color:var(--gold-hi);border-bottom-color:var(--gold);background:var(--panel-2)}
+.pane{display:none;overflow-y:auto;padding:14px;flex:1;min-height:0;background:var(--panel)}
+.pane[data-on=true]{display:block}
+.empty{color:var(--ink-faint);font-size:12px;line-height:1.7;padding:26px 8px;text-align:center}
+.nd-head{border-bottom:1px solid var(--line);padding-bottom:11px;margin-bottom:13px}
+.nd-tick{font-family:var(--mono);font-size:23px;font-weight:700;letter-spacing:.04em;line-height:1}
+.nd-name{font-size:12px;color:var(--ink-dim);margin-top:3px}
+.nd-chips{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;padding:3px 7px;border-radius:2px;border:1px solid var(--line);color:var(--ink-dim)}
+.verdict{border-left:3px solid var(--gold);background:rgba(201,162,39,.07);padding:9px 11px;margin-bottom:14px;font-size:11.5px;line-height:1.65}
+.verdict b{color:var(--gold-hi);font-family:var(--mono);letter-spacing:.05em}
+.verdict.mute{border-left-color:var(--line);background:rgba(255,255,255,.02)}
+.verdict.mute b{color:var(--ink-dim)}
+h5.sec{font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faint);margin:16px 0 8px}
+table.kv{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+table.kv td{padding:4px 0;border-bottom:1px solid var(--line-soft)}
+table.kv td:first-child{color:var(--ink-dim);font-family:var(--sans);font-size:11.5px}
+table.kv td:last-child{text-align:right}
+.pos{color:var(--ok)}.neg{color:var(--alert)}.gld{color:var(--gold-hi)}
+.bar{height:3px;background:var(--line-soft);border-radius:2px;overflow:hidden;margin-top:3px}
+.bar>i{display:block;height:100%;background:var(--gold)}
+.conn{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line-soft);cursor:pointer;font-family:var(--mono);font-size:11.5px}
+.conn:hover{background:rgba(201,162,39,.06)}
+.conn .t{width:56px;color:var(--gold-hi)}
+.conn .b{flex:1;height:4px;background:var(--line-soft);border-radius:2px;overflow:hidden}
+.conn .b>i{display:block;height:100%}
+.conn .v{width:42px;text-align:right;color:var(--ink-dim)}
+.sig{border:1px solid var(--line);border-radius:3px;padding:9px 10px;margin-bottom:8px;cursor:pointer;background:var(--panel-2)}
+.sig:hover{border-color:var(--gold)}
+.sig-top{display:flex;align-items:baseline;gap:8px;font-family:var(--mono)}
+.sig-top .p{font-size:12.5px;color:var(--gold-hi);letter-spacing:.03em}
+.sig-top .z{margin-left:auto;font-size:14px;font-weight:700}
+.sig-sub{font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-top:5px;display:flex;gap:12px}
+.warn{border:1px solid #4a3410;background:rgba(201,162,39,.06);border-radius:3px;padding:10px 11px;font-size:11px;line-height:1.7;color:var(--ink-dim);margin-bottom:13px}
+.warn b{color:var(--gold-hi)}
+pre.code{background:#050f1c;border:1px solid var(--line);border-radius:3px;padding:11px;font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--ink-dim);overflow-x:auto;white-space:pre}
+pre.code .k{color:var(--gold-hi)}
+pre.code .c{color:var(--ink-faint);font-style:italic}
+.doc{font-size:11.5px;line-height:1.75;color:var(--ink-dim);margin-bottom:12px}
+.doc b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><b>QUANTNET</b><span>Financial Network Terminal</span></div>
+    <span class="tag-sim" id="srcTag">DATOS SIMULADOS</span>
+    <div class="seg" id="segRole" style="width:186px;margin-left:14px">
+      <button data-v="analyst" aria-pressed="true">ANALISTA</button>
+      <button data-v="client"  aria-pressed="false">CLIENTE</button>
+    </div>
+    <div class="hdr-meta">
+      <div><i>UNIVERSO</i><span id="mUni">—</span></div>
+      <div><i>NODOS</i><span id="mN">—</span></div>
+      <div><i>ARISTAS</i><span id="mE">—</span></div>
+      <div><i>COM.</i><span id="mC">—</span></div>
+      <div><i>AISLADOS</i><span id="mI">—</span></div>
+    </div>
+  </header>
+
+  <main>
+    <aside class="rail">
+      <div class="grp">
+        <h4>Vista</h4>
+        <div class="seg" id="segView" style="margin-bottom:9px">
+          <button data-v="dense" aria-pressed="true">DENSA</button>
+          <button data-v="analytic" aria-pressed="false">ANALÍTICA</button>
+        </div>
+        <p style="font-size:10.5px;line-height:1.6;color:var(--ink-faint)" id="viewNote"></p>
+      </div>
+
+      <div class="grp">
+        <h4>Universo</h4>
+        <label class="fld"><span>Conjunto</span>
+          <select id="fUniv">
+            <option value="core" selected>Núcleo 196</option>
+            <option value="ndx">Nasdaq 100</option>
+            <option value="sp500">S&amp;P 500 (456 · lento)</option>
+          </select>
+        </label>
+        <label class="fld"><span>Sector</span>
+          <select id="fSector">
+            <option value="all" selected>Todos los sectores</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="grp">
+        <h4>Vista 3D</h4>
+        <label class="fld"><span>Giro Y <b class="readout" id="rotVal2">0°</b></span>
+          <input type="range" id="rotSlide2" min="-180" max="180" step="1" value="0">
+        </label>
+        <label class="fld"><span>Inclinación X <b class="readout" id="tiltVal2">-14°</b></span>
+          <input type="range" id="tiltSlide2" min="-85" max="85" step="1" value="-14">
+        </label>
+        <div class="seg">
+          <button id="bRot02">RESET 0°</button>
+          <button id="bSpin2" aria-pressed="false">↻ GIRO</button>
+        </div>
+      </div>
+
+      <div class="grp">
+        <h4>Topología</h4>
+        <label class="fld"><span>Filtro de aristas</span>
+          <select id="fFilter">
+            <option value="mst">MST</option>
+            <option value="mst_thr" selected>MST + umbral</option>
+            <option value="thr">Solo umbral</option>
+          </select>
+        </label>
+        <label class="fld"><span>Umbral |ρ| <b class="readout" id="rThr">0.58</b></span>
+          <input type="range" id="fThr" min="0.30" max="0.95" step="0.01" value="0.58">
+        </label>
+        <label class="fld"><span>Separación <b class="readout" id="rSpread">1.8×</b></span>
+          <input type="range" id="fSpread" min="0.4" max="4" step="0.1" value="1.8">
+        </label>
+        <label class="fld"><span>Profundidad 3D <b class="readout" id="rDepth">1.00</b></span>
+          <input type="range" id="fDepth" min="0" max="1.6" step="0.05" value="1">
+        </label>
+      </div>
+
+      <div class="grp">
+        <h4>Codificación</h4>
+        <label class="fld"><span>Color</span>
+          <div class="seg" id="segColor">
+            <button data-v="centrality" aria-pressed="true">CENTR.</button>
+            <button data-v="sector" aria-pressed="false">SECTOR</button>
+            <button data-v="community" aria-pressed="false">COMUN.</button>
+          </div>
+        </label>
+        <label class="fld"><span>Tamaño</span>
+          <select id="fSize">
+            <option value="eig" selected>Centralidad eigenvector</option>
+            <option value="degree">Grado</option>
+            <option value="mcap">Capitalización</option>
+            <option value="btw">Intermediación</option>
+            <option value="adv">Liquidez (ADV)</option>
+            <option value="flat">Uniforme</option>
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" id="fBloom" checked> Resplandor aditivo</label>
+        <label class="chk"><input type="checkbox" id="fHalo" checked> Halo de desacople</label>
+        <label class="chk"><input type="checkbox" id="fLbl" checked> Etiquetas</label>
+        <label class="chk"><input type="checkbox" id="fRing" checked> Anillo de aislados</label>
+        <label class="chk"><input type="checkbox" id="fBreathe" checked> Movimiento ambiental</label>
+      </div>
+
+      <div class="grp">
+        <h4>Buscar</h4>
+        <input type="text" id="fSearch" placeholder="AAPL, JPM…" autocomplete="off">
+      </div>
+
+      <div class="grp">
+        <h4 id="legTitle">Escala</h4>
+        <div id="legend"></div>
+      </div>
+
+      <div class="grp">
+        <h4>Datos</h4>
+        <button class="btn hero" id="bLoad">CARGAR network.json</button>
+        <input type="file" id="fFile" accept=".json" hidden>
+        <button class="btn" id="bFit">ENCUADRAR</button>
+        <button class="btn" id="bRelayout">REORDENAR LAYOUT</button>
+      </div>
+      <button class="scrolldn" id="bScrollDn">▾ MÁS OPCIONES</button>
+    </aside>
+
+    <div class="gutter" data-side="l" title="Arrastra para redimensionar">
+      <button class="gtoggle" data-side="l" id="tgL" title="Ocultar panel izquierdo">‹</button>
+    </div>
+
+    <section class="stage">
+      <canvas id="cv"></canvas>
+      <div id="tip"></div>
+      <div class="stage-hud">
+        <div><kbd>rueda</kbd> zoom · <kbd>arrastrar</kbd> mover · <kbd>clic</kbd> inspeccionar · <kbd>esc</kbd> limpiar</div>
+        <div id="hudNote">Halo dorado = activo desacoplado de su comunidad</div>
+      </div>
+    </section>
+
+    <div class="gutter" data-side="r" title="Arrastra para redimensionar">
+      <button class="gtoggle" data-side="r" id="tgR" title="Ocultar panel derecho">›</button>
+    </div>
+
+    <aside class="rail rail-r">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true"  data-p="detail">ACTIVO</button>
+        <button role="tab" aria-selected="false" data-p="signals">SEÑALES</button>
+        <button role="tab" aria-selected="false" data-p="contract">CONTRATO</button>
+      </div>
+      <div class="pane" data-pane="detail" data-on="true">
+        <div class="empty" id="detEmpty">Selecciona un nodo en la red<br>para inspeccionarlo.</div>
+        <div id="detBody" style="display:none"></div>
+      </div>
+      <div class="pane" data-pane="signals">
+        <div class="warn"><b>Candidatos, no órdenes.</b> Los z-scores no incorporan costos de
+        transacción, coste de préstamo ni validación fuera de muestra. Un candidato solo se
+        opera después de pasar el arnés del Bloque 3.</div>
+        <h5 class="sec">Nodos desacoplados de su comunidad</h5>
+        <div id="sigNodes"></div>
+        <h5 class="sec">Pares divergentes · p ajustado (Benjamini-Hochberg)</h5>
+        <div id="sigPairs"></div>
+      </div>
+      <div class="pane" data-pane="contract">
+        <p class="doc">La interfaz consume un único <b>network.json</b>. Lo que ves ahora está
+        generado en el navegador con un modelo de factores sintético; sustituirlo por la salida
+        real de tu Python no requiere tocar el render.</p>
+        <pre class="code" id="schema"></pre>
+        <h5 class="sec">Separación por perfil</h5>
+        <p class="doc">El selector ANALISTA / CLIENTE de la cabecera solo cambia la
+        interfaz. En producción tienen que ser <b>dos archivos distintos</b>:</p>
+        <pre class="code"><span class="c">// network_client_{fecha}.json  → nodes, rho, communities</span>
+<span class="c">// network_admin_{fecha}.json   → + cohesion_z, pairs, p_adj</span></pre>
+        <p class="doc">Si el JSON del cliente contiene las señales, ocultarlas en la
+        interfaz no protege nada: basta abrir la pestaña de red del navegador. La
+        separación real ocurre cuando el worker escribe dos ficheros y el endpoint
+        decide cuál firma según el rol.</p>
+        <h5 class="sec">Notas de implementación</h5>
+        <p class="doc"><b>Intermediación sobre el MST.</b> La betweenness se calcula siempre
+        sobre el árbol, nunca sobre el grafo denso. En un grafo con miles de aristas casi todos
+        los caminos mínimos tienen longitud 2 y la métrica pierde sentido.</p>
+        <p class="doc"><b>iv_rank / iv_pct</b> requieren un año de superficie de volatilidad
+        implícita histórica. Es la única pieza del contrato sin fuente resuelta.</p>
+        <p class="doc"><b>p_adj</b> debe llegar ya corregido por multiplicidad. Con 196 nodos hay
+        19.110 pares posibles; sin corrección, ~955 aparecerán significativos al 5% aunque no
+        exista ninguna relación real.</p>
+      </div>
+    </aside>
+  </main>
+
+  <div class="ctrlbar" id="ctrlbar">
+    <div class="barhead"><button id="bBar" title="Minimizar barra inferior">▾ OCULTAR BARRA</button></div>
+    <div class="ctrlrow">
+      <span class="stamp" id="tStamp">—</span>
+      <input type="range" id="tSlide" min="0" max="0" step="1" value="0" aria-label="Fecha del snapshot">
+      <button class="minibtn" id="bPlay">▶ ANIMAR</button>
+      <span class="rlabel" style="min-width:auto;padding-left:10px">GIRO Y <b id="rotVal">0°</b></span>
+      <input type="range" id="rotSlide" min="-180" max="180" step="1" value="0" aria-label="Giro">
+      <span class="rlabel" style="min-width:auto">INCL. X <b id="tiltVal">-14°</b></span>
+      <input type="range" id="tiltSlide" min="-85" max="85" step="1" value="-14" aria-label="Inclinación">
+      <button class="minibtn" id="bRot0">0°</button>
+      <button class="minibtn" id="bSpin" aria-pressed="false">↻ GIRO</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ═══════════════════════════════════════════════════════════
+   QuantNet Terminal v2 — capa de presentación
+   El cálculo sintético de abajo existe SOLO para producir datos
+   de demo con la forma exacta del contrato.
+   ═══════════════════════════════════════════════════════════ */
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rnd=mulberry32(20260804);
+const gauss=()=>{let u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+
+const SECTORS={
+ "Tecnología":{c:"#4a9eff",t:"AAPL,MSFT,NVDA,AVGO,AMD,ORCL,CRM,ADBE,INTC,CSCO,QCOM,TXN,AMAT,MU,LRCX,KLAC,ADI,NXPI,SNPS,CDNS,ANET,PANW,FTNT,NOW,INTU,IBM,ACN,HPQ,DELL,WDC,STX,SMCI,ON,MCHP"},
+ "Comunicación":{c:"#d4548f",t:"GOOGL,META,NFLX,DIS,T,VZ,CMCSA,TMUS,EA,TTWO,WBD,OMC"},
+ "Consumo disc.":{c:"#e8963c",t:"AMZN,TSLA,HD,MCD,NKE,SBUX,LOW,TJX,BKNG,ORLY,AZO,CMG,MAR,HLT,GM,F,LULU,ROST,YUM,DHI"},
+ "Consumo básico":{c:"#c9a227",t:"PG,KO,PEP,WMT,COST,PM,MO,MDLZ,CL,KMB,GIS,KHC,STZ,SYY,KR,HSY"},
+ "Salud":{c:"#a97bd6",t:"JNJ,UNH,LLY,PFE,ABBV,MRK,TMO,ABT,DHR,BMY,AMGN,GILD,CVS,CI,ELV,ISRG,VRTX,REGN,ZTS,BSX,MDT,HCA"},
+ "Financiero":{c:"#3ecf8e",t:"JPM,BAC,WFC,GS,MS,C,AXP,BLK,SCHW,SPGI,CB,PGR,MMC,AON,ICE,CME,USB,PNC,TFC,COF,BK,AIG,MET,PRU"},
+ "Industrial":{c:"#45c2c9",t:"BA,CAT,GE,HON,UPS,LMT,RTX,DE,MMM,UNP,CSX,NSC,FDX,ETN,EMR,ITW,PH,GD,NOC,WM,CARR,JCI"},
+ "Energía":{c:"#e0603f",t:"XOM,CVX,COP,SLB,EOG,PSX,MPC,VLO,OXY,WMB,KMI,HAL,DVN,HES"},
+ "Materiales":{c:"#b08968",t:"LIN,APD,SHW,ECL,FCX,NEM,NUE,DOW,DD,PPG"},
+ "Utilities":{c:"#6c8ebf",t:"NEE,DUK,SO,D,AEP,EXC,SRE,XEL,ED,PEG,WEC,ES"},
+ "Inmobiliario":{c:"#8f7fd6",t:"AMT,PLD,CCI,EQIX,SPG,PSA,O,WELL,DLR,AVB"}
+};
+const COMM_COLORS=["#c9a227","#4a9eff","#3ecf8e","#e0603f","#a97bd6","#45c2c9","#e8963c","#d4548f","#8ba4c9","#b08968","#6c8ebf"];
+const SNAPS=["2020-12-31","2021-12-31","2022-12-31","2023-12-31","2024-12-31","2025-12-31","2026-06-30"];
+const MKT_VOL={"2020-12-31":.34,"2021-12-31":.17,"2022-12-31":.29,"2023-12-31":.19,"2024-12-31":.15,"2025-12-31":.22,"2026-06-30":.20};
+
+/* rampa de centralidad: teal profundo → cian → verde → lima → amarillo pálido */
+const RAMP=[[0.00,11,51,70],[0.32,27,154,170],[0.58,63,208,160],[0.80,184,227,74],[1.00,255,246,168]];
+function rampColor(t){
+  t=Math.max(0,Math.min(1,t));
+  for(let i=0;i<RAMP.length-1;i++){
+    const a=RAMP[i],b=RAMP[i+1];
+    if(t<=b[0]){const u=(t-a[0])/((b[0]-a[0])||1);
+      return [Math.round(a[1]+(b[1]-a[1])*u),Math.round(a[2]+(b[2]-a[2])*u),Math.round(a[3]+(b[3]-a[3])*u)];}
+  }
+  return [255,246,168];
+}
+const rgb=c=>`rgb(${c[0]},${c[1]},${c[2]})`;
+const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+/* ---------- generación sintética ---------- */
+/* razón social real de cada ticker */
+const NAMES={
+AAPL:"Apple Inc.",MSFT:"Microsoft Corporation",NVDA:"NVIDIA Corporation",AVGO:"Broadcom Inc.",
+AMD:"Advanced Micro Devices, Inc.",ORCL:"Oracle Corporation",CRM:"Salesforce, Inc.",ADBE:"Adobe Inc.",
+INTC:"Intel Corporation",CSCO:"Cisco Systems, Inc.",QCOM:"QUALCOMM Incorporated",TXN:"Texas Instruments Incorporated",
+AMAT:"Applied Materials, Inc.",MU:"Micron Technology, Inc.",LRCX:"Lam Research Corporation",KLAC:"KLA Corporation",
+ADI:"Analog Devices, Inc.",NXPI:"NXP Semiconductors N.V.",SNPS:"Synopsys, Inc.",CDNS:"Cadence Design Systems, Inc.",
+ANET:"Arista Networks, Inc.",PANW:"Palo Alto Networks, Inc.",FTNT:"Fortinet, Inc.",NOW:"ServiceNow, Inc.",
+INTU:"Intuit Inc.",IBM:"International Business Machines Corporation",ACN:"Accenture plc",HPQ:"HP Inc.",
+DELL:"Dell Technologies Inc.",WDC:"Western Digital Corporation",STX:"Seagate Technology Holdings plc",
+SMCI:"Super Micro Computer, Inc.",ON:"ON Semiconductor Corporation",MCHP:"Microchip Technology Incorporated",
+GOOGL:"Alphabet Inc.",META:"Meta Platforms, Inc.",NFLX:"Netflix, Inc.",DIS:"The Walt Disney Company",
+T:"AT&T Inc.",VZ:"Verizon Communications Inc.",CMCSA:"Comcast Corporation",TMUS:"T-Mobile US, Inc.",
+EA:"Electronic Arts Inc.",TTWO:"Take-Two Interactive Software, Inc.",WBD:"Warner Bros. Discovery, Inc.",OMC:"Omnicom Group Inc.",
+AMZN:"Amazon.com, Inc.",TSLA:"Tesla, Inc.",HD:"The Home Depot, Inc.",MCD:"McDonald's Corporation",
+NKE:"NIKE, Inc.",SBUX:"Starbucks Corporation",LOW:"Lowe's Companies, Inc.",TJX:"The TJX Companies, Inc.",
+BKNG:"Booking Holdings Inc.",ORLY:"O'Reilly Automotive, Inc.",AZO:"AutoZone, Inc.",CMG:"Chipotle Mexican Grill, Inc.",
+MAR:"Marriott International, Inc.",HLT:"Hilton Worldwide Holdings Inc.",GM:"General Motors Company",
+F:"Ford Motor Company",LULU:"Lululemon Athletica Inc.",ROST:"Ross Stores, Inc.",YUM:"Yum! Brands, Inc.",DHI:"D.R. Horton, Inc.",
+PG:"The Procter & Gamble Company",KO:"The Coca-Cola Company",PEP:"PepsiCo, Inc.",WMT:"Walmart Inc.",
+COST:"Costco Wholesale Corporation",PM:"Philip Morris International Inc.",MO:"Altria Group, Inc.",
+MDLZ:"Mondelez International, Inc.",CL:"Colgate-Palmolive Company",KMB:"Kimberly-Clark Corporation",
+GIS:"General Mills, Inc.",KHC:"The Kraft Heinz Company",STZ:"Constellation Brands, Inc.",
+SYY:"Sysco Corporation",KR:"The Kroger Co.",HSY:"The Hershey Company",
+JNJ:"Johnson & Johnson",UNH:"UnitedHealth Group Incorporated",LLY:"Eli Lilly and Company",PFE:"Pfizer Inc.",
+ABBV:"AbbVie Inc.",MRK:"Merck & Co., Inc.",TMO:"Thermo Fisher Scientific Inc.",ABT:"Abbott Laboratories",
+DHR:"Danaher Corporation",BMY:"Bristol-Myers Squibb Company",AMGN:"Amgen Inc.",GILD:"Gilead Sciences, Inc.",
+CVS:"CVS Health Corporation",CI:"The Cigna Group",ELV:"Elevance Health, Inc.",ISRG:"Intuitive Surgical, Inc.",
+VRTX:"Vertex Pharmaceuticals Incorporated",REGN:"Regeneron Pharmaceuticals, Inc.",ZTS:"Zoetis Inc.",
+BSX:"Boston Scientific Corporation",MDT:"Medtronic plc",HCA:"HCA Healthcare, Inc.",
+JPM:"JPMorgan Chase & Co.",BAC:"Bank of America Corporation",WFC:"Wells Fargo & Company",
+GS:"The Goldman Sachs Group, Inc.",MS:"Morgan Stanley",C:"Citigroup Inc.",AXP:"American Express Company",
+BLK:"BlackRock, Inc.",SCHW:"The Charles Schwab Corporation",SPGI:"S&P Global Inc.",CB:"Chubb Limited",
+PGR:"The Progressive Corporation",MMC:"Marsh & McLennan Companies, Inc.",AON:"Aon plc",
+ICE:"Intercontinental Exchange, Inc.",CME:"CME Group Inc.",USB:"U.S. Bancorp",
+PNC:"The PNC Financial Services Group, Inc.",TFC:"Truist Financial Corporation",COF:"Capital One Financial Corporation",
+BK:"The Bank of New York Mellon Corporation",AIG:"American International Group, Inc.",
+MET:"MetLife, Inc.",PRU:"Prudential Financial, Inc.",
+BA:"The Boeing Company",CAT:"Caterpillar Inc.",GE:"GE Aerospace",HON:"Honeywell International Inc.",
+UPS:"United Parcel Service, Inc.",LMT:"Lockheed Martin Corporation",RTX:"RTX Corporation",DE:"Deere & Company",
+MMM:"3M Company",UNP:"Union Pacific Corporation",CSX:"CSX Corporation",NSC:"Norfolk Southern Corporation",
+FDX:"FedEx Corporation",ETN:"Eaton Corporation plc",EMR:"Emerson Electric Co.",ITW:"Illinois Tool Works Inc.",
+PH:"Parker-Hannifin Corporation",GD:"General Dynamics Corporation",NOC:"Northrop Grumman Corporation",
+WM:"Waste Management, Inc.",CARR:"Carrier Global Corporation",JCI:"Johnson Controls International plc",
+XOM:"Exxon Mobil Corporation",CVX:"Chevron Corporation",COP:"ConocoPhillips",SLB:"SLB (Schlumberger)",
+EOG:"EOG Resources, Inc.",PSX:"Phillips 66",MPC:"Marathon Petroleum Corporation",VLO:"Valero Energy Corporation",
+OXY:"Occidental Petroleum Corporation",WMB:"The Williams Companies, Inc.",KMI:"Kinder Morgan, Inc.",
+HAL:"Halliburton Company",DVN:"Devon Energy Corporation",HES:"Hess Corporation",
+LIN:"Linde plc",APD:"Air Products and Chemicals, Inc.",SHW:"The Sherwin-Williams Company",ECL:"Ecolab Inc.",
+FCX:"Freeport-McMoRan Inc.",NEM:"Newmont Corporation",NUE:"Nucor Corporation",DOW:"Dow Inc.",
+DD:"DuPont de Nemours, Inc.",PPG:"PPG Industries, Inc.",
+NEE:"NextEra Energy, Inc.",DUK:"Duke Energy Corporation",SO:"The Southern Company",D:"Dominion Energy, Inc.",
+AEP:"American Electric Power Company, Inc.",EXC:"Exelon Corporation",SRE:"Sempra",XEL:"Xcel Energy Inc.",
+ED:"Consolidated Edison, Inc.",PEG:"Public Service Enterprise Group Incorporated",WEC:"WEC Energy Group, Inc.",
+ES:"Eversource Energy",
+AMT:"American Tower Corporation",PLD:"Prologis, Inc.",CCI:"Crown Castle Inc.",EQIX:"Equinix, Inc.",
+SPG:"Simon Property Group, Inc.",PSA:"Public Storage",O:"Realty Income Corporation",WELL:"Welltower Inc.",
+DLR:"Digital Realty Trust, Inc.",AVB:"AvalonBay Communities, Inc."
+};
+
+
+/* ampliación del universo: resto de miembros del S&P 500 con su nombre.
+   Formato "TICKER|Razón social" separado por ";" para no inflar el archivo. */
+const EXTRA={
+"Tecnología":"ADSK|Autodesk;ANSS|Ansys;APH|Amphenol;AKAM|Akamai Technologies;CDW|CDW;CTSH|Cognizant;ENPH|Enphase Energy;EPAM|EPAM Systems;FFIV|F5;FSLR|First Solar;GEN|Gen Digital;GLW|Corning;HPE|Hewlett Packard Enterprise;IT|Gartner;JBL|Jabil;JNPR|Juniper Networks;KEYS|Keysight Technologies;MPWR|Monolithic Power Systems;MSI|Motorola Solutions;NTAP|NetApp;PTC|PTC;ROP|Roper Technologies;SWKS|Skyworks Solutions;TDY|Teledyne Technologies;TEL|TE Connectivity;TER|Teradyne;TRMB|Trimble;TYL|Tyler Technologies;VRSN|VeriSign;ZBRA|Zebra Technologies",
+"Comunicación":"CHTR|Charter Communications;FOXA|Fox Corporation;IPG|Interpublic Group;LYV|Live Nation Entertainment;MTCH|Match Group;NWSA|News Corporation;PARA|Paramount Global",
+"Consumo disc.":"ABNB|Airbnb;APTV|Aptiv;BBY|Best Buy;BBWI|Bath & Body Works;CCL|Carnival;DECK|Deckers Outdoor;DPZ|Domino's Pizza;DRI|Darden Restaurants;EBAY|eBay;EXPE|Expedia Group;GPC|Genuine Parts;GRMN|Garmin;HAS|Hasbro;KMX|CarMax;LEN|Lennar;LKQ|LKQ Corporation;LVS|Las Vegas Sands;MGM|MGM Resorts International;NCLH|Norwegian Cruise Line;NVR|NVR;PHM|PulteGroup;POOL|Pool Corporation;RCL|Royal Caribbean;RL|Ralph Lauren;TPR|Tapestry;TSCO|Tractor Supply;ULTA|Ulta Beauty;WSM|Williams-Sonoma;WYNN|Wynn Resorts",
+"Consumo básico":"ADM|Archer-Daniels-Midland;CAG|Conagra Brands;CHD|Church & Dwight;CLX|Clorox;CPB|Campbell's;DG|Dollar General;DLTR|Dollar Tree;EL|Estée Lauder;HRL|Hormel Foods;K|Kellanova;LW|Lamb Weston;MKC|McCormick;SJM|J.M. Smucker;TAP|Molson Coors;TSN|Tyson Foods;WBA|Walgreens Boots Alliance",
+"Salud":"A|Agilent Technologies;ALGN|Align Technology;BAX|Baxter International;BDX|Becton Dickinson;BIIB|Biogen;CAH|Cardinal Health;CNC|Centene;COO|Cooper Companies;CRL|Charles River Laboratories;DVA|DaVita;DXCM|DexCom;EW|Edwards Lifesciences;HOLX|Hologic;HSIC|Henry Schein;IDXX|IDEXX Laboratories;ILMN|Illumina;INCY|Incyte;IQV|IQVIA;MCK|McKesson;MOH|Molina Healthcare;MRNA|Moderna;MTD|Mettler-Toledo;PODD|Insulet;RMD|ResMed;RVTY|Revvity;STE|STERIS;SYK|Stryker;TECH|Bio-Techne;UHS|Universal Health Services;VTRS|Viatris;WAT|Waters;WST|West Pharmaceutical;ZBH|Zimmer Biomet",
+"Financiero":"ACGL|Arch Capital;AFL|Aflac;AIZ|Assurant;AJG|Arthur J. Gallagher;ALL|Allstate;AMP|Ameriprise Financial;BEN|Franklin Resources;BRO|Brown & Brown;CBOE|Cboe Global Markets;CFG|Citizens Financial Group;CINF|Cincinnati Financial;DFS|Discover Financial;FDS|FactSet;FI|Fiserv;FITB|Fifth Third Bancorp;GL|Globe Life;HBAN|Huntington Bancshares;HIG|The Hartford;IVZ|Invesco;JKHY|Jack Henry;KEY|KeyCorp;L|Loews;MCO|Moody's;MKTX|MarketAxess;MSCI|MSCI;MTB|M&T Bank;NDAQ|Nasdaq;NTRS|Northern Trust;PFG|Principal Financial;RF|Regions Financial;RJF|Raymond James;SYF|Synchrony Financial;TROW|T. Rowe Price;WRB|W. R. Berkley;WTW|Willis Towers Watson;ZION|Zions Bancorporation",
+"Industrial":"ALLE|Allegion;AME|AMETEK;AOS|A. O. Smith;AXON|Axon Enterprise;BLDR|Builders FirstSource;BR|Broadridge;CHRW|C.H. Robinson;CMI|Cummins;CPRT|Copart;CTAS|Cintas;DAL|Delta Air Lines;DOV|Dover;EFX|Equifax;EXPD|Expeditors International;FAST|Fastenal;FTV|Fortive;GNRC|Generac;GWW|W.W. Grainger;HII|Huntington Ingalls;HUBB|Hubbell;IEX|IDEX;IR|Ingersoll Rand;J|Jacobs Solutions;LDOS|Leidos;LHX|L3Harris Technologies;LUV|Southwest Airlines;MAS|Masco;NDSN|Nordson;ODFL|Old Dominion Freight Line;OTIS|Otis Worldwide;PAYX|Paychex;PCAR|PACCAR;PNR|Pentair;PWR|Quanta Services;ROK|Rockwell Automation;RSG|Republic Services;SNA|Snap-on;SWK|Stanley Black & Decker;TDG|TransDigm;TT|Trane Technologies;TXT|Textron;UAL|United Airlines;URI|United Rentals;VLTO|Veralto;VRSK|Verisk Analytics;WAB|Wabtec;XYL|Xylem",
+"Energía":"APA|APA Corporation;BKR|Baker Hughes;CTRA|Coterra Energy;EQT|EQT Corporation;FANG|Diamondback Energy;OKE|ONEOK;TRGP|Targa Resources;TPL|Texas Pacific Land",
+"Materiales":"ALB|Albemarle;AMCR|Amcor;AVY|Avery Dennison;BALL|Ball Corporation;CE|Celanese;CF|CF Industries;CTVA|Corteva;EMN|Eastman Chemical;IFF|International Flavors & Fragrances;IP|International Paper;LYB|LyondellBasell;MLM|Martin Marietta Materials;MOS|Mosaic;PKG|Packaging Corporation of America;STLD|Steel Dynamics;VMC|Vulcan Materials",
+"Utilities":"AES|AES Corporation;ATO|Atmos Energy;AWK|American Water Works;CEG|Constellation Energy;CMS|CMS Energy;CNP|CenterPoint Energy;DTE|DTE Energy;EIX|Edison International;ETR|Entergy;EVRG|Evergy;FE|FirstEnergy;LNT|Alliant Energy;NI|NiSource;NRG|NRG Energy;PCG|PG&E;PNW|Pinnacle West;PPL|PPL Corporation;VST|Vistra",
+"Inmobiliario":"ARE|Alexandria Real Estate;BXP|BXP;CBRE|CBRE Group;CPT|Camden Property Trust;DOC|Healthpeak Properties;EQR|Equity Residential;ESS|Essex Property Trust;EXR|Extra Space Storage;FRT|Federal Realty;HST|Host Hotels & Resorts;INVH|Invitation Homes;IRM|Iron Mountain;KIM|Kimco Realty;MAA|Mid-America Apartment;REG|Regency Centers;SBAC|SBA Communications;UDR|UDR;VICI|VICI Properties;VTR|Ventas;WY|Weyerhaeuser"
+};
+for(const [sec,str] of Object.entries(EXTRA))
+  for(const pair of str.split(";")){
+    const [tk,nm]=pair.split("|");
+    NAMES[tk]=nm;
+  }
+/* Miembros del Nasdaq-100 presentes en este universo (aproximado;
+   con datos reales la lista la entrega el backend). */
+const NDX=new Set(("AAPL,MSFT,NVDA,AVGO,AMD,ADBE,CSCO,QCOM,TXN,AMAT,MU,LRCX,KLAC,ADI,NXPI,"+
+"SNPS,CDNS,PANW,FTNT,INTU,INTC,MCHP,ON,MPWR,ROP,VRSN,CTSH,ADSK,ANSS,EA,TTWO,GEN,TER,SWKS,"+
+"ZBRA,CDW,FAST,PAYX,ODFL,CPRT,VRSK,AXON,ABNB,AMZN,TSLA,GOOGL,META,NFLX,CMCSA,TMUS,CHTR,"+
+"WBD,BKNG,MAR,ORLY,ROST,LULU,DLTR,KHC,MDLZ,PEP,COST,SBUX,AMGN,GILD,VRTX,REGN,ISRG,DXCM,"+
+"IDXX,ILMN,MRNA,BIIB,PODD,HON,CSX,PCAR,CTAS,EXC,XEL,AEP,BKR,DDOG,TEAM,WDAY,CRWD,MRVL").split(","));
+
+function allTickers(sec){
+  const core=SECTORS[sec].t.split(",");
+  const ex=EXTRA[sec]?EXTRA[sec].split(";").map(x=>x.split("|")[0]):[];
+  return {core,ex};
+}
+function universeTickers(sec){
+  if(S.sector!=="all"&&sec!==S.sector)return [];
+  const {core,ex}=allTickers(sec);
+  if(S.univ==="sp500")return core.concat(ex);
+  if(S.univ==="ndx")return core.concat(ex).filter(t=>NDX.has(t));
+  return core;
+}
+
+/* perfiles corporativos — en producción llegan en node.profile desde el JSON */
+const PROFILE={
+ "Tecnología":{ind:["Semiconductores","Software de infraestructura","Software de aplicación","Hardware y equipos","Servicios de TI"],hq:["Cupertino, CA","Redmond, WA","Santa Clara, CA","Austin, TX","San José, CA"]},
+ "Comunicación":{ind:["Medios interactivos","Entretenimiento","Telecomunicaciones","Publicidad","Videojuegos"],hq:["Mountain View, CA","Menlo Park, CA","Los Gatos, CA","Nueva York, NY","Dallas, TX"]},
+ "Consumo disc.":{ind:["Comercio electrónico","Automoción","Minorista especializado","Restaurantes","Hoteles y ocio"],hq:["Seattle, WA","Austin, TX","Atlanta, GA","Chicago, IL","Beaverton, OR"]},
+ "Consumo básico":{ind:["Bebidas","Alimentación envasada","Hipermercados","Tabaco","Cuidado personal"],hq:["Cincinnati, OH","Atlanta, GA","Purchase, NY","Bentonville, AR","Issaquah, WA"]},
+ "Salud":{ind:["Farmacéutica","Biotecnología","Equipamiento médico","Seguros de salud","Servicios sanitarios"],hq:["New Brunswick, NJ","Indianápolis, IN","Minneapolis, MN","Boston, MA","Chicago, IL"]},
+ "Financiero":{ind:["Banca diversificada","Banca de inversión","Seguros","Gestión de activos","Mercados de capitales"],hq:["Nueva York, NY","Charlotte, NC","San Francisco, CA","Boston, MA","Chicago, IL"]},
+ "Industrial":{ind:["Aeroespacial y defensa","Maquinaria pesada","Ferrocarriles","Logística","Conglomerado industrial"],hq:["Arlington, VA","Peoria, IL","Chicago, IL","Omaha, NE","Memphis, TN"]},
+ "Energía":{ind:["Petróleo integrado","Exploración y producción","Refino","Servicios petroleros","Midstream"],hq:["Houston, TX","Irving, TX","San Ramón, CA","Findlay, OH","Oklahoma City, OK"]},
+ "Materiales":{ind:["Gases industriales","Química especializada","Minería","Acero","Recubrimientos"],hq:["Danbury, CT","Cleveland, OH","Phoenix, AZ","Midland, MI","Pittsburgh, PA"]},
+ "Utilities":{ind:["Eléctrica regulada","Multiservicios","Gas natural","Renovables","Generación independiente"],hq:["Juno Beach, FL","Charlotte, NC","Atlanta, GA","Richmond, VA","Columbus, OH"]},
+ "Inmobiliario":{ind:["REIT de infraestructura","REIT industrial","REIT de datos","REIT comercial","REIT residencial"],hq:["Boston, MA","Denver, CO","Redwood City, CA","Indianápolis, IN","Glendale, CA"]}
+};
+function buildSynthetic(){
+  const base=[];
+  for(const [sec,cfg] of Object.entries(SECTORS))
+    for(const id of universeTickers(sec)){
+      const P=PROFILE[sec]||{ind:["—"],hq:["—"]};
+      const mcap=Math.exp(23.5+rnd()*3.8);
+      const price=22+rnd()*470;
+      const shares=mcap/price;
+      const ps=1.1+rnd()*6.4;
+      const revenue=mcap/ps;
+      const netMargin=.03+rnd()*.28;
+      const netIncome=revenue*netMargin;
+      const eps=netIncome/shares;
+      const grossMargin=Math.min(.86,netMargin+.16+rnd()*.36);
+      const opMargin=Math.min(grossMargin-.02,netMargin+.04+rnd()*.12);
+      base.push({id,name:NAMES[id]||id,sector:sec,
+        beta:.55+rnd()*1.35, gamma:.28+rnd()*.62, idio:.11+rnd()*.24,
+        mcap, adv:Math.exp(18.5+rnd()*2.9),
+        profile:{
+          long_name:NAMES[id]||id,
+          country:"Estados Unidos",
+          exchange:rnd()<.48?"NASDAQ":"NYSE",
+          currency:"USD",
+          industry:P.ind[Math.floor(rnd()*P.ind.length)],
+          hq:P.hq[Math.floor(rnd()*P.hq.length)],
+          employees:Math.round(Math.exp(8.2+rnd()*4.1)),
+          founded:1850+Math.floor(rnd()*158),
+          free_float:+(56+rnd()*43).toFixed(1)
+        },
+        fin:{
+          price:+price.toFixed(2),
+          shares_out:shares,
+          revenue, revenue_growth:+(-7+rnd()*34).toFixed(1),
+          net_income:netIncome,
+          ebitda:revenue*(opMargin+.06+rnd()*.05),
+          gross_margin:+(grossMargin*100).toFixed(1),
+          op_margin:+(opMargin*100).toFixed(1),
+          net_margin:+(netMargin*100).toFixed(1),
+          eps:+eps.toFixed(2),
+          pe:+(price/eps).toFixed(1),
+          ps:+ps.toFixed(2),
+          pb:+(0.9+rnd()*8.5).toFixed(2),
+          ev_ebitda:+(6+rnd()*21).toFixed(1),
+          roe:+(4+rnd()*34).toFixed(1),
+          roic:+(3+rnd()*24).toFixed(1),
+          debt_equity:+(rnd()*2.3).toFixed(2),
+          current_ratio:+(0.8+rnd()*2.4).toFixed(2),
+          fcf:netIncome*(.55+rnd()*.95),
+          div_yield:+(rnd()*3.6).toFixed(2),
+          payout:+(rnd()*72).toFixed(0),
+          w52_low:+(price*(.62+rnd()*.2)).toFixed(2),
+          w52_high:+(price*(1.06+rnd()*.34)).toFixed(2)
+        }});
+    }
+  const snapshots={};
+  SNAPS.forEach(dt=>{
+    const sm=MKT_VOL[dt], ss=.12+rnd()*.08;
+    const nodes=base.map(b=>{
+      const g=Math.max(.04,b.gamma*(1+gauss()*.24));
+      const bt=Math.max(.18,b.beta*(1+gauss()*.11));
+      return {...b,_g:g,_b:bt,sd:Math.sqrt(bt*bt*sm*sm+g*g*ss*ss+b.idio*b.idio)};
+    });
+    const N=nodes.length, rho=Array.from({length:N},()=>new Float64Array(N));
+    for(let i=0;i<N;i++){rho[i][i]=1;
+      for(let j=i+1;j<N;j++){
+        const same=nodes[i].sector===nodes[j].sector;
+        let c=(nodes[i]._b*nodes[j]._b*sm*sm+(same?nodes[i]._g*nodes[j]._g*ss*ss:0))/(nodes[i].sd*nodes[j].sd);
+        c=Math.max(-.9,Math.min(.97,c+gauss()*.038));
+        rho[i][j]=rho[j][i]=c;
+      }}
+    nodes.forEach(n=>{
+      n.ret_21d=gauss()*.06+.005; n.ret_63d=gauss()*.11+.012; n.ret_252d=gauss()*.24+.09;
+      n.vol_21d=Math.abs(n.sd*(1+gauss()*.15));
+      n.iv_rank=Math.round(Math.min(99,Math.max(1,40+gauss()*26)));
+      n.iv_pct=Math.round(Math.min(99,Math.max(1,n.iv_rank+gauss()*9)));
+      delete n._g; delete n._b;
+    });
+    snapshots[dt]={nodes,rho};
+  });
+  const uName={core:"Núcleo 196",ndx:"Nasdaq 100",sp500:"S&P 500"}[S.univ];
+  return {meta:{universe:uName+(S.sector==="all"?"":" · "+S.sector)+" (sintético)",estimator:"factor model + ruido",lookback:252,synthetic:true},
+          dates:SNAPS,snapshots};
+}
+
+/* ---------- grafo ---------- */
+const maxEdgesFor=N=>N>380?5500:N>260?9000:14000;
+function mstEdges(rho,N){
+  const inT=new Uint8Array(N),best=new Float64Array(N).fill(Infinity),par=new Int32Array(N).fill(-1);
+  best[0]=0;const out=[];
+  for(let k=0;k<N;k++){
+    let u=-1,bv=Infinity;
+    for(let i=0;i<N;i++)if(!inT[i]&&best[i]<bv){bv=best[i];u=i}
+    if(u<0)break;inT[u]=1;
+    if(par[u]>=0)out.push([Math.min(u,par[u]),Math.max(u,par[u])]);
+    for(let v=0;v<N;v++)if(!inT[v]){const w=Math.sqrt(2*(1-rho[u][v]));if(w<best[v]){best[v]=w;par[v]=u}}
+  }
+  return out;
+}
+function buildEdges(rho,N,mode,thr){
+  const seen=new Set(),out=[],key=(a,b)=>a*4096+b;
+  if(mode!=="thr")for(const[a,b]of mstEdges(rho,N)){seen.add(key(a,b));out.push({a,b,mst:true,w:rho[a][b]})}
+  if(mode!=="mst"){
+    const extra=[];
+    for(let i=0;i<N;i++)for(let j=i+1;j<N;j++)
+      if(Math.abs(rho[i][j])>=thr&&!seen.has(key(i,j)))extra.push({a:i,b:j,mst:false,w:rho[i][j]});
+    extra.sort((x,y)=>Math.abs(y.w)-Math.abs(x.w));
+    out.push(...extra.slice(0,maxEdgesFor(N)));
+  }
+  return out;
+}
+function labelProp(N,adj){
+  let lab=Int32Array.from({length:N},(_,i)=>i);
+  /* acumulador en Float64Array con lista de etiquetas tocadas: evita crear
+     un Map por nodo y por iteración, que era el cuello de botella a N>300 */
+  const tally=new Float64Array(N), touched=new Int32Array(N);
+  for(let it=0;it<24;it++){
+    let moved=false;
+    for(let i=0;i<N;i++){
+      let nt=0;
+      for(const[j,w]of adj[i]){
+        const l=lab[j];
+        if(tally[l]===0)touched[nt++]=l;
+        tally[l]+=Math.abs(w)||1e-9;
+      }
+      let bl=lab[i],bv=-1;
+      for(let t=0;t<nt;t++){const l=touched[t],v=tally[l];
+        if(v>bv||(v===bv&&l<bl)){bv=v;bl=l}}
+      for(let t=0;t<nt;t++)tally[touched[t]]=0;
+      if(bl!==lab[i]){lab[i]=bl;moved=true}
+    }
+    if(!moved)break;
+  }
+  lab=Array.from(lab);
+  const rm=new Map();let k=0;
+  return lab.map(l=>{if(!rm.has(l))rm.set(l,k++);return rm.get(l)});
+}
+function eigenCentrality(N,adj){
+  let x=new Float64Array(N).fill(1/Math.sqrt(N));
+  for(let it=0;it<90;it++){
+    const y=new Float64Array(N);
+    for(let i=0;i<N;i++)for(const[j,w]of adj[i])y[i]+=Math.abs(w)*x[j];
+    let nm=0;for(let i=0;i<N;i++)nm+=y[i]*y[i];
+    nm=Math.sqrt(nm)||1;for(let i=0;i<N;i++)y[i]/=nm;
+    x=y;
+  }
+  const mx=Math.max(...x)||1;return Array.from(x,v=>v/mx);
+}
+function betweenness(N,adjM){ // sobre el MST: es donde la métrica significa algo
+  const CB=new Float64Array(N);
+  for(let s=0;s<N;s++){
+    const S=[],P=Array.from({length:N},()=>[]),sig=new Float64Array(N),dst=new Int32Array(N).fill(-1);
+    sig[s]=1;dst[s]=0;const Q=[s];let qi=0;
+    while(qi<Q.length){const v=Q[qi++];S.push(v);
+      for(const w of adjM[v]){
+        if(dst[w]<0){dst[w]=dst[v]+1;Q.push(w)}
+        if(dst[w]===dst[v]+1){sig[w]+=sig[v];P[w].push(v)}}}
+    const dl=new Float64Array(N);
+    while(S.length){const w=S.pop();
+      for(const v of P[w])dl[v]+=(sig[v]/sig[w])*(1+dl[w]);
+      if(w!==s)CB[w]+=dl[w];}
+  }
+  const out=Array.from(CB,v=>v/((N-1)*(N-2)||1)),mx=Math.max(...out)||1;
+  return out.map(v=>v/mx);
+}
+function bh(ps){
+  const m=ps.length,idx=ps.map((p,i)=>[p,i]).sort((x,y)=>x[0]-y[0]);
+  const adj=new Array(m);let prev=1;
+  for(let k=m-1;k>=0;k--){const v=Math.min(prev,idx[k][0]*m/(k+1));prev=v;adj[idx[k][1]]=v}
+  return adj;
+}
+
+/* ════════ ESTADO ════════ */
+const S={data:null,si:0,nodes:[],edges:[],adj:[],rho:null,N:0,pairs:[],
+  view:"dense",colorBy:"centrality",sizeBy:"eig",filter:"mst_thr",thr:.58,
+  bloom:true,halo:true,labels:true,ring:true,
+  sel:null,hover:null,focusPair:null,cam:{x:0,y:0,k:1},camT:{x:0,y:0,k:1},
+  panV:{x:0,y:0},breathe:true,t0:0,
+  alpha:1,cohHist:{},topLabels:new Set(),
+  rotY:0,rotX:-0.24,spin:false,autoFit:true,spread:1.6,depth:1.0,
+  univ:"core",sector:"all",role:"analyst"};
+
+/* ════════ PROYECCIÓN 3D ════════
+   El layout vive en R3. Se rota primero alrededor de Y (giro) y luego
+   alrededor de X (inclinación), y se proyecta en perspectiva. */
+const FOV=1500;
+let PX=[],PY=[],PS=[],PZ=[];
+function projectAll(){
+  const cy=Math.cos(S.rotY),sy=Math.sin(S.rotY);
+  const cx=Math.cos(S.rotX),sx=Math.sin(S.rotX);
+  const N=S.nodes.length;
+  if(PX.length!==N){PX=new Float64Array(N);PY=new Float64Array(N);PS=new Float64Array(N);PZ=new Float64Array(N)}
+  for(let i=0;i<N;i++){
+    const n=S.nodes[i];
+    const x=n.x+(S.breathe?n.bx:0), y=n.y+(S.breathe?n.by:0), z=(n.z+(S.breathe?n.bz:0))*S.depth;
+    const X=x*cy+z*sy, Z1=-x*sy+z*cy;
+    const Y=y*cx-Z1*sx, Z=y*sx+Z1*cx;
+    const s=FOV/Math.max(250,FOV+Z);
+    PX[i]=X*s;PY[i]=Y*s;PS[i]=s;PZ[i]=Z;
+  }
+}
+/* inversa: de pantalla a R3 manteniendo la profundidad del nodo arrastrado */
+function unproject(px,py,Zf){
+  const X=(px-W/2-S.cam.x)/S.cam.k, Y=(py-H/2-S.cam.y)/S.cam.k;
+  const s=FOV/Math.max(250,FOV+Zf);
+  const Xr=X/s, Yr=Y/s;
+  const cx=Math.cos(S.rotX),sx=Math.sin(S.rotX);
+  const y=Yr*cx+Zf*sx, Z1=-Yr*sx+Zf*cx;
+  const cy=Math.cos(S.rotY),sy=Math.sin(S.rotY);
+  return {x:Xr*cy-Z1*sy, y, z:Xr*sy+Z1*cy};
+}
+
+function recompute(keepPos){
+  const dt=S.data.dates[S.si],snap=S.data.snapshots[dt];
+  const raw=snap.nodes,rho=snap.rho,N=raw.length;
+  S.rho=rho;S.N=N;
+  const edges=buildEdges(rho,N,S.filter,S.thr);
+  const adj=Array.from({length:N},()=>[]);
+  for(const e of edges){adj[e.a].push([e.b,e.w]);adj[e.b].push([e.a,e.w])}
+  const adjM=Array.from({length:N},()=>[]);
+  for(const e of edges)if(e.mst){adjM[e.a].push(e.b);adjM[e.b].push(e.a)}
+  const comm=labelProp(N,adj),eig=eigenCentrality(N,adj),btw=betweenness(N,adjM);
+
+  const old=new Map(S.nodes.map(n=>[n.id,n]));
+  S.nodes=raw.map((r,i)=>{
+    const o=keepPos?old.get(r.id):null;
+    /* semilla en esfera de Fibonacci: reparto uniforme, sin sesgo polar */
+    const gi=(i+.5)/N, th=Math.acos(1-2*gi), phi=Math.PI*(1+Math.sqrt(5))*i;
+    const R0=200+(i%7)*7;
+    return {...r,i,community:comm[i],degree:adj[i].length,eig:eig[i],btw:btw[i],
+      mass:1+Math.log1p(adj[i].length),
+      x:o?o.x:R0*Math.sin(th)*Math.cos(phi),
+      y:o?o.y:R0*Math.sin(th)*Math.sin(phi),
+      z:o?o.z:R0*Math.cos(th),
+      vx:0,vy:0,vz:0,bx:0,by:0,bz:0,ph:(i*2.3999)%6.2832,
+      fixed:false,isolate:adj[i].length===0};
+  });
+  S.edges=edges;S.adj=adj;
+
+  const byC=new Map();
+  S.nodes.forEach(n=>{if(!byC.has(n.community))byC.set(n.community,[]);byC.get(n.community).push(n.i)});
+  S.nodes.forEach(n=>{
+    const grp=byC.get(n.community);
+    let acc=0,cnt=0;
+    for(const j of grp){if(j===n.i)continue;acc+=rho[n.i][j];cnt++}
+    n.cohesion=cnt?acc/cnt:0;
+    n.commSize=grp.length;
+  });
+  S.nodes.forEach(n=>{
+    const h=S.cohHist[n.id]||[];
+    const mu=h.reduce((a,b)=>a+b,0)/(h.length||1);
+    const sd=Math.sqrt(h.reduce((a,b)=>a+(b-mu)**2,0)/(h.length||1))||1e-6;
+    n.cohesion_z=h.length>2?(n.cohesion-mu)/sd:0;
+  });
+
+  // Señales (pares): solo para ANALISTA. El CLIENTE nunca las calcula ni ve.
+  if(S.role==="client"){
+    S.pairs=[];
+  } else if(S.data.snapshots[S.data.dates[S.si]].signals){
+    // si el backend ya las entregó (JSON admin), se usan tal cual
+    const sig=S.data.snapshots[S.data.dates[S.si]].signals;
+    const idOf=new Map(S.nodes.map(n=>[n.id,n]));
+    S.pairs=(sig.pairs||[]).filter(p=>idOf.has(p.a)&&idOf.has(p.b))
+      .map(p=>({a:p.a,b:p.b,z:p.z!=null?p.z:0,halflife:p.halflife||null,p_adj:p.p_adj!=null?p.p_adj:null,rho:p.rho}))
+      .slice(0,14);
+  } else {
+    const pr=mulberry32(1000+S.si*7);
+    const gz=()=>{let u=0,v=0;while(!u)u=pr();while(!v)v=pr();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+    const cand=edges.filter(e=>e.mst).map(e=>({a:e.a,b:e.b,z:gz()*1.35,
+      halflife:Math.round(6+pr()*38),p:Math.min(.99,Math.abs(pr()*.5)**1.6+.001)}));
+    bh(cand.map(c=>c.p)).forEach((v,k)=>cand[k].p_adj=v);
+    S.pairs=cand.filter(c=>Math.abs(c.z)>1.6&&c.p_adj<.15).sort((x,y)=>Math.abs(y.z)-Math.abs(x.z)).slice(0,14);
+  }
+
+  const rank=[...S.nodes].sort((a,b)=>b.eig-a.eig).slice(0,28);
+  S.topLabels=new Set(rank.map(n=>n.id));
+
+  const iso=S.nodes.filter(n=>n.isolate).length;
+  document.getElementById("mUni").textContent=S.data.meta.universe;
+  document.getElementById("mN").textContent=N;
+  document.getElementById("mE").textContent=edges.length.toLocaleString("es");
+  document.getElementById("mC").textContent=new Set(comm).size;
+  document.getElementById("mI").textContent=iso;
+  document.getElementById("tStamp").textContent=dt;
+  S.alpha=keepPos?.30:1;
+  if(!keepPos){for(let i=0;i<260;i++)tick();placeIsolates();fitView(true)}
+  else placeIsolates();
+  renderSignals();renderLegend();
+  if(S.sel)renderDetail(S.nodes.find(n=>n.id===S.sel));
+}
+function placeIsolates(){
+  if(!S.ring)return;
+  const core=S.nodes.filter(n=>!n.isolate);
+  let R=1;for(const n of core)R=Math.max(R,Math.hypot(n.x,n.y,n.z));
+  R*=1.24;
+  const iso=S.nodes.filter(n=>n.isolate);
+  iso.forEach((n,k)=>{
+    const gi=(k+.5)/iso.length, th=Math.acos(1-2*gi), phi=Math.PI*(1+Math.sqrt(5))*k;
+    const r=R+(k%3)*8;
+    n.x=r*Math.sin(th)*Math.cos(phi);n.y=r*Math.sin(th)*Math.sin(phi);n.z=r*Math.cos(th);
+    n.vx=n.vy=n.vz=0;n.pinned=true;
+  });
+}
+function primeCohesionHistory(){
+  S.cohHist={};
+  S.data.dates.forEach(dt=>{
+    const snap=S.data.snapshots[dt],rho=snap.rho,N=snap.nodes.length;
+    const edges=buildEdges(rho,N,S.filter,S.thr);
+    const adj=Array.from({length:N},()=>[]);
+    for(const e of edges){adj[e.a].push([e.b,e.w]);adj[e.b].push([e.a,e.w])}
+    const comm=labelProp(N,adj);
+    const byComm=new Map();
+    comm.forEach((c,i)=>{if(!byComm.has(c))byComm.set(c,[]);byComm.get(c).push(i)});
+    snap.nodes.forEach((n,i)=>{
+      const peers=byComm.get(comm[i]).filter(j=>j!==i);
+      const c=peers.length?peers.reduce((s,j)=>s+rho[i][j],0)/peers.length:0;
+      (S.cohHist[n.id]=S.cohHist[n.id]||[]).push(c);
+    });
+  });
+}
+
+/* ════════ FÍSICA ════════ */
+/* Elimina traslación y rotación netas del sistema.
+   Sin esto la red conserva momento angular y gira indefinidamente:
+   la simulación es estable pero el observador no puede leerla. */
+function killDrift(){
+  const n=S.nodes.filter(p=>!p.pinned);
+  if(n.length<3)return;
+  let mx=0,my=0,mz=0;
+  for(const p of n){mx+=p.vx;my+=p.vy;mz+=p.vz}
+  mx/=n.length;my/=n.length;mz/=n.length;
+  let Lx=0,Ly=0,Lz=0,den=0;
+  for(const p of n){
+    const vx=p.vx-mx,vy=p.vy-my,vz=p.vz-mz;
+    Lx+=p.y*vz-p.z*vy; Ly+=p.z*vx-p.x*vz; Lz+=p.x*vy-p.y*vx;
+    den+=p.x*p.x+p.y*p.y+p.z*p.z;
+  }
+  if(den<1)den=1;
+  const wx=Lx/den,wy=Ly/den,wz=Lz/den;
+  for(const p of n){
+    p.vx-=mx+(wy*p.z-wz*p.y);
+    p.vy-=my+(wz*p.x-wx*p.z);
+    p.vz-=mz+(wx*p.y-wy*p.x);
+  }
+}
+function tick(){
+  const a=S.alpha;
+  if(a<.004){S.alpha=0;return}
+  const n=S.nodes,N=n.length,dense=S.view==="dense";
+  const REP=(dense?310:640)*S.spread, KS=dense?.013:.026, VMAX=dense?7:13;
+  const CUT=dense?360000:250000;
+
+  /* repulsión con masa: la fuerza escala con el grado de ambos nodos, así que
+     los hubs se separan entre sí en vez de apelotonarse en el centro.
+     Suelo de distancia y techo de fuerza para que no diverja. */
+  for(let i=0;i<N;i++){
+    const A=n[i]; if(A.pinned)continue;
+    for(let j=i+1;j<N;j++){
+      const B=n[j]; if(B.pinned)continue;
+      let dx=B.x-A.x,dy=B.y-A.y,dz=B.z-A.z;
+      let d2=dx*dx+dy*dy+dz*dz;
+      if(d2>CUT)continue;
+      if(d2<144)d2=144;
+      const d=Math.sqrt(d2),f=Math.min(9,REP*A.mass*B.mass/d2);
+      dx/=d;dy/=d;dz/=d;
+      A.vx-=dx*f*a;A.vy-=dy*f*a;A.vz-=dz*f*a;
+      B.vx+=dx*f*a;B.vy+=dy*f*a;B.vz+=dz*f*a;
+    }
+  }
+  /* resortes normalizados por grado: un nodo con 120 aristas recibía
+     120 impulsos por tick y salía disparado */
+  for(const e of S.edges){
+    const u=n[e.a],v=n[e.b];
+    const rest=(dense?58:40)+(1-Math.abs(e.w))*(dense?200:130);
+    let dx=v.x-u.x,dy=v.y-u.y,dz=v.z-u.z;
+    const d=Math.sqrt(dx*dx+dy*dy+dz*dz)||1;
+    let f=(d-rest)*KS*a;
+    if(f>3.5)f=3.5;else if(f<-3.5)f=-3.5;
+    dx/=d;dy/=d;dz/=d;
+    const wu=1/(1+Math.log1p(u.degree)),wv=1/(1+Math.log1p(v.degree));
+    if(!u.pinned&&!u.fixed){u.vx+=dx*f*wu;u.vy+=dy*f*wu;u.vz+=dz*f*wu}
+    if(!v.pinned&&!v.fixed){v.vx-=dx*f*wv;v.vy-=dy*f*wv;v.vz-=dz*f*wv}
+  }
+  for(const p of n){
+    if(p.pinned)continue;
+    p.vx-=p.x*.0019*a;p.vy-=p.y*.0019*a;p.vz-=p.z*.0019*a;
+    const sp=Math.hypot(p.vx,p.vy,p.vz);
+    if(sp>VMAX){const g=VMAX/sp;p.vx*=g;p.vy*=g;p.vz*=g}
+    if(!p.fixed){p.x+=p.vx;p.y+=p.vy;p.z+=p.vz}
+    p.vx*=.78;p.vy*=.78;p.vz*=.78;
+  }
+  killDrift();
+  S.alpha*=.976;
+}
+
+/* ════════ RENDER ════════ */
+const cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  const r=cv.parentElement.getBoundingClientRect();
+  W=Math.max(1,r.width);H=Math.max(1,r.height);
+  cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  syncRailHeights();
+  if(!S.nodes.length)return;
+  /* la cámara vive en coordenadas del mundo: al cambiar el tamaño del lienzo
+     NO se reescala. Escalarla en cada evento de resize hacía que el zoom se
+     encogiese acumulativamente al arrastrar una columna, hasta desaparecer. */
+  if(S.autoFit)fitView();
+}
+/* Los paneles laterales llevan altura explícita en píxeles en lugar de
+   depender del estirado del grid. Es lo único que ha resultado inmune a
+   los contenedores que no propagan altura: si el navegador sabe cuánto
+   miden, el desplazamiento interno siempre funciona. */
+function syncRailHeights(){
+  const m=document.querySelector("main");
+  if(!m)return;
+  const h=Math.round(m.getBoundingClientRect().height);
+  if(h<40)return;
+  document.querySelectorAll(".rail").forEach(r=>{r.style.height=h+"px"});
+}
+/* fix: diferir al siguiente frame evita "ResizeObserver loop completed
+   with undelivered notifications" cuando el resize altera el layout */
+let roPend=false;
+new ResizeObserver(()=>{
+  if(roPend)return;roPend=true;
+  requestAnimationFrame(()=>{roPend=false;resize()});
+}).observe(document.querySelector(".stage"));
+
+function fitView(instant){
+  if(!S.nodes.length||W<2||H<2)return;
+  projectAll();
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(let i=0;i<PX.length;i++){
+    const X=PX[i],Y=PY[i];
+    if(X<x0)x0=X;if(X>x1)x1=X;if(Y<y0)y0=Y;if(Y>y1)y1=Y;
+  }
+  const w=(x1-x0)||1,h=(y1-y0)||1;
+  /* Hv acota la banda vertical usada para encuadrar. Si el contenedor entrega
+     un lienzo mucho más alto que la zona realmente visible, centrar en H/2
+     deja la red por debajo del corte y la pantalla aparece vacía. */
+  const Hv=H>1300?1000:H;
+  S.camT.k=Math.min(4,Math.max(.05,Math.min(W/(w*1.14),(Hv-40)/(h*1.14))));
+  S.camT.x=-((x0+x1)/2)*S.camT.k;
+  S.camT.y=(Hv-H)/2-((y0+y1)/2)*S.camT.k-10;
+  S.panV.x=S.panV.y=0;
+  if(instant)Object.assign(S.cam,S.camT);
+}
+/* la cámara mostrada persigue al objetivo: el zoom deja de ser a saltos */
+function easeCam(){
+  const c=S.cam,t=S.camT,f=.20;
+  if(Math.hypot(S.panV.x,S.panV.y)>.15){          // inercia tras soltar el arrastre
+    t.x+=S.panV.x;t.y+=S.panV.y;
+    S.panV.x*=.90;S.panV.y*=.90;
+  }else{S.panV.x=S.panV.y=0}
+  c.x+=(t.x-c.x)*f;c.y+=(t.y-c.y)*f;c.k+=(t.k-c.k)*f;
+  if(Math.abs(t.k-c.k)<1e-5)c.k=t.k;
+}
+
+const sizeVal=n=>({mcap:Math.log(n.mcap),eig:n.eig,btw:n.btw,degree:Math.log(1+n.degree),adv:Math.log(n.adv),flat:1})[S.sizeBy];
+let sizeMin=0,sizeMax=1;
+function refreshSizeScale(){
+  const v=S.nodes.map(sizeVal);sizeMin=Math.min(...v);sizeMax=Math.max(...v);
+}
+function radiusOf(n){
+  if(S.sizeBy==="flat")return S.view==="dense"?2.6:6.5;
+  const t=(sizeVal(n)-sizeMin)/((sizeMax-sizeMin)||1);
+  return S.view==="dense" ? 1.5+Math.pow(t,1.35)*9 : 4.2+Math.sqrt(t)*13;
+}
+function colorOf(n){
+  if(S.colorBy==="sector")return SECTORS[n.sector].c;
+  if(S.colorBy==="community")return COMM_COLORS[n.community%COMM_COLORS.length];
+  return rgb(rampColor(n.eig));
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const k=S.cam.k;
+  projectAll();
+  ctx.save();ctx.translate(W/2+S.cam.x,H/2+S.cam.y);ctx.scale(k,k);
+  const dense=S.view==="dense";
+  if(S.bloom)ctx.globalCompositeOperation="lighter";
+
+  const selN=S.sel?S.nodes.find(n=>n.id===S.sel):null;
+  const nbr=new Set();
+  if(selN){nbr.add(selN.i);for(const[j]of S.adj[selN.i])nbr.add(j)}
+
+  /* aristas por lotes: una sola llamada de trazo por bucket */
+  const BUCKETS=5,paths=Array.from({length:BUCKETS},()=>new Path2D());
+  let pairPath=null;
+  for(const e of S.edges){
+    const ux=PX[e.a],uy=PY[e.a],vx=PX[e.b],vy=PY[e.b];
+    if(S.focusPair&&((e.a===S.focusPair[0]&&e.b===S.focusPair[1])||(e.a===S.focusPair[1]&&e.b===S.focusPair[0]))){
+      pairPath=new Path2D();pairPath.moveTo(ux,uy);pairPath.lineTo(vx,vy);continue;
+    }
+    if(selN&&!(nbr.has(e.a)&&nbr.has(e.b)))continue;
+    const b=Math.min(BUCKETS-1,Math.floor(Math.abs(e.w)*BUCKETS));
+    paths[b].moveTo(ux,uy);paths[b].lineTo(vx,vy);
+  }
+  for(let b=0;b<BUCKETS;b++){
+    const s=(b+.5)/BUCKETS;
+    ctx.strokeStyle=dense
+      ? `rgba(${40+s*30},${120+s*90},${150+s*60},${(dense?.055:.2)+s*.10})`
+      : `rgba(120,168,224,${.10+s*.35})`;
+    ctx.lineWidth=(dense?.35+s*.9:.8+s*1.6)/k;
+    ctx.stroke(paths[b]);
+  }
+  if(pairPath){ctx.strokeStyle="#f0d375";ctx.lineWidth=3.2/k;ctx.stroke(pairPath)}
+
+  /* nodos */
+  const order=S.nodes.map(n=>n.i).sort((a,b)=>PZ[b]-PZ[a]);  // lejanos primero
+  for(const oi of order){
+    const n=S.nodes[oi];
+    const persp=PS[oi];
+    const r=radiusOf(n)*persp,dim=selN&&!nbr.has(n.i);
+    const nx=PX[oi],ny=PY[oi];
+    const depthA=Math.max(.30,Math.min(1,persp*persp));   // los del fondo se apagan
+    const col=n.isolate?[70,92,118]:(S.colorBy==="centrality"?rampColor(n.eig):null);
+    const solid=n.isolate?"rgb(70,92,118)":colorOf(n);
+    ctx.globalAlpha=dim?.12:depthA;
+    if(S.bloom&&!n.isolate){
+      const c=col||hexToRgb(solid);
+      if(S.nodes.length<=300){ctx.beginPath();ctx.arc(nx,ny,r*3.4,0,7);ctx.fillStyle=rgba(c,.055);ctx.fill()}
+      ctx.beginPath();ctx.arc(nx,ny,r*2.0,0,7);ctx.fillStyle=rgba(c,.14);ctx.fill();
+    }
+    if(S.halo&&Math.abs(n.cohesion_z)>1.1&&!n.isolate){
+      ctx.beginPath();ctx.arc(nx,ny,r+3.6,0,7);
+      ctx.strokeStyle=n.cohesion_z<0?"rgba(240,211,117,.85)":"rgba(62,207,142,.7)";
+      ctx.lineWidth=Math.min(2.8,(Math.abs(n.cohesion_z)-.8)*1.7)/k*1.4;ctx.stroke();
+    }
+    ctx.beginPath();ctx.arc(nx,ny,r,0,7);ctx.fillStyle=solid;ctx.fill();
+    if(n.id===S.sel){
+      ctx.beginPath();ctx.arc(nx,ny,r+8,0,7);
+      ctx.strokeStyle="#f0d375";ctx.lineWidth=1.8/k;ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+  ctx.globalCompositeOperation="source-over";
+  ctx.restore();
+  /* etiquetas en espacio de pantalla: no rotan con la red ni las come
+     el blending aditivo, así que siguen legibles a cualquier ángulo */
+  if(S.labels){
+    ctx.font="10px ui-monospace,monospace";ctx.textAlign="center";
+    for(const n of S.nodes){
+      const show=n.id===S.sel||n.id===S.hover||
+        (!n.isolate&&(S.topLabels.has(n.id)||k>1.9));
+      if(!show)continue;
+      const i=n.i,dim=selN&&!nbr.has(i);
+      const sx=W/2+S.cam.x+k*PX[i], sy=H/2+S.cam.y+k*PY[i];
+      if(sx<-40||sy<-20||sx>W+40||sy>H-24)continue;
+      ctx.globalAlpha=dim?.18:Math.max(.35,Math.min(.95,PS[i]));
+      ctx.fillStyle=n.id===S.sel?"#f0d375":"#cfdcec";
+      ctx.fillText(n.id,sx,sy-radiusOf(n)*PS[i]*k-5);
+      ctx.globalAlpha=1;
+    }
+  }
+}
+function hexToRgb(h){
+  const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);
+  return m?[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]:[200,200,200];
+}
+function loop(){
+  const t=(performance.now()-S.t0)/1000;
+  if(S.breathe){
+    for(const n of S.nodes){
+      n.bx=Math.sin(t*.33+n.ph)*2.6;
+      n.by=Math.cos(t*.27+n.ph*1.6)*2.6;
+      n.bz=Math.sin(t*.21+n.ph*2.3)*2.6;
+    }
+  }
+  if(S.spin){
+    S.rotY+=0.0034;
+    if(S.rotY>Math.PI)S.rotY-=2*Math.PI;
+    const d=Math.round(S.rotY*180/Math.PI);
+    rotSlide.value=d;rotSlide2.value=d;
+    rotVal.textContent=d+"°";rotVal2.textContent=d+"°";
+  }
+  tick();easeCam();refreshSizeScale();draw();requestAnimationFrame(loop);
+}
+
+/* ════════ INTERACCIÓN ════════ */
+/* con perspectiva, la selección se resuelve en pantalla: comparar en
+   coordenadas del mundo daría el nodo equivocado a distintas profundidades */
+function pick(px,py){
+  if(!PX.length)return null;
+  let best=null,bd=Infinity;
+  const k=S.cam.k;
+  for(const n of S.nodes){
+    const i=n.i;
+    const sx=W/2+S.cam.x+k*PX[i], sy=H/2+S.cam.y+k*PY[i];
+    const r=radiusOf(n)*PS[i]*k+7;
+    const d=Math.hypot(sx-px,sy-py);
+    if(d<r&&d<bd){bd=d;best=n}
+  }
+  return best;
+}
+let drag=null,pan=null,moved=0;
+cv.addEventListener("mousedown",ev=>{
+  const R=cv.getBoundingClientRect();
+  moved=0;const n=pick(ev.clientX-R.left,ev.clientY-R.top);
+  if(n){drag={n,z:PZ[n.i]};n.fixed=true}
+  else{
+    S.panV.x=S.panV.y=0;
+    pan={x:ev.clientX,y:ev.clientY,cx:S.camT.x,cy:S.camT.y,lx:ev.clientX,ly:ev.clientY};
+    cv.style.cursor="grabbing";
+  }
+});
+window.addEventListener("mousemove",ev=>{
+  const R=cv.getBoundingClientRect(),px=ev.clientX-R.left,py=ev.clientY-R.top;
+  if(drag){
+    moved++;
+    const w=unproject(px,py,drag.z);
+    drag.n.x=w.x-(S.breathe?drag.n.bx:0);
+    drag.n.y=w.y-(S.breathe?drag.n.by:0);
+    drag.n.z=w.z/(S.depth||1)-(S.breathe?drag.n.bz:0);
+    S.alpha=Math.max(S.alpha,S.view==="dense"?.035:.09);return;
+  }
+  if(pan){
+    moved++;S.autoFit=false;
+    S.camT.x=pan.cx+(ev.clientX-pan.x);S.camT.y=pan.cy+(ev.clientY-pan.y);
+    /* el arrastre es 1:1, sin suavizado, para que la red siga al cursor */
+    S.cam.x=S.camT.x;S.cam.y=S.camT.y;
+    S.panV.x=(ev.clientX-pan.lx)*.55;S.panV.y=(ev.clientY-pan.ly)*.55;
+    pan.lx=ev.clientX;pan.ly=ev.clientY;
+    return;
+  }
+  if(px<0||py<0||px>W||py>H){hideTip();S.hover=null;return}
+  const n=pick(px,py);S.hover=n?n.id:null;
+  cv.style.cursor=n?"pointer":"grab";
+  if(n)showTip(n,ev.clientX,ev.clientY);else hideTip();
+});
+window.addEventListener("mouseup",()=>{
+  if(drag){drag.n.fixed=false;if(moved<3)select(drag.n.id)}
+  else if(pan){
+    if(moved<3){S.panV.x=S.panV.y=0;
+      if(S.sel||S.focusPair){S.sel=null;S.focusPair=null;renderDetail(null)}}
+    cv.style.cursor="grab";
+  }
+  drag=null;pan=null;
+});
+cv.addEventListener("wheel",ev=>{
+  ev.preventDefault();S.autoFit=false;S.panV.x=S.panV.y=0;
+  const R=cv.getBoundingClientRect(),mx=ev.clientX-R.left-W/2,my=ev.clientY-R.top-H/2;
+  const step=Math.min(1.28,Math.max(1.04,1+Math.abs(ev.deltaY)/900));
+  const f=ev.deltaY<0?step:1/step;
+  const nk=Math.max(.05,Math.min(8,S.camT.k*f)),ratio=nk/S.camT.k;
+  S.camT.x=mx-(mx-S.camT.x)*ratio;S.camT.y=my-(my-S.camT.y)*ratio;S.camT.k=nk;
+},{passive:false});
+document.addEventListener("keydown",ev=>{
+  if(ev.key==="Escape"){S.sel=null;S.focusPair=null;renderDetail(null)}
+  if((ev.key==="f"||ev.key==="F")&&document.activeElement.tagName!=="INPUT"){
+    S.autoFit=true;resize();fitView();
+  }
+  if(ev.key==="/"&&document.activeElement.tagName!=="INPUT"){ev.preventDefault();document.getElementById("fSearch").focus()}
+});
+window.addEventListener("resize",()=>requestAnimationFrame(()=>{resize();if(S.autoFit)fitView()}));
+const tip=document.getElementById("tip");
+function showTip(n,cx,cy){
+  tip.innerHTML=`<b>${n.id}</b> · ${n.sector}<br>grado ${n.degree} · eig ${n.eig.toFixed(2)} · z ${n.cohesion_z.toFixed(2)}`;
+  tip.style.display="block";
+  const R=cv.getBoundingClientRect();
+  tip.style.left=Math.min(W-190,cx-R.left+14)+"px";tip.style.top=(cy-R.top+12)+"px";
+}
+const hideTip=()=>tip.style.display="none";
+
+/* ════════ PANELES ════════ */
+const fmtP=v=>(v*100).toFixed(1)+"%";
+const cls=v=>v>0?"pos":v<0?"neg":"";
+const bn=v=>v>=1e12?(v/1e12).toFixed(2)+" T":v>=1e9?(v/1e9).toFixed(1)+" B":(v/1e6).toFixed(0)+" M";
+function switchPane(p){
+  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.p===p));
+  document.querySelectorAll(".pane").forEach(el=>el.dataset.on=(el.dataset.pane===p));
+}
+function select(id){S.sel=id;S.focusPair=null;renderDetail(S.nodes.find(n=>n.id===id));switchPane("detail")}
+
+function renderDetail(n){
+  const E=document.getElementById("detEmpty"),B=document.getElementById("detBody");
+  if(!n){E.style.display="";B.style.display="none";return}
+  E.style.display="none";B.style.display="";
+  const conns=S.adj[n.i].map(([j,w])=>({n:S.nodes[j],w})).sort((a,b)=>Math.abs(b.w)-Math.abs(a.w)).slice(0,9);
+  const z=n.cohesion_z,det=z<-1.5,over=z>1.5;
+  const p=n.profile||{}, f=n.fin||{};
+  const verdict=det
+    ?`<b>DESACOPLADO</b> — su correlación media con la comunidad ${n.community} cayó ${Math.abs(z).toFixed(1)}σ por
+      debajo de su propio histórico. Candidato a convergencia si la relación es estructural y no un cambio de régimen.`
+    :over
+    ?`<b>SOBREACOPLADO</b> — ${z.toFixed(1)}σ por encima de su histórico. Poco útil para arbitraje; relevante para
+      riesgo, porque la diversificación que aporta se ha reducido.`
+    :`<b>EN RANGO</b> — cohesión dentro de ±1.5σ. Sin señal de desfase.`;
+  B.innerHTML=`
+   <div class="nd-head">
+     <div class="nd-tick" style="color:${colorOf(n)}">${n.id}</div>
+     <div class="nd-name">${n.name}</div>
+     <div class="nd-chips">
+       <span class="chip" style="border-color:${SECTORS[n.sector].c};color:${SECTORS[n.sector].c}">${n.sector}</span>
+       <span class="chip" style="border-color:${COMM_COLORS[n.community%11]};color:${COMM_COLORS[n.community%11]}">COM ${n.community} · ${n.commSize}</span>
+       ${n.isolate?'<span class="chip">AISLADO</span>':''}
+     </div>
+   </div>
+   ${S.role==="analyst"?`<div class="verdict ${det||over?"":"mute"}">${verdict}</div>`:""}
+   <h5 class="sec">Ficha de la empresa</h5>
+   ${S.data.meta.synthetic?'<div class="warn" style="margin-bottom:9px">Nombre, ticker y sector son reales. <b>El resto de la ficha y los fundamentales están simulados</b> hasta que cargues tu network.json.</div>':''}
+   <table class="kv">
+     <tr><td>Razón social</td><td>${p.long_name||n.name}</td></tr>
+     <tr><td>Industria</td><td>${p.industry||"—"}</td></tr>
+     <tr><td>Sector</td><td>${n.sector}</td></tr>
+     <tr><td>País</td><td>${p.country||"—"}</td></tr>
+     <tr><td>Sede</td><td>${p.hq||"—"}</td></tr>
+     <tr><td>Bolsa</td><td>${p.exchange||"—"} · ${p.currency||"—"}</td></tr>
+     <tr><td>Fundación</td><td>${p.founded||"—"}</td></tr>
+     <tr><td>Empleados</td><td>${p.employees?p.employees.toLocaleString("es"):"—"}</td></tr>
+     <tr><td>Free float</td><td>${p.free_float!=null?p.free_float+"%":"—"}</td></tr>
+   </table>
+   ${f.price!=null?`
+   <h5 class="sec">Cotización</h5>
+   <table class="kv">
+     <tr><td>Precio</td><td class="gld">${f.price} ${p.currency||""}</td></tr>
+     <tr><td>Rango 52 semanas</td><td>${f.w52_low} — ${f.w52_high}</td></tr>
+     <tr><td>Capitalización</td><td>${bn(n.mcap)}</td></tr>
+     <tr><td>Acciones en circulación</td><td>${bn(f.shares_out).replace(/ [TBM]/,m=>m)}</td></tr>
+   </table>
+
+   <h5 class="sec">Resultados</h5>
+   <table class="kv">
+     <tr><td>Ingresos</td><td>${bn(f.revenue)}</td></tr>
+     <tr><td>Crecimiento de ingresos</td><td class="${cls(f.revenue_growth)}">${f.revenue_growth>0?"+":""}${f.revenue_growth}%</td></tr>
+     <tr><td>Beneficio neto</td><td>${bn(f.net_income)}</td></tr>
+     <tr><td>EBITDA</td><td>${bn(f.ebitda)}</td></tr>
+     <tr><td>Flujo de caja libre</td><td>${bn(f.fcf)}</td></tr>
+     <tr><td>BPA</td><td>${f.eps}</td></tr>
+   </table>
+
+   <h5 class="sec">Márgenes y rentabilidad</h5>
+   <table class="kv">
+     <tr><td>Margen bruto<div class="bar"><i style="width:${f.gross_margin}%"></i></div></td><td>${f.gross_margin}%</td></tr>
+     <tr><td>Margen operativo<div class="bar"><i style="width:${f.op_margin}%"></i></div></td><td>${f.op_margin}%</td></tr>
+     <tr><td>Margen neto<div class="bar"><i style="width:${f.net_margin}%"></i></div></td><td>${f.net_margin}%</td></tr>
+     <tr><td>ROE</td><td>${f.roe}%</td></tr>
+     <tr><td>ROIC</td><td>${f.roic}%</td></tr>
+   </table>
+
+   <h5 class="sec">Valoración y solvencia</h5>
+   <table class="kv">
+     <tr><td>PER</td><td>${f.pe}</td></tr>
+     <tr><td>Precio / ventas</td><td>${f.ps}</td></tr>
+     <tr><td>Precio / valor contable</td><td>${f.pb}</td></tr>
+     <tr><td>EV / EBITDA</td><td>${f.ev_ebitda}</td></tr>
+     <tr><td>Deuda / patrimonio</td><td>${f.debt_equity}</td></tr>
+     <tr><td>Ratio corriente</td><td>${f.current_ratio}</td></tr>
+     <tr><td>Rentabilidad por dividendo</td><td>${f.div_yield}%</td></tr>
+     <tr><td>Payout</td><td>${f.payout}%</td></tr>
+   </table>`:""}
+   ${S.role==="analyst"?`
+   <h5 class="sec">Desfase</h5>
+   <table class="kv">
+     <tr><td>Cohesión con su comunidad</td><td>${n.cohesion.toFixed(3)}</td></tr>
+     <tr><td>z de cohesión</td><td class="${det?"gld":cls(z)}">${z>0?"+":""}${z.toFixed(2)}σ</td></tr>
+   </table>`:""}
+   <h5 class="sec">Posición en la red</h5>
+   <table class="kv">
+     <tr><td>Grado</td><td>${n.degree}</td></tr>
+     <tr><td>Eigenvector<div class="bar"><i style="width:${(n.eig*100).toFixed(0)}%"></i></div></td><td>${n.eig.toFixed(3)}</td></tr>
+     <tr><td>Intermediación (MST)<div class="bar"><i style="width:${(n.btw*100).toFixed(0)}%"></i></div></td><td>${n.btw.toFixed(3)}</td></tr>
+   </table>
+   <h5 class="sec">Rendimiento y riesgo</h5>
+   <table class="kv">
+     <tr><td>Retorno 21d</td><td class="${cls(n.ret_21d)}">${fmtP(n.ret_21d)}</td></tr>
+     <tr><td>Retorno 63d</td><td class="${cls(n.ret_63d)}">${fmtP(n.ret_63d)}</td></tr>
+     <tr><td>Retorno 252d</td><td class="${cls(n.ret_252d)}">${fmtP(n.ret_252d)}</td></tr>
+     <tr><td>Volatilidad 21d</td><td>${fmtP(n.vol_21d)}</td></tr>
+     <tr><td>Beta</td><td>${n.beta.toFixed(2)}</td></tr>
+   </table>
+   <h5 class="sec">Opciones y liquidez</h5>
+   <table class="kv">
+     <tr><td>IV Rank<div class="bar"><i style="width:${n.iv_rank}%"></i></div></td><td>${n.iv_rank}</td></tr>
+     <tr><td>IV Percentile</td><td>${n.iv_pct}</td></tr>
+     <tr><td>ADV</td><td>${bn(n.adv)}</td></tr>
+     <tr><td>Capitalización</td><td>${bn(n.mcap)}</td></tr>
+   </table>
+   <h5 class="sec">Conexiones más fuertes</h5>
+   ${conns.length?conns.map(c=>`<div class="conn" data-go="${c.n.id}">
+      <span class="t">${c.n.id}</span>
+      <span class="b"><i style="width:${(Math.abs(c.w)*100).toFixed(0)}%;background:${colorOf(c.n)}"></i></span>
+      <span class="v">${c.w.toFixed(2)}</span></div>`).join(""):'<div class="empty">Sin aristas con este filtro.</div>'}`;
+  B.querySelectorAll("[data-go]").forEach(el=>el.onclick=()=>select(el.dataset.go));
+}
+function renderSignals(){
+  const dn=S.nodes.filter(n=>Math.abs(n.cohesion_z)>1.2&&!n.isolate)
+    .sort((a,b)=>Math.abs(b.cohesion_z)-Math.abs(a.cohesion_z)).slice(0,12);
+  document.getElementById("sigNodes").innerHTML=dn.length?dn.map(n=>`
+    <div class="sig" data-go="${n.id}">
+      <div class="sig-top"><span class="p">${n.id}</span>
+        <span style="font-size:10px;color:var(--ink-faint)">com. ${n.community}</span>
+        <span class="z ${n.cohesion_z<0?"gld":"pos"}">${n.cohesion_z>0?"+":""}${n.cohesion_z.toFixed(2)}σ</span></div>
+      <div class="sig-sub"><span>cohesión ${n.cohesion.toFixed(3)}</span><span>${n.sector}</span></div>
+    </div>`).join(""):`<div class="empty">Ningún activo supera ±1.2σ en esta foto.</div>`;
+  document.getElementById("sigPairs").innerHTML=S.pairs.length?S.pairs.map(p=>{
+    const A=S.nodes[p.a],Bn=S.nodes[p.b];
+    return `<div class="sig" data-pair="${p.a},${p.b}">
+      <div class="sig-top"><span class="p">${A.id} / ${Bn.id}</span>
+        <span class="z ${p.z<0?"neg":"pos"}">${p.z>0?"+":""}${p.z.toFixed(2)}</span></div>
+      <div class="sig-sub"><span>ρ ${S.rho[p.a][p.b].toFixed(2)}</span>
+        <span>vida media ${p.halflife}d</span><span>p_adj ${p.p_adj.toFixed(3)}</span></div></div>`}).join("")
+    :`<div class="empty">Ningún par sobrevive al filtro de multiplicidad.</div>`;
+  document.querySelectorAll("#sigNodes [data-go]").forEach(el=>el.onclick=()=>select(el.dataset.go));
+  document.querySelectorAll("#sigPairs [data-pair]").forEach(el=>el.onclick=()=>{
+    const[a,b]=el.dataset.pair.split(",").map(Number);
+    S.focusPair=[a,b];S.sel=null;renderDetail(null);
+  });
+}
+function renderLegend(){
+  const L=document.getElementById("legend"),T=document.getElementById("legTitle");
+  if(S.colorBy==="centrality"){
+    T.textContent="Centralidad";
+    L.innerHTML=`<div class="ramp"></div><div class="ramp-lbl"><span>periferia</span><span>núcleo</span></div>
+      <div class="leg" style="margin-top:8px"><span class="dot" style="background:rgb(70,92,118)"></span>aislado (grado 0)</div>`;
+  }else if(S.colorBy==="sector"){
+    T.textContent="Sectores";
+    L.innerHTML=Object.entries(SECTORS).map(([s,c])=>`<div class="leg"><span class="dot" style="background:${c.c}"></span>${s}</div>`).join("");
+  }else{
+    T.textContent="Comunidades";
+    const cs=[...new Set(S.nodes.map(n=>n.community))].sort((a,b)=>a-b);
+    L.innerHTML=cs.slice(0,11).map(c=>{
+      const k=S.nodes.filter(n=>n.community===c).length;
+      return `<div class="leg"><span class="dot" style="background:${COMM_COLORS[c%11]}"></span>Comunidad ${c} · ${k}</div>`}).join("");
+  }
+}
+
+/* ════════ CONTROLES ════════ */
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>switchPane(b.dataset.p));
+function applyView(v){
+  S.view=v;
+  document.querySelectorAll("#segView button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.v===v));
+  if(v==="dense"){
+    S.filter="mst_thr";S.thr=.58;S.colorBy="centrality";S.bloom=true;S.sizeBy="eig";
+    S.spread=1.8;S.depth=1.0;
+    document.getElementById("viewNote").textContent="Grafo denso con resplandor aditivo. Bonito y bueno para explorar; malo para decidir — el hairball esconde estructura.";
+    document.getElementById("hudNote").textContent="Amarillo = núcleo · Los nodos atenuados están al fondo de la escena";
+  }else{
+    S.filter="mst";S.colorBy="sector";S.bloom=false;S.sizeBy="eig";
+    S.spread=1.0;S.depth=.85;
+    document.getElementById("viewNote").textContent="Backbone MST con color por sector. Cada arista tiene interpretación económica; es la vista para tomar decisiones.";
+    document.getElementById("hudNote").textContent="Halo dorado = activo desacoplado de su comunidad";
+  }
+  document.getElementById("fFilter").value=S.filter;
+  document.getElementById("fThr").value=S.thr;
+  document.getElementById("rThr").textContent=S.thr.toFixed(2);
+  document.getElementById("fBloom").checked=S.bloom;
+  document.getElementById("fSpread").value=S.spread;
+  document.getElementById("rSpread").textContent=S.spread.toFixed(1)+"×";
+  document.getElementById("fDepth").value=S.depth;
+  document.getElementById("rDepth").textContent=S.depth.toFixed(2);
+  document.getElementById("fSize").value=S.sizeBy;
+  document.querySelectorAll("#segColor button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.v===S.colorBy));
+  primeCohesionHistory();recompute(false);
+}
+document.querySelectorAll("#segView button").forEach(b=>b.onclick=()=>applyView(b.dataset.v));
+document.getElementById("fFilter").onchange=e=>{S.filter=e.target.value;primeCohesionHistory();recompute(true)};
+document.getElementById("fThr").oninput=e=>{
+  S.thr=+e.target.value;document.getElementById("rThr").textContent=S.thr.toFixed(2);
+  clearTimeout(window._t);window._t=setTimeout(()=>{primeCohesionHistory();recompute(true)},200);
+};
+document.getElementById("fSize").onchange=e=>S.sizeBy=e.target.value;
+document.getElementById("fBloom").onchange=e=>S.bloom=e.target.checked;
+document.getElementById("fHalo").onchange=e=>S.halo=e.target.checked;
+document.getElementById("fLbl").onchange=e=>S.labels=e.target.checked;
+document.getElementById("fBreathe").onchange=e=>{
+  S.breathe=e.target.checked;
+  if(!S.breathe)S.nodes.forEach(n=>{n.bx=0;n.by=0});
+};
+document.getElementById("fRing").onchange=e=>{S.ring=e.target.checked;
+  if(!S.ring)S.nodes.forEach(n=>n.pinned=false);else placeIsolates();S.alpha=Math.max(S.alpha,.3)};
+document.querySelectorAll("#segColor button").forEach(b=>b.onclick=()=>{
+  S.colorBy=b.dataset.v;
+  document.querySelectorAll("#segColor button").forEach(x=>x.setAttribute("aria-pressed",x===b));
+  renderLegend();if(S.sel)renderDetail(S.nodes.find(n=>n.id===S.sel));
+});
+document.getElementById("fSearch").oninput=e=>{
+  const q=e.target.value.trim().toUpperCase();if(!q)return;
+  const n=S.nodes.find(x=>x.id.startsWith(q));if(n)select(n.id);
+};
+document.getElementById("tSlide").oninput=e=>{S.si=+e.target.value;recompute(true)};
+document.getElementById("bRelayout").onclick=()=>recompute(false);
+/* botón de desplazamiento del panel izquierdo */
+const railL=document.querySelector(".rail"),bDn=document.getElementById("bScrollDn");
+function syncScrollBtn(){
+  const more=railL.scrollHeight-railL.clientHeight-railL.scrollTop;
+  bDn.dataset.show=more>18;
+}
+bDn.onclick=()=>railL.scrollBy({top:railL.clientHeight*.75,behavior:"smooth"});
+railL.addEventListener("scroll",syncScrollBtn);
+new ResizeObserver(()=>requestAnimationFrame(syncScrollBtn)).observe(railL);
+new ResizeObserver(()=>requestAnimationFrame(()=>{syncRailHeights();syncScrollBtn()}))
+  .observe(document.querySelector("main"));
+syncRailHeights();syncScrollBtn();
+document.getElementById("bFit").onclick=()=>{S.autoFit=true;fitView()};
+
+/* ---------- rotación ---------- */
+const rotSlide=document.getElementById("rotSlide"),rotVal=document.getElementById("rotVal");
+const tiltSlide=document.getElementById("tiltSlide"),tiltVal=document.getElementById("tiltVal");
+const rotSlide2=document.getElementById("rotSlide2"),rotVal2=document.getElementById("rotVal2");
+const tiltSlide2=document.getElementById("tiltSlide2"),tiltVal2=document.getElementById("tiltVal2");
+/* los controles existen por duplicado (barra inferior y panel izquierdo);
+   syncRot mantiene los dos juegos en el mismo estado */
+function syncRot(){
+  const gy=Math.round(S.rotY*180/Math.PI), gx=Math.round(S.rotX*180/Math.PI);
+  rotSlide.value=gy;rotSlide2.value=gy;
+  tiltSlide.value=gx;tiltSlide2.value=gx;
+  rotVal.textContent=gy+"°";rotVal2.textContent=gy+"°";
+  tiltVal.textContent=gx+"°";tiltVal2.textContent=gx+"°";
+  const on=String(S.spin);
+  document.getElementById("bSpin").setAttribute("aria-pressed",on);
+  document.getElementById("bSpin2").setAttribute("aria-pressed",on);
+}
+function setRotY(deg){
+  S.spin=false;S.rotY=deg*Math.PI/180;syncRot();if(S.autoFit)fitView();
+}
+function setRotX(deg){
+  S.rotX=deg*Math.PI/180;syncRot();if(S.autoFit)fitView();
+}
+rotSlide.oninput=e=>setRotY(+e.target.value);
+rotSlide2.oninput=e=>setRotY(+e.target.value);
+tiltSlide.oninput=e=>setRotX(+e.target.value);
+tiltSlide2.oninput=e=>setRotX(+e.target.value);
+const resetRot=()=>{S.spin=false;S.rotY=0;S.rotX=0;syncRot();if(S.autoFit)fitView()};
+document.getElementById("bRot0").onclick=resetRot;
+document.getElementById("bRot02").onclick=resetRot;
+/* separación y profundidad */
+const spSlide=document.getElementById("fSpread"),dpSlide=document.getElementById("fDepth");
+spSlide.oninput=e=>{
+  S.spread=+e.target.value;
+  document.getElementById("rSpread").textContent=S.spread.toFixed(1)+"×";
+  S.alpha=Math.max(S.alpha,.55);
+};
+dpSlide.oninput=e=>{
+  S.depth=+e.target.value;
+  document.getElementById("rDepth").textContent=S.depth.toFixed(2);
+  if(S.autoFit)fitView();
+};
+/* ---------- perfil de usuario ----------
+   OJO: esto es solo la capa visual. En InveXia el JSON del cliente NO debe
+   contener pairs ni cohesion_z: si el dato viaja al navegador, ocultarlo en
+   la interfaz no protege nada. La separación real va en el backend. */
+function applyRole(r){
+  S.role=r;
+  document.querySelectorAll("#segRole button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===r)));
+  const client=r==="client";
+  const tabSig=document.querySelector('.tabs button[data-p="signals"]');
+  tabSig.style.display=client?"none":"";
+  if(client){
+    if(tabSig.getAttribute("aria-selected")==="true")switchPane("detail");
+    S.halo=false;
+  }else{
+    S.halo=document.getElementById("fHalo").checked;
+  }
+  const haloBox=document.getElementById("fHalo").closest("label");
+  haloBox.style.display=client?"none":"";
+  document.getElementById("hudNote").textContent=client
+    ? "Vista de diagnóstico: comunidades, centralidad y conexiones"
+    : "Halo dorado = activo desacoplado de su comunidad";
+  if(S.sel)renderDetail(S.nodes.find(n=>n.id===S.sel));
+}
+document.querySelectorAll("#segRole button").forEach(b=>b.onclick=()=>applyRole(b.dataset.v));
+
+/* ---------- universo y sector ---------- */
+const selSector=document.getElementById("fSector");
+Object.keys(SECTORS).forEach(k=>{
+  const o=document.createElement("option");o.value=k;o.textContent=k;selSector.appendChild(o);
+});
+function rebuildUniverse(){
+  document.getElementById("mUni").textContent="calculando…";
+  setTimeout(()=>{
+    if(S.univ==="sp500"&&S.sector==="all"&&S.thr<.62){
+      S.thr=.62;
+      document.getElementById("fThr").value=.62;
+      document.getElementById("rThr").textContent="0.62";
+    }
+    S.data=buildSynthetic();
+    const sl2=document.getElementById("tSlide");
+    sl2.max=S.data.dates.length-1;S.si=S.data.dates.length-1;sl2.value=S.si;
+    S.nodes=[];PX=[];S.autoFit=true;
+    primeCohesionHistory();recompute(false);
+  },30);
+}
+document.getElementById("fUniv").onchange=e=>{S.univ=e.target.value;rebuildUniverse()};
+selSector.onchange=e=>{S.sector=e.target.value;rebuildUniverse()};
+
+/* barra inferior plegable */
+document.getElementById("bBar").onclick=e=>{
+  const bar=document.getElementById("ctrlbar");
+  const min=bar.classList.toggle("min");
+  e.currentTarget.textContent=min?"▴ MOSTRAR BARRA":"▾ OCULTAR BARRA";
+  requestAnimationFrame(()=>{resize();if(S.autoFit)fitView()});
+};
+const toggleSpin=()=>{S.spin=!S.spin;syncRot();if(S.spin)fitView()};
+document.getElementById("bSpin").onclick=toggleSpin;
+document.getElementById("bSpin2").onclick=toggleSpin;
+
+/* ---------- columnas: redimensionar y minimizar ---------- */
+const COL_DEF={l:216,r:336},colLast={l:216,r:336};
+function setCol(side,px){
+  document.documentElement.style.setProperty(side==="l"?"--colL":"--colR",px+"px");
+}
+function colWidth(side){
+  return parseFloat(getComputedStyle(document.documentElement)
+    .getPropertyValue(side==="l"?"--colL":"--colR"))||0;
+}
+function toggleCol(side){
+  const w=colWidth(side),btn=document.getElementById(side==="l"?"tgL":"tgR");
+  if(w>4){colLast[side]=w;setCol(side,0);btn.textContent=side==="l"?"›":"‹";
+    btn.title=`Mostrar panel ${side==="l"?"izquierdo":"derecho"}`}
+  else{setCol(side,colLast[side]||COL_DEF[side]);btn.textContent=side==="l"?"‹":"›";
+    btn.title=`Ocultar panel ${side==="l"?"izquierdo":"derecho"}`}
+  requestAnimationFrame(syncScrollBtn);
+}
+document.querySelectorAll(".gtoggle").forEach(b=>{
+  b.addEventListener("mousedown",ev=>ev.stopPropagation());
+  b.addEventListener("click",ev=>{ev.stopPropagation();toggleCol(b.dataset.side)});
+});
+document.querySelectorAll(".gutter").forEach(g=>{
+  g.addEventListener("mousedown",ev=>{
+    if(ev.target.classList.contains("gtoggle"))return;
+    ev.preventDefault();
+    const side=g.dataset.side,startX=ev.clientX,start=colWidth(side)||COL_DEF[side];
+    const min=side==="l"?0:0, max=side==="l"?440:600;
+    g.classList.add("act");document.body.style.userSelect="none";
+    const mv=e=>{
+      const d=e.clientX-startX;
+      let v=side==="l"?start+d:start-d;
+      if(v<70)v=0;                       // se pliega en vez de quedar inservible
+      setCol(side,Math.max(min,Math.min(max,v)));
+    };
+    const up=()=>{
+      g.classList.remove("act");document.body.style.userSelect="";
+      const w=colWidth(side),btn=document.getElementById(side==="l"?"tgL":"tgR");
+      if(w>4)colLast[side]=w;
+      btn.textContent=(w>4)===(side==="l")?"‹":"›";
+      window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);
+      requestAnimationFrame(syncScrollBtn);
+    };
+    window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);
+  });
+  g.addEventListener("dblclick",()=>setCol(g.dataset.side,COL_DEF[g.dataset.side]));
+});
+document.getElementById("bLoad").onclick=()=>document.getElementById("fFile").click();
+document.getElementById("fFile").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const j=JSON.parse(r.result);
+      if(!j.dates||!j.snapshots)throw new Error("Falta 'dates' o 'snapshots'.");
+      for(const d of j.dates){
+        const s=j.snapshots[d];
+        if(!s||!s.nodes||!s.rho)throw new Error(`Snapshot ${d} incompleto.`);
+        s.rho=s.rho.map(row=>Float64Array.from(row));
+        s.nodes.forEach(n=>{if(!SECTORS[n.sector])SECTORS[n.sector]={c:"#8ba4c9",t:""}});
+      }
+      S.data=j;S.si=j.dates.length-1;S.nodes=[];
+      const sl=document.getElementById("tSlide");sl.max=j.dates.length-1;sl.value=S.si;
+      const tag=document.getElementById("srcTag");
+      tag.textContent="DATOS PROPIOS";tag.style.background="#3ecf8e";
+      primeCohesionHistory();recompute(false);
+    }catch(err){alert("No se pudo cargar el archivo: "+err.message)}
+  };
+  r.readAsText(f);
+};
+let playT=null;
+document.getElementById("bPlay").onclick=e=>{
+  if(playT){clearInterval(playT);playT=null;e.target.textContent="▶ ANIMAR";return}
+  e.target.textContent="■ DETENER";
+  playT=setInterval(()=>{
+    S.si=(S.si+1)%S.data.dates.length;
+    document.getElementById("tSlide").value=S.si;recompute(true);
+  },1700);
+};
+
+document.getElementById("schema").innerHTML=`{
+  <span class="k">"meta"</span>: { <span class="k">"universe"</span>:"SP500 PIT",
+            <span class="k">"estimator"</span>:"ledoit_wolf+rmt",
+            <span class="k">"lookback"</span>:252 },
+  <span class="k">"dates"</span>: ["2024-12-31", ...],
+  <span class="k">"snapshots"</span>: {
+    "2024-12-31": {
+      <span class="k">"nodes"</span>: [{
+        "id":"AAPL", "name":"Apple", "sector":"Tecnología",
+        "mcap":3.4e12, "adv":8.2e9, "beta":1.18,
+        "ret_21d":0.043, "ret_63d":0.081, "ret_252d":0.192,
+        "vol_21d":0.214, "iv_rank":32, "iv_pct":28,
+        <span class="k">"profile"</span>:{ "long_name":"Apple Inc.",
+                     "industry":"Hardware y equipos",
+                     "country":"Estados Unidos",
+                     "hq":"Cupertino, CA", "exchange":"NASDAQ",
+                     "currency":"USD", "founded":1976,
+                     "employees":164000, "pe":32.4,
+                     "div_yield":0.44, "free_float":99.9 }
+      }, ...],
+      <span class="k">"rho"</span>: [[1.0, 0.91, ...], ...]  <span class="c">// N×N simétrica</span>
+    }
+  }
+}
+<span class="c">// Opcional — si el backend ya los calcula, la UI los usa:</span>
+<span class="k">"communities"</span>: [0,0,1,2,...],
+<span class="k">"pairs"</span>: [{"a":"AAPL","b":"MSFT","z":-2.31,
+             "halflife":14,"p_adj":0.031}]`;
+
+/* ════════ ARRANQUE · InveXia carga datos reales por rol ════════
+   Parámetros por URL (los pasa InveXia):
+     ?data=<url firmada al network JSON>   ?role=analyst|client   ?demo=1
+   El rol lo decide InveXia según la cuenta; aquí solo se aplica. */
+const QS=new URLSearchParams(location.search);
+const Q_ROLE = QS.get("role")==="client" ? "client" : "analyst";
+const Q_DATA = QS.get("data");
+const Q_DEMO = QS.get("demo")==="1";
+
+function initWith(data){
+  S.data=data;
+  const sl=document.getElementById("tSlide");
+  sl.max=S.data.dates.length-1; S.si=S.data.dates.length-1; sl.value=S.si;
+  S.nodes=[];
+  const tag=document.getElementById("srcTag");
+  if(data.meta && data.meta.synthetic===false){ tag.textContent="DATOS REALES"; tag.style.background="#3ecf8e"; }
+  // si el rol es CLIENTE, se oculta el selector para que no pueda ver la vista de analista
+  if(Q_ROLE==="client"){ const sr=document.getElementById("segRole"); if(sr) sr.style.display="none"; }
+  S.t0=performance.now();
+  resize(); applyView("dense"); applyRole(Q_ROLE);
+  primeCohesionHistory(); recompute(false); loop();
+  requestAnimationFrame(()=>{resize();fitView(true);syncScrollBtn()});
+}
+
+async function boot(){
+  if(Q_DATA && !Q_DEMO){
+    document.getElementById("srcTag").textContent="CARGANDO…";
+    try{
+      const r=await fetch(Q_DATA);
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const j=await r.json();
+      if(!j.dates||!j.snapshots) throw new Error("Falta 'dates' o 'snapshots'.");
+      for(const d of j.dates){
+        const s=j.snapshots[d];
+        if(!s||!s.nodes||!s.rho) throw new Error(`Snapshot ${d} incompleto.`);
+        s.rho=s.rho.map(row=>Float64Array.from(row));
+        s.nodes.forEach(n=>{ if(!SECTORS[n.sector]) SECTORS[n.sector]={c:"#8ba4c9",t:""}; });
+      }
+      initWith(j); return;
+    }catch(err){
+      document.getElementById("srcTag").textContent="ERROR DE DATOS";
+      alert("No se pudieron cargar los datos reales: "+err.message+"\nSe muestra la demostración.");
+    }
+  }
+  initWith(buildSynthetic());   // respaldo: sintético (demo o error)
+}
+boot();
+window.addEventListener("load",()=>{resize();if(S.autoFit)fitView(true);syncScrollBtn()});
+</script>
+</body>
+</html>
