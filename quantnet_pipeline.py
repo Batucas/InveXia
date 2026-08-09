@@ -291,19 +291,33 @@ def build_outputs(dates, snapshots, synthetic=False):
 # =====================================================================
 #  Subida a Supabase Storage
 # =====================================================================
+def key_role(k):
+    """Detecta el rol de la llave SIN exponerla (para diagnóstico)."""
+    try:
+        import base64
+        parts = k.split(".")
+        if len(parts) == 3:  # JWT legacy
+            pad = parts[1] + "=" * (-len(parts[1]) % 4)
+            return json.loads(base64.urlsafe_b64decode(pad)).get("role", "?")
+        if k.startswith("sb_secret"): return "secret (nueva, ok)"
+        if k.startswith("sb_publishable"): return "publishable (¡es la pública!)"
+        return "desconocido"
+    except Exception:
+        return "no-decodable"
+
 def upload(name, obj):
     import requests
     if not SUPABASE_URL or not SUPABASE_KEY:
-        print("  (sin credenciales Supabase; omito subida)"); return
+        print("  (sin credenciales Supabase; omito subida)"); return False
     url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{name}"
     headers = {"Authorization": f"Bearer {SUPABASE_KEY}",
                "apikey": SUPABASE_KEY, "Content-Type": "application/json",
                "x-upsert": "true"}
     r = requests.post(url, headers=headers, data=json.dumps(obj))
     if r.status_code in (200, 201):
-        print(f"  ✓ subido: {name}")
-    else:
-        print(f"  ✗ error subiendo {name}: {r.status_code} {r.text[:200]}")
+        print(f"  ✓ subido: {name}"); return True
+    print(f"  ✗ error subiendo {name}: {r.status_code} {r.text[:200]}")
+    return False
 
 # =====================================================================
 #  Main
@@ -336,8 +350,13 @@ def main():
 
     if not args.no_upload and not args.dry_run:
         print("Subiendo a Supabase Storage…")
-        upload("network_admin_latest.json", admin)
-        upload("network_client_latest.json", client)
+        print(f"  llave detectada: rol = {key_role(SUPABASE_KEY)}   (debe ser 'service_role' o 'secret')")
+        ok1 = upload("network_admin_latest.json", admin)
+        ok2 = upload("network_client_latest.json", client)
+        if not (ok1 and ok2):
+            print("\n⚠ La subida falló. Si el rol de arriba dice 'anon' o 'publishable',")
+            print("  la llave en GitHub es la PÚBLICA, no la service_role. Corrígela y reintenta.")
+            sys.exit(1)   # que el job salga ROJO para que se note
 
     print("Listo.")
 
