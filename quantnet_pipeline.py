@@ -60,6 +60,18 @@ MARKET = "SPY"   # proxy de mercado para betas
 def ann(x):        return x * 252
 def ann_vol(x):    return x * math.sqrt(252)
 
+def clean(o):
+    """Convierte NaN/Infinity (no válidos en JSON) en None, de forma recursiva."""
+    if isinstance(o, dict):  return {k: clean(v) for k, v in o.items()}
+    if isinstance(o, list):  return [clean(v) for v in o]
+    if isinstance(o, float): return o if math.isfinite(o) else None
+    try:
+        if isinstance(o, np.floating): return float(o) if math.isfinite(float(o)) else None
+        if isinstance(o, np.integer):  return int(o)
+    except Exception:
+        pass
+    return o
+
 def factor_model(stock_ret, mkt_ret):
     """beta (CAPM), residuo idiosincrático."""
     var_m = np.var(mkt_ret)
@@ -313,7 +325,7 @@ def upload(name, obj):
     headers = {"Authorization": f"Bearer {SUPABASE_KEY}",
                "apikey": SUPABASE_KEY, "Content-Type": "application/json",
                "x-upsert": "true"}
-    r = requests.post(url, headers=headers, data=json.dumps(obj))
+    r = requests.post(url, headers=headers, data=json.dumps(obj, allow_nan=False))
     if r.status_code in (200, 201):
         print(f"  ✓ subido: {name}"); return True
     print(f"  ✗ error subiendo {name}: {r.status_code} {r.text[:200]}")
@@ -340,12 +352,13 @@ def main():
         print("Sin snapshots generados. Aborta."); sys.exit(1)
 
     admin, client = build_outputs(dates, snaps, synthetic)
+    admin, client = clean(admin), clean(client)   # elimina NaN/Inf -> JSON válido
     print(f"Snapshots: {len(dates)}  ({dates[0]} … {dates[-1]})")
     print(f"Nodos: {len(admin['snapshots'][dates[-1]]['nodes'])}")
 
-    # guardar copias locales
-    with open("network_admin_latest.json", "w") as f: json.dump(admin, f)
-    with open("network_client_latest.json", "w") as f: json.dump(client, f)
+    # guardar copias locales (allow_nan=False garantiza JSON válido)
+    with open("network_admin_latest.json", "w") as f: json.dump(admin, f, allow_nan=False)
+    with open("network_client_latest.json", "w") as f: json.dump(client, f, allow_nan=False)
     print("Archivos locales escritos.")
 
     if not args.no_upload and not args.dry_run:
