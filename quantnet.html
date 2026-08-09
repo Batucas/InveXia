@@ -765,15 +765,9 @@ function recompute(keepPos){
   });
 
   // Señales (pares): solo para ANALISTA. El CLIENTE nunca las calcula ni ve.
+  // El admin las calcula del lado del cliente a partir de rho (formato consistente).
   if(S.role==="client"){
     S.pairs=[];
-  } else if(S.data.snapshots[S.data.dates[S.si]].signals){
-    // si el backend ya las entregó (JSON admin), se usan tal cual
-    const sig=S.data.snapshots[S.data.dates[S.si]].signals;
-    const idOf=new Map(S.nodes.map(n=>[n.id,n]));
-    S.pairs=(sig.pairs||[]).filter(p=>idOf.has(p.a)&&idOf.has(p.b))
-      .map(p=>({a:p.a,b:p.b,z:p.z!=null?p.z:0,halflife:p.halflife||null,p_adj:p.p_adj!=null?p.p_adj:null,rho:p.rho}))
-      .slice(0,14);
   } else {
     const pr=mulberry32(1000+S.si*7);
     const gz=()=>{let u=0,v=0;while(!u)u=pr();while(!v)v=pr();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
@@ -1211,7 +1205,7 @@ function renderDetail(n){
    </div>
    ${S.role==="analyst"?`<div class="verdict ${det||over?"":"mute"}">${verdict}</div>`:""}
    <h5 class="sec">Ficha de la empresa</h5>
-   ${S.data.meta.synthetic?'<div class="warn" style="margin-bottom:9px">Nombre, ticker y sector son reales. <b>El resto de la ficha y los fundamentales están simulados</b> hasta que cargues tu network.json.</div>':''}
+   ${(S.data.meta.synthetic && !Q_DATA)?'<div class="warn" style="margin-bottom:9px">Nombre, ticker y sector son reales. <b>El resto de la ficha y los fundamentales están simulados</b> hasta que cargues tu network.json.</div>':''}
    <table class="kv">
      <tr><td>Razón social</td><td>${p.long_name||n.name}</td></tr>
      <tr><td>Industria</td><td>${p.industry||"—"}</td></tr>
