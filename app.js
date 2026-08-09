@@ -226,6 +226,7 @@ const NAV_CLIENT=[
 ];
 const NAV_ADMIN=[
   ["clientes","Clientes",icon("users")],
+  ["quantnet","Red de mercado",icon("net")],
   ["publicaciones","Noticias e ideas",icon("news")],
   ["cursos","Cursos",icon("book")],
   ["calendario","Calendario",icon("cal")],
@@ -295,6 +296,7 @@ function route(){
    ============================================================ */
 async function render(){
   const m=$("#main"); m.innerHTML=loading();
+  m.classList.remove("wide");   // por defecto ancho normal; algunas vistas lo amplían
   const admin=state.profile.role==="admin";
   try{
     if(admin){
@@ -305,6 +307,7 @@ async function render(){
       if(state.view==="cursos")        return void await viewCoursesAdmin();
       if(state.view==="calendario")    return void await viewCalendarAdmin();
       if(state.view==="mensajes")      return void await viewAdminInbox();
+      if(state.view==="quantnet")      return void await viewQuantNet();
     } else {
       if(state.view==="inicio")     return void await viewClientHome();
       if(state.view==="notificaciones") return void await viewNotifications();
@@ -632,6 +635,7 @@ function perfOf(holds,quotes){
    ============================================================ */
 async function viewQuantNet(){
   const m=$("#main");
+  m.classList.add("wide");   // esta vista aprovecha todo el ancho
   m.innerHTML=head("Premium","Red de mercado","Estructura de correlaciones del mercado como una red viva.");
   const admin=state.profile.role==="admin";
   if(!admin && !state.profile.premium_quantnet){
