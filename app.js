@@ -119,6 +119,7 @@ const ui = {
     auth.mode=m; $("#authMsg").textContent="";
   },
   toggleSidebar(){ $("#sidebar").classList.toggle("open"); },
+  toggleSide(){ $("#app").classList.toggle("collapsed"); },
   toast(msg,kind=""){ const t=$("#toast"); t.textContent=msg; t.className="toast show "+kind;
     setTimeout(()=>t.className="toast",2800); },
 };
@@ -191,10 +192,11 @@ async function loadProfile(){
     state.profile.phone=metaPhone;
   }
 }
-function showAuth(){ $("#app").classList.add("hidden"); $("#auth").classList.remove("hidden"); $("#bellBtn")?.classList.add("hidden"); $("#bellPanel")?.classList.add("hidden"); }
+function showAuth(){ $("#app").classList.add("hidden"); $("#auth").classList.remove("hidden"); $("#bellBtn")?.classList.add("hidden"); $("#bellPanel")?.classList.add("hidden"); $("#sideToggle")?.classList.add("hidden"); }
 function enterApp(){
   $("#auth").classList.add("hidden"); $("#app").classList.remove("hidden");
   $("#bellBtn")?.classList.remove("hidden");
+  $("#sideToggle")?.classList.remove("hidden");
   const p=state.profile, admin=p.role==="admin";
   $("#uName").textContent=p.full_name||"—";
   $("#uRole").textContent=admin?"Administrador":"Cliente";

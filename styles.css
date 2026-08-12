@@ -640,3 +640,26 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 }
 /* QuantNet ocupa todo el alto/ancho disponible cuando la vista es 'wide' */
 .main.wide .quantnet-frame{height:calc(100vh - 150px)}
+
+/* ============================================================
+   v3.1 · Menú lateral colapsable (escritorio)
+   ============================================================ */
+.app{transition:grid-template-columns .22s ease}
+.app.collapsed{grid-template-columns:0 1fr}
+.app.collapsed .sidebar{opacity:0;pointer-events:none}
+.sidebar{transition:opacity .15s}
+
+/* botón de rayas (fijo, esquina superior izquierda) */
+.side-toggle{position:fixed;top:14px;left:14px;z-index:60;width:40px;height:40px;border-radius:9px;
+  background:var(--navy-800);border:1px solid var(--line-strong);color:var(--blue-300);
+  display:grid;place-items:center;cursor:pointer;font-size:18px;line-height:1;
+  box-shadow:var(--shadow);transition:.15s}
+.side-toggle:hover{border-color:var(--blue-500);background:var(--navy-700)}
+
+/* con el menú abierto, deja hueco para el botón para no tapar el logo */
+.app:not(.collapsed) .side-brand{padding-left:44px}
+/* con el menú colapsado, la cabecera deja hueco al botón */
+.app.collapsed .page-head{padding-left:52px}
+
+/* en móvil manda el menú deslizante propio; este botón no aplica */
+@media(max-width:900px){ .side-toggle{display:none !important} }
