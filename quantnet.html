@@ -1740,6 +1740,20 @@ const Q_DEMO = QS.get("demo")==="1";
 
 function initWith(data){
   S.data=data;
+  // Con datos reales: poblar el selector de Sector con los sectores del dataset
+  // y ocultar el de Universo (fijo por el pipeline).
+  if(data.meta && data.meta.synthetic===false){
+    const selS=document.getElementById("fSector");
+    if(selS){
+      const last=data.dates[data.dates.length-1];
+      const secs=[...new Set(data.snapshots[last].nodes.map(n=>n.sector))].sort();
+      selS.innerHTML='<option value="all">Todos los sectores</option>'+
+        secs.map(s=>`<option value="${s}">${s}</option>`).join("");
+      selS.value="all"; S.sector="all";
+    }
+    const uni=document.getElementById("fUniv");
+    if(uni){ const fld=uni.closest(".fld"); if(fld) fld.style.display="none"; }
+  }
   // En móvil: colapsar los paneles laterales para que la red ocupe toda la pantalla.
   if(window.innerWidth<=820){
     setCol("l",0); setCol("r",0);
