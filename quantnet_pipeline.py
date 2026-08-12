@@ -332,6 +332,7 @@ def make_node(tid, sector, beta, gamma, idio, price_series, prof, sd):
         "profile": prof["profile"], "fin": prof["fin"],
         "ret_21d": round(trailing(21), 4), "ret_63d": round(trailing(63), 4), "ret_252d": round(trailing(251), 4),
         "vol_21d": round(vol21, 4), "iv_rank": None, "iv_pct": None,
+        "ndx": tid in NASDAQ100,   # ¿pertenece al Nasdaq-100? (para el filtro de universo)
     }
     return node
 

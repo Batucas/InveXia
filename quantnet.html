@@ -736,10 +736,17 @@ function unproject(px,py,Zf){
 function recompute(keepPos){
   const dt=S.data.dates[S.si],snap=S.data.snapshots[dt];
   const fullMat=(S.basis==="coint"&&snap.coint)?snap.coint:snap.rho;
-  // filtro por sector: subconjunto de nodos y de la matriz (funciona con datos reales)
+  // filtros combinados: sector y/o universo (Nasdaq-100)
   let raw, rho;
-  if(S.sector && S.sector!=="all"){
-    const idx=[]; snap.nodes.forEach((n,i)=>{ if(n.sector===S.sector) idx.push(i); });
+  const sectorF = S.sector && S.sector!=="all";
+  const ndxF = S.univ==="ndx";
+  if(sectorF || ndxF){
+    const idx=[];
+    snap.nodes.forEach((n,i)=>{
+      if(sectorF && n.sector!==S.sector) return;
+      if(ndxF && !n.ndx) return;
+      idx.push(i);
+    });
     raw=idx.map(i=>snap.nodes[i]);
     rho=idx.map(i=>idx.map(j=>fullMat[i][j]));
   } else { raw=snap.nodes; rho=fullMat; }
@@ -1752,7 +1759,15 @@ function initWith(data){
       selS.value="all"; S.sector="all";
     }
     const uni=document.getElementById("fUniv");
-    if(uni){ const fld=uni.closest(".fld"); if(fld) fld.style.display="none"; }
+    if(uni){
+      const last=data.dates[data.dates.length-1];
+      const hasNdx=data.snapshots[last].nodes.some(n=>n.ndx);
+      // el selector de Universo solo aplica si el dato marca la pertenencia al Nasdaq-100
+      uni.innerHTML='<option value="all">S&P 500 (todo)</option>'+
+        (hasNdx?'<option value="ndx">Nasdaq-100</option>':'');
+      uni.value="all"; S.univ="all";
+      const fld=uni.closest(".fld"); if(fld) fld.style.display= hasNdx?"":"none";
+    }
   }
   // En móvil: colapsar los paneles laterales para que la red ocupe toda la pantalla.
   if(window.innerWidth<=820){
