@@ -72,15 +72,25 @@ _GICS = {
 
 def fetch_sp500_universe():
     """Obtiene los constituyentes vigentes del S&P 500 (Wikipedia) con su sector."""
-    import pandas as pd, requests
+    import pandas as pd, requests, io
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
     html = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30).text
-    tbl = pd.read_html(html)[0]
+    tables = pd.read_html(io.StringIO(html))   # StringIO: compatible con pandas 2.x
+    # elegir la tabla que tenga columnas de símbolo y sector GICS
+    tbl = None
+    for t in tables:
+        cols = [str(c) for c in t.columns]
+        if any("Symbol" in c for c in cols) and any("GICS Sector" in c for c in cols):
+            tbl = t; break
+    if tbl is None:
+        raise RuntimeError("no se encontró la tabla de constituyentes en Wikipedia")
+    symcol = [c for c in tbl.columns if "Symbol" in str(c)][0]
+    seccol = [c for c in tbl.columns if "GICS Sector" in str(c)][0]
     uni = {}
     for _, row in tbl.iterrows():
-        sym = str(row["Symbol"]).replace(".", "-").strip()
-        sec = _GICS.get(str(row["GICS Sector"]).strip(), "Otros")
-        if sym and sym.lower() != "nan":
+        sym = str(row[symcol]).replace(".", "-").strip().upper()
+        sec = _GICS.get(str(row[seccol]).strip(), "Otros")
+        if sym and sym != "NAN":
             uni[sym] = sec
     if len(uni) < 400:
         raise RuntimeError(f"lista S&P 500 sospechosamente corta ({len(uni)})")
