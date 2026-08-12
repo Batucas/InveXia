@@ -213,6 +213,12 @@ pre.code .c{color:var(--ink-faint);font-style:italic}
 
       <div class="grp">
         <h4>Topología</h4>
+        <label class="fld"><span>Base de la red</span>
+          <select id="fBasis">
+            <option value="corr" selected>Correlación (log-ret)</option>
+            <option value="coint">Cointegración · pairs</option>
+          </select>
+        </label>
         <label class="fld"><span>Filtro de aristas</span>
           <select id="fFilter">
             <option value="mst">MST</option>
@@ -729,7 +735,8 @@ function unproject(px,py,Zf){
 
 function recompute(keepPos){
   const dt=S.data.dates[S.si],snap=S.data.snapshots[dt];
-  const raw=snap.nodes,rho=snap.rho,N=raw.length;
+  const raw=snap.nodes,N=raw.length;
+  const rho=(S.basis==="coint"&&snap.coint)?snap.coint:snap.rho;
   S.rho=rho;S.N=N;
   const edges=buildEdges(rho,N,S.filter,S.thr);
   const adj=Array.from({length:N},()=>[]);
@@ -771,9 +778,17 @@ function recompute(keepPos){
   });
 
   // Señales (pares): solo para ANALISTA. El CLIENTE nunca las calcula ni ve.
-  // El admin las calcula del lado del cliente a partir de rho (formato consistente).
+  const sigBlock=snap.signals;
   if(S.role==="client"){
     S.pairs=[];
+  } else if(S.basis==="coint" && sigBlock && sigBlock.coint_pairs){
+    // Screener real de cointegración entregado por el pipeline (Engle-Granger)
+    const idx=new Map(S.nodes.map(n=>[n.id,n.i]));
+    S.pairs=(sigBlock.coint_pairs||[])
+      .filter(p=>idx.has(p.a)&&idx.has(p.b))
+      .map(p=>({a:idx.get(p.a),b:idx.get(p.b),z:p.strength!=null?p.strength:0,
+        beta:p.beta,halflife:p.halflife,p_adj:p.pval,coint:true}))
+      .slice(0,14);
   } else {
     const pr=mulberry32(1000+S.si*7);
     const gz=()=>{let u=0,v=0;while(!u)u=pr();while(!v)v=pr();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
@@ -815,7 +830,8 @@ function placeIsolates(){
 function primeCohesionHistory(){
   S.cohHist={};
   S.data.dates.forEach(dt=>{
-    const snap=S.data.snapshots[dt],rho=snap.rho,N=snap.nodes.length;
+    const snap=S.data.snapshots[dt],N=snap.nodes.length;
+    const rho=(S.basis==="coint"&&snap.coint)?snap.coint:snap.rho;
     const edges=buildEdges(rho,N,S.filter,S.thr);
     const adj=Array.from({length:N},()=>[]);
     for(const e of edges){adj[e.a].push([e.b,e.w]);adj[e.b].push([e.a,e.w])}
@@ -1373,12 +1389,18 @@ function renderSignals(){
     </div>`).join(""):`<div class="empty">Ningún activo supera ±1.2σ en esta foto.</div>`;
   document.getElementById("sigPairs").innerHTML=S.pairs.length?S.pairs.map(p=>{
     const A=S.nodes[p.a],Bn=S.nodes[p.b];
+    if(!A||!Bn) return "";
+    const badge=p.z!=null?`${p.z>0?"+":""}${p.z.toFixed(2)}`:"";
+    const first=p.coint
+      ? `β ${p.beta!=null?p.beta.toFixed(2):"—"}`
+      : `ρ ${(S.rho[p.a]&&S.rho[p.a][p.b]!=null)?S.rho[p.a][p.b].toFixed(2):"—"}`;
+    const hl=p.halflife!=null?`vida media ${p.halflife}d`:"";
+    const pv=p.p_adj!=null?`${p.coint?"p-valor":"p_adj"} ${p.p_adj.toFixed(3)}`:"";
     return `<div class="sig" data-pair="${p.a},${p.b}">
       <div class="sig-top"><span class="p">${A.id} / ${Bn.id}</span>
-        <span class="z ${p.z<0?"neg":"pos"}">${p.z>0?"+":""}${p.z.toFixed(2)}</span></div>
-      <div class="sig-sub"><span>ρ ${S.rho[p.a][p.b].toFixed(2)}</span>
-        <span>vida media ${p.halflife}d</span><span>p_adj ${p.p_adj.toFixed(3)}</span></div></div>`}).join("")
-    :`<div class="empty">Ningún par sobrevive al filtro de multiplicidad.</div>`;
+        <span class="z ${p.z<0?"neg":"pos"}">${badge}</span></div>
+      <div class="sig-sub"><span>${first}</span><span>${hl}</span><span>${pv}</span></div></div>`}).join("")
+    :`<div class="empty">${S.basis==="coint"?"Ningún par cointegrado en esta foto.":"Ningún par sobrevive al filtro de multiplicidad."}</div>`;
   document.querySelectorAll("#sigNodes [data-go]").forEach(el=>el.onclick=()=>select(el.dataset.go));
   document.querySelectorAll("#sigPairs [data-pair]").forEach(el=>el.onclick=()=>{
     const[a,b]=el.dataset.pair.split(",").map(Number);
@@ -1410,6 +1432,7 @@ function applyView(v){
   document.querySelectorAll("#segView button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.v===v));
   if(v==="dense"){
     S.filter="mst_thr";S.thr=.58;S.colorBy="centrality";S.bloom=true;S.sizeBy="eig";
+    if(S.basis===undefined)S.basis="corr";
     S.spread=1.8;S.depth=1.0;
     document.getElementById("viewNote").textContent="Grafo denso con resplandor aditivo. Bonito y bueno para explorar; malo para decidir — el hairball esconde estructura.";
     document.getElementById("hudNote").textContent="Amarillo = núcleo · Los nodos atenuados están al fondo de la escena";
@@ -1433,6 +1456,16 @@ function applyView(v){
 }
 document.querySelectorAll("#segView button").forEach(b=>b.onclick=()=>applyView(b.dataset.v));
 document.getElementById("fFilter").onchange=e=>{S.filter=e.target.value;primeCohesionHistory();recompute(true)};
+const fBasis=document.getElementById("fBasis");
+if(fBasis) fBasis.onchange=e=>{
+  const has=S.data.snapshots[S.data.dates[S.si]].coint;
+  if(e.target.value==="coint" && !has){ alert("Este conjunto de datos aún no incluye la capa de cointegración. Corre el pipeline actualizado."); e.target.value="corr"; return; }
+  S.basis=e.target.value;
+  const lbl=document.querySelector('label[for],#rThr'); // relabel umbral
+  const thrSpan=document.getElementById("rThr")?document.getElementById("rThr").parentNode:null;
+  if(thrSpan) thrSpan.firstChild.textContent=S.basis==="coint"?"Umbral fuerza ":"Umbral |ρ| ";
+  primeCohesionHistory();recompute(true);
+};
 document.getElementById("fThr").oninput=e=>{
   S.thr=+e.target.value;document.getElementById("rThr").textContent=S.thr.toFixed(2);
   clearTimeout(window._t);window._t=setTimeout(()=>{primeCohesionHistory();recompute(true)},200);
@@ -1725,6 +1758,7 @@ async function boot(){
         const s=j.snapshots[d];
         if(!s||!s.nodes||!s.rho) throw new Error(`Snapshot ${d} incompleto.`);
         s.rho=s.rho.map(row=>Float64Array.from(row));
+        if(s.coint) s.coint=s.coint.map(row=>Float64Array.from(row));
         s.nodes.forEach(n=>{ if(!SECTORS[n.sector]) SECTORS[n.sector]={c:"#8ba4c9",t:""}; });
       }
       initWith(j); return;

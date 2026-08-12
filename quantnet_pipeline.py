@@ -90,30 +90,54 @@ def corr_matrix(R):
     return C
 
 # =====================================================================
-#  Señales (solo para el JSON de ANALISTA)
+#  Cointegración (Engle-Granger) — para la red de pairs trading
 # =====================================================================
-def compute_signals(nodes, C):
-    """Cohesión por nodo (z-score) + pares candidatos por alta correlación."""
-    N = len(nodes)
-    # cohesión = correlación media absoluta de cada nodo con el resto
-    cohesion = []
-    for i in range(N):
-        vals = [abs(C[i][j]) for j in range(N) if j != i]
-        cohesion.append(float(np.mean(vals)) if vals else 0.0)
-    mu, sd = np.mean(cohesion), np.std(cohesion)
-    coh_z = [float((c - mu) / sd) if sd > 0 else 0.0 for c in cohesion]
+def halflife(spread):
+    """Vida media de reversión a la media del spread (días)."""
+    s = np.asarray(spread, dtype=float)
+    lag = s[:-1] - s[:-1].mean()
+    d = np.diff(s)
+    if len(lag) < 5 or np.var(lag) == 0:
+        return None
+    beta = np.polyfit(lag, d, 1)[0]
+    if beta >= 0:
+        return None
+    hl = -math.log(2) / beta
+    return round(float(hl), 1) if math.isfinite(hl) and 0 < hl < 400 else None
 
-    # pares con correlación extrema dentro del mismo sector
-    pairs = []
+def coint_layer(logpx, corr, syms, thr=0.6, max_pairs=800):
+    """Matriz de fuerza de cointegración (0..1) + lista de pares ordenados.
+       logpx: T x N (log-precios) · corr: NxN (corr de log-retornos)."""
+    from statsmodels.tsa.stattools import coint as eg_coint
+    N = corr.shape[0]
+    M = np.zeros((N, N))
+    cands = []
     for i in range(N):
         for j in range(i + 1, N):
-            if nodes[i]["sector"] == nodes[j]["sector"] and abs(C[i][j]) > 0.7:
-                pairs.append({"a": nodes[i]["id"], "b": nodes[j]["id"],
-                              "rho": round(float(C[i][j]), 3),
-                              "sector": nodes[i]["sector"]})
-    pairs.sort(key=lambda p: -abs(p["rho"]))
-    return {"cohesion_z": {nodes[i]["id"]: round(coh_z[i], 2) for i in range(N)},
-            "pairs": pairs[:14]}
+            c = abs(corr[i][j])
+            if c >= thr:
+                cands.append((c, i, j))
+    cands.sort(reverse=True)
+    cands = cands[:max_pairs]
+    pairs = []
+    for _, i, j in cands:
+        a, b = logpx[:, i], logpx[:, j]
+        if not (np.all(np.isfinite(a)) and np.all(np.isfinite(b))):
+            continue
+        try:
+            _, pval, _ = eg_coint(a, b)
+        except Exception:
+            continue
+        if pval < 0.10:
+            beta = float(np.polyfit(b, a, 1)[0])
+            hl = halflife(a - beta * b)
+            strength = round(float(1 - pval), 4)
+            M[i][j] = M[j][i] = strength
+            pairs.append({"a": syms[i], "b": syms[j], "pval": round(float(pval), 4),
+                          "beta": round(beta, 3), "halflife": hl,
+                          "corr": round(float(corr[i][j]), 3), "strength": strength})
+    pairs.sort(key=lambda p: -p["strength"])
+    return M, pairs[:20]
 
 # =====================================================================
 #  Descarga de datos reales (yfinance)
@@ -141,7 +165,8 @@ def fetch_real():
             info = {}
         profiles[t] = build_profile_fin(info)
 
-    rets = px.pct_change().dropna()
+    logpx = np.log(px)
+    rets = logpx.diff().dropna()   # LOG-retornos (correcto para pairs trading)
     dates_idx = rets.index
 
     # fechas de snapshot: últimos N_SNAPS fines de mes disponibles
@@ -176,8 +201,13 @@ def fetch_real():
             prof = profiles[t]
             nodes.append(make_node(t, sect, beta, min(gamma, 1.5), idio,
                                    window[t], prof, sd))
-        snapshots[sd.strftime("%Y-%m-%d")] = {"nodes": nodes, "rho": C.round(4).tolist()}
-        out_dates.append(sd.strftime("%Y-%m-%d"))
+        key = sd.strftime("%Y-%m-%d")
+        snapshots[key] = {"nodes": nodes, "rho": C.round(4).tolist()}
+        logpxwin = logpx.loc[window.index, node_syms].values
+        Mc, cpairs = coint_layer(logpxwin, C, node_syms)
+        snapshots[key]["coint"] = Mc.round(4).tolist()
+        snapshots[key]["_pairs"] = cpairs
+        out_dates.append(key)
 
     return out_dates, snapshots
 
@@ -256,7 +286,8 @@ def fetch_synthetic():
     common = rng.normal(0, 1, T)
     px = {t: 100 * np.cumprod(1 + (0.0003 + 0.01 * (0.6 * common + 0.8 * rng.normal(0, 1, T)))) for t in tickers}
     dfpx = pd.DataFrame(px, index=idx)
-    rets = dfpx.pct_change().dropna()
+    logpx = np.log(dfpx)
+    rets = logpx.diff().dropna()
     snap_dates = list(rets.resample("ME").last().index)[-N_SNAPS:]
     snapshots, out_dates = {}, []
     for sd in snap_dates:
@@ -273,8 +304,13 @@ def fetch_synthetic():
                     "roe","roic","debt_equity","current_ratio","fcf","div_yield","payout","w52_low","w52_high")},
                     "mcap": 1e11, "adv": 1e8}
             nodes.append(make_node(t, UNIVERSE[t], 1.0, 0.2, 0.2, dfpx[t].loc[:sd], prof, sd))
-        snapshots[sd.strftime("%Y-%m-%d")] = {"nodes": nodes, "rho": C.round(4).tolist()}
-        out_dates.append(sd.strftime("%Y-%m-%d"))
+        key = sd.strftime("%Y-%m-%d")
+        snapshots[key] = {"nodes": nodes, "rho": C.round(4).tolist()}
+        logpxwin = logpx.loc[window.index, tickers].values
+        Mc, cpairs = coint_layer(logpxwin, C, tickers)
+        snapshots[key]["coint"] = Mc.round(4).tolist()
+        snapshots[key]["_pairs"] = cpairs
+        out_dates.append(key)
     return out_dates, snapshots
 
 # =====================================================================
@@ -290,13 +326,13 @@ def build_outputs(dates, snapshots, synthetic=False):
     admin_snaps = {}
     for d in dates:
         s = snapshots[d]
-        C = np.array(s["rho"])
-        admin_snaps[d] = {"nodes": s["nodes"], "rho": s["rho"],
-                          "signals": compute_signals(s["nodes"], C)}
+        admin_snaps[d] = {"nodes": s["nodes"], "rho": s["rho"], "coint": s.get("coint"),
+                          "signals": {"coint_pairs": s.get("_pairs", [])}}
     admin = {"meta": {**meta, "role": "analyst"}, "dates": dates, "snapshots": admin_snaps}
 
-    # CLIENTE: mismos nodos y grafo, SIN el bloque de señales
-    client_snaps = {d: {"nodes": snapshots[d]["nodes"], "rho": snapshots[d]["rho"]} for d in dates}
+    # CLIENTE: rho + coint (para dibujar ambas redes), SIN el screener de pares
+    client_snaps = {d: {"nodes": snapshots[d]["nodes"], "rho": snapshots[d]["rho"],
+                        "coint": snapshots[d].get("coint")} for d in dates}
     client = {"meta": {**meta, "role": "client"}, "dates": dates, "snapshots": client_snaps}
     return admin, client
 
