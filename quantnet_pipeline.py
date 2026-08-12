@@ -205,12 +205,16 @@ def fetch_real():
     tickers = list(UNIVERSE.keys())
     all_syms = tickers + [MARKET]
     print(f"Descargando precios de {len(all_syms)} símbolos…")
-    start = (dt.date.today() - dt.timedelta(days=800)).isoformat()
+    start = (dt.date.today() - dt.timedelta(days=1000)).isoformat()
     px = yf.download(all_syms, start=start, interval="1d",
                      auto_adjust=True, progress=False)["Close"]
-    px = px.dropna(axis=1, how="all").ffill().dropna()
+    px = px.dropna(axis=1, how="all").ffill()          # rellenar huecos internos
+    # descartar activos con poca historia (IPOs recientes) en vez de borrar fechas
+    min_obs = int(len(px) * 0.90)
+    px = px.dropna(axis=1, thresh=min_obs)
+    px = px.dropna()                                    # alinear: filas completas
     good = [t for t in tickers if t in px.columns and t != MARKET]
-    print(f"  {len(good)} símbolos con datos válidos.")
+    print(f"  {len(good)} activos con historia suficiente · {len(px)} días alineados.")
 
     # fundamentales/perfil (una sola vez; se aplican a todos los snapshots)
     print("Descargando fundamentales/perfil…")
