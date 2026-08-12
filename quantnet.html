@@ -735,8 +735,15 @@ function unproject(px,py,Zf){
 
 function recompute(keepPos){
   const dt=S.data.dates[S.si],snap=S.data.snapshots[dt];
-  const raw=snap.nodes,N=raw.length;
-  const rho=(S.basis==="coint"&&snap.coint)?snap.coint:snap.rho;
+  const fullMat=(S.basis==="coint"&&snap.coint)?snap.coint:snap.rho;
+  // filtro por sector: subconjunto de nodos y de la matriz (funciona con datos reales)
+  let raw, rho;
+  if(S.sector && S.sector!=="all"){
+    const idx=[]; snap.nodes.forEach((n,i)=>{ if(n.sector===S.sector) idx.push(i); });
+    raw=idx.map(i=>snap.nodes[i]);
+    rho=idx.map(i=>idx.map(j=>fullMat[i][j]));
+  } else { raw=snap.nodes; rho=fullMat; }
+  const N=raw.length;
   S.rho=rho;S.N=N;
   const edges=buildEdges(rho,N,S.filter,S.thr);
   const adj=Array.from({length:N},()=>[]);
@@ -1578,6 +1585,13 @@ Object.keys(SECTORS).forEach(k=>{
   const o=document.createElement("option");o.value=k;o.textContent=k;selSector.appendChild(o);
 });
 function rebuildUniverse(){
+  // Con datos reales (cargados desde InveXia) NO se regeneran sintéticos:
+  // solo se re-filtra y redibuja la red real.
+  if(S.data && S.data.meta && S.data.meta.synthetic===false){
+    S.nodes=[];S.autoFit=true;
+    primeCohesionHistory();recompute(false);
+    return;
+  }
   document.getElementById("mUni").textContent="calculando…";
   setTimeout(()=>{
     if(S.univ==="sp500"&&S.sector==="all"&&S.thr<.62){
