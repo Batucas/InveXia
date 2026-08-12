@@ -27,8 +27,12 @@ BUCKET     = "quantnet"
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
-# Universo ~100 (Nasdaq-100 aprox.) con sector legible en español.
-UNIVERSE = {
+# --------- Universo ---------
+# Modo del universo: "sp500" (obtiene la lista vigente) o "nasdaq100".
+UNIVERSE_MODE = "sp500"
+
+# Fallback / Nasdaq-100 (~100) con sector legible en español.
+NASDAQ100 = {
   "AAPL":"Tecnología","MSFT":"Tecnología","NVDA":"Tecnología","AVGO":"Tecnología","ADBE":"Tecnología",
   "CSCO":"Tecnología","AMD":"Tecnología","INTC":"Tecnología","QCOM":"Tecnología","TXN":"Tecnología",
   "AMAT":"Tecnología","MU":"Tecnología","INTU":"Tecnología","LRCX":"Tecnología","KLAC":"Tecnología",
@@ -53,6 +57,46 @@ UNIVERSE = {
   "WBA":"Consumo básico","ANSS":"Tecnología","MDB":"Tecnología","SMCI":"Tecnología","ARM":"Tecnología",
 }
 MARKET = "SPY"   # proxy de mercado para betas
+
+# UNIVERSE y su nombre se fijan en main() según el modo elegido.
+UNIVERSE = NASDAQ100
+UNIVERSE_NAME = "Nasdaq-100"
+
+# Mapa de sectores GICS (inglés) -> español, para el S&P 500
+_GICS = {
+    "Information Technology": "Tecnología", "Health Care": "Salud", "Financials": "Financiero",
+    "Consumer Discretionary": "Consumo discrecional", "Communication Services": "Comunicaciones",
+    "Industrials": "Industrial", "Consumer Staples": "Consumo básico", "Energy": "Energía",
+    "Utilities": "Servicios básicos", "Real Estate": "Inmobiliario", "Materials": "Materiales",
+}
+
+def fetch_sp500_universe():
+    """Obtiene los constituyentes vigentes del S&P 500 (Wikipedia) con su sector."""
+    import pandas as pd, requests
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    html = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30).text
+    tbl = pd.read_html(html)[0]
+    uni = {}
+    for _, row in tbl.iterrows():
+        sym = str(row["Symbol"]).replace(".", "-").strip()
+        sec = _GICS.get(str(row["GICS Sector"]).strip(), "Otros")
+        if sym and sym.lower() != "nan":
+            uni[sym] = sec
+    if len(uni) < 400:
+        raise RuntimeError(f"lista S&P 500 sospechosamente corta ({len(uni)})")
+    return uni
+
+def build_universe(dry_run=False):
+    """Devuelve (dict ticker->sector, nombre)."""
+    if dry_run or UNIVERSE_MODE != "sp500":
+        return NASDAQ100, "Nasdaq-100"
+    try:
+        uni = fetch_sp500_universe()
+        print(f"  S&P 500: {len(uni)} constituyentes obtenidos.")
+        return uni, "S&P 500"
+    except Exception as e:
+        print(f"  ⚠ no se pudo obtener el S&P 500 ({e}); usando Nasdaq-100.")
+        return NASDAQ100, "Nasdaq-100"
 
 # =====================================================================
 #  Utilidades numéricas
@@ -105,15 +149,18 @@ def halflife(spread):
     hl = -math.log(2) / beta
     return round(float(hl), 1) if math.isfinite(hl) and 0 < hl < 400 else None
 
-def coint_layer(logpx, corr, syms, thr=0.6, max_pairs=800):
+def coint_layer(logpx, corr, syms, sectors=None, thr=0.55, max_pairs=1500):
     """Matriz de fuerza de cointegración (0..1) + lista de pares ordenados.
-       logpx: T x N (log-precios) · corr: NxN (corr de log-retornos)."""
+       logpx: T x N (log-precios) · corr: NxN (corr de log-retornos).
+       Si 'sectors' se provee, solo testea pares del MISMO sector."""
     from statsmodels.tsa.stattools import coint as eg_coint
     N = corr.shape[0]
     M = np.zeros((N, N))
     cands = []
     for i in range(N):
         for j in range(i + 1, N):
+            if sectors is not None and sectors[i] != sectors[j]:
+                continue   # solo pares del mismo sector
             c = abs(corr[i][j])
             if c >= thr:
                 cands.append((c, i, j))
@@ -202,10 +249,11 @@ def fetch_real():
             nodes.append(make_node(t, sect, beta, min(gamma, 1.5), idio,
                                    window[t], prof, sd))
         key = sd.strftime("%Y-%m-%d")
-        snapshots[key] = {"nodes": nodes, "rho": C.round(4).tolist()}
+        snapshots[key] = {"nodes": nodes, "rho": C.round(3).tolist()}
         logpxwin = logpx.loc[window.index, node_syms].values
-        Mc, cpairs = coint_layer(logpxwin, C, node_syms)
-        snapshots[key]["coint"] = Mc.round(4).tolist()
+        secs = [UNIVERSE.get(t, "Otros") for t in node_syms]
+        Mc, cpairs = coint_layer(logpxwin, C, node_syms, sectors=secs)
+        snapshots[key]["coint"] = Mc.round(3).tolist()
         snapshots[key]["_pairs"] = cpairs
         out_dates.append(key)
 
@@ -305,10 +353,11 @@ def fetch_synthetic():
                     "mcap": 1e11, "adv": 1e8}
             nodes.append(make_node(t, UNIVERSE[t], 1.0, 0.2, 0.2, dfpx[t].loc[:sd], prof, sd))
         key = sd.strftime("%Y-%m-%d")
-        snapshots[key] = {"nodes": nodes, "rho": C.round(4).tolist()}
+        snapshots[key] = {"nodes": nodes, "rho": C.round(3).tolist()}
         logpxwin = logpx.loc[window.index, tickers].values
-        Mc, cpairs = coint_layer(logpxwin, C, tickers)
-        snapshots[key]["coint"] = Mc.round(4).tolist()
+        secs = [UNIVERSE.get(t, "Otros") for t in tickers]
+        Mc, cpairs = coint_layer(logpxwin, C, tickers, sectors=secs)
+        snapshots[key]["coint"] = Mc.round(3).tolist()
         snapshots[key]["_pairs"] = cpairs
         out_dates.append(key)
     return out_dates, snapshots
@@ -318,8 +367,8 @@ def fetch_synthetic():
 # =====================================================================
 def build_outputs(dates, snapshots, synthetic=False):
     today = dt.date.today().isoformat()
-    meta = {"universe": f"Nasdaq-100 ({len(UNIVERSE)} activos)",
-            "estimator": "correlación de retornos · ventana 252d",
+    meta = {"universe": f"{UNIVERSE_NAME} ({len(UNIVERSE)} activos)",
+            "estimator": "correlación de log-retornos · ventana 252d · cointegración intra-sector",
             "lookback": LOOKBACK, "generated": today, "synthetic": synthetic}
 
     # ADMIN: completo + señales por snapshot
@@ -375,6 +424,9 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="sintético, valida estructura")
     ap.add_argument("--no-upload", action="store_true", help="no subir a Supabase")
     args = ap.parse_args()
+
+    global UNIVERSE, UNIVERSE_NAME
+    UNIVERSE, UNIVERSE_NAME = build_universe(dry_run=args.dry_run)
 
     if args.dry_run:
         print("== MODO PRUEBA (sintético) ==")
