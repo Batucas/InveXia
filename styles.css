@@ -663,3 +663,47 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 
 /* en móvil manda el menú deslizante propio; este botón no aplica */
 @media(max-width:900px){ .side-toggle{display:none !important} }
+
+/* ============================================================
+   v3.2 · Mapa de cursos tipo red neuronal
+   ============================================================ */
+.cmap-wrap{display:grid;grid-template-columns:1fr 320px;gap:1.2rem;margin-top:.5rem}
+.cmap-scroll{padding:1rem;overflow-x:auto;overflow-y:hidden}
+.cmap-svg{width:100%;height:auto;display:block;font-family:'Inter',sans-serif}
+.cmap-head{font-family:'JetBrains Mono';font-size:12px;letter-spacing:.14em;font-weight:500}
+
+/* aristas: señal que fluye de una capa a la siguiente */
+.cmap-edges path{fill:none;stroke:var(--line-strong);stroke-width:1.1;
+  stroke-dasharray:4 9;animation:cmapFlow 1.4s linear infinite;opacity:.5}
+@keyframes cmapFlow{to{stroke-dashoffset:-13}}
+
+/* neuronas */
+.cmap-node{cursor:pointer}
+.cmap-node .halo{fill:var(--col);opacity:.10;transition:opacity .25s,r .25s}
+.cmap-node .core{fill:var(--col);stroke:var(--navy-950);stroke-width:2;
+  transform-box:fill-box;transform-origin:center;animation:cmapBreathe 3.2s ease-in-out infinite}
+.cmap-node .cmap-label{fill:var(--muted);font-size:12.5px;transition:fill .25s}
+@keyframes cmapBreathe{0%,100%{opacity:.85}50%{opacity:1}}
+.cmap-node:hover .halo,.cmap-node.sel .halo{opacity:.28;r:30}
+.cmap-node:hover .cmap-label,.cmap-node.sel .cmap-label{fill:var(--text)}
+.cmap-node.sel .core{stroke:var(--col);stroke-width:3}
+.cmap-node:focus{outline:none}
+.cmap-node:focus .halo{opacity:.28;r:30}
+
+/* panel de detalle */
+.cmap-detail{padding:1.4rem;min-height:240px;display:flex;align-items:center;justify-content:center}
+.cmap-detail-empty{text-align:center;color:var(--faint)}
+.cmap-detail-empty svg{width:28px;height:28px;opacity:.5}
+.cmap-detail-empty p{margin-top:.6rem;font-size:.88rem}
+.cmap-detail-full{width:100%}
+.cmap-detail-full h3{margin:.7rem 0 .5rem;font-size:1.15rem;color:var(--text)}
+.cmap-detail-full p{color:var(--muted);font-size:.9rem;line-height:1.55;margin-bottom:1.1rem}
+.cmap-nolink{font-size:.82rem;color:var(--faint);font-style:italic}
+
+@media(max-width:820px){
+  .cmap-wrap{grid-template-columns:1fr}
+  .cmap-detail{min-height:auto}
+}
+@media(prefers-reduced-motion:reduce){
+  .cmap-edges path,.cmap-node .core{animation:none}
+}

@@ -1288,13 +1288,73 @@ function courseCard(c){
 /* ============================================================
    CLIENTE · Cursos / Calendario / Mensajes
    ============================================================ */
+/* Mapa de cursos tipo red neuronal: capas por nivel, cursos como neuronas */
+const CMAP_LAYERS=["Básico","Intermedio","Avanzado"];
+const CMAP_COL={"Básico":"var(--blue-400)","Intermedio":"var(--gold)","Avanzado":"var(--good)"};
+function coursesNeuralMap(cs){
+  // agrupar por nivel; niveles desconocidos van a "Básico"
+  const buckets=CMAP_LAYERS.map(L=>cs.filter(c=>(c.level||"Básico")===L));
+  cs.forEach(c=>{ if(!CMAP_LAYERS.includes(c.level||"Básico")) buckets[0].push(c); });
+  const layers=CMAP_LAYERS.map((L,i)=>({label:L,items:buckets[i]})).filter(l=>l.items.length);
+  const nL=layers.length;
+  const W=1000, top=96, botPad=40;
+  const maxN=Math.max(...layers.map(l=>l.items.length),1);
+  const H=Math.max(380, maxN*104+top+botPad);
+  const xs=nL===1?[500]:layers.map((_,i)=>150+i*(700/(nL-1)));
+  // posiciones por nodo
+  const pos=layers.map((l,li)=>l.items.map((c,ci)=>{
+    const n=l.items.length, y=top+(ci+0.5)*((H-top-botPad)/n);
+    return {c,x:xs[li],y};
+  }));
+  // aristas entre capas adyacentes (densas, como una red neuronal)
+  let edges="";
+  for(let li=0; li<pos.length-1; li++){
+    for(const a of pos[li]) for(const b of pos[li+1]){
+      const dx=(b.x-a.x)*0.45;
+      edges+=`<path class="cmap-edge" d="M${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}"/>`;
+    }
+  }
+  // encabezados de capa
+  let heads="";
+  layers.forEach((l,li)=>{
+    heads+=`<text x="${xs[li]}" y="46" text-anchor="middle" class="cmap-head" fill="${CMAP_COL[l.label]}">${l.label.toUpperCase()}</text>
+      <line x1="${xs[li]-70}" y1="60" x2="${xs[li]+70}" y2="60" stroke="${CMAP_COL[l.label]}" stroke-opacity=".3"/>`;
+  });
+  // nodos
+  let nodes="", idx=0; const flat=[];
+  pos.forEach((layer,li)=>layer.forEach(p=>{
+    const col=CMAP_COL[layers[li].label];
+    const title=(p.c.title||"Curso");
+    const short=title.length>22?title.slice(0,21)+"…":title;
+    flat.push(p.c);
+    nodes+=`<g class="cmap-node" data-i="${idx}" style="--col:${col}" tabindex="0" role="button" aria-label="${esc(title)}">
+      <circle class="halo" cx="${p.x}" cy="${p.y}" r="26"/>
+      <circle class="core" cx="${p.x}" cy="${p.y}" r="13"/>
+      <text x="${p.x}" y="${p.y+40}" text-anchor="middle" class="cmap-label">${esc(short)}</text>
+    </g>`;
+    idx++;
+  }));
+  return {svg:`<svg viewBox="0 0 ${W} ${H}" class="cmap-svg" preserveAspectRatio="xMidYMid meet" style="min-width:${Math.max(680,nL*260)}px">
+      <g class="cmap-edges">${edges}</g>${heads}${nodes}</svg>`, flat};
+}
+
 async function viewCoursesClient(){
   const cs=await sb.from("courses").select("*").eq("published",true).order("created_at",{ascending:false}).then(r=>r.data||[]);
-  const m=$("#main"); m.innerHTML=head("Formación","Cursos","Contenido publicado por InveXia.");
+  const m=$("#main"); m.innerHTML=head("Formación","Cursos","Tu ruta de aprendizaje, conectada como una red.");
   if(!cs.length){ m.append(el(`<div class="card empty">${icon("book")}<p style="margin-top:.4rem">Aún no hay cursos publicados.</p></div>`)); return; }
-  const g=el(`<div class="grid grid-3"></div>`);
-  cs.forEach(c=>g.append(courseCard(c)));
-  m.append(g);
+  const {svg,flat}=coursesNeuralMap(cs);
+  m.append(el(`<div class="cmap-wrap">
+    <div class="cmap-scroll card">${svg}</div>
+    <div id="courseDetail" class="cmap-detail card">
+      <div class="cmap-detail-empty">${icon("book")}<p>Toca una neurona del mapa para ver el curso.</p></div>
+    </div>
+  </div>`));
+  state.cache.cmapCourses=flat;
+  document.querySelectorAll(".cmap-node").forEach(g=>{
+    const pick=()=>app.pickCourse(+g.dataset.i);
+    g.addEventListener("click",pick);
+    g.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();} });
+  });
 }
 async function viewCalendarClient(){
   const ev=await sb.from("events").select("*").order("event_date",{ascending:true}).then(r=>r.data||[]);
@@ -1889,6 +1949,21 @@ const app = {
     const plan=r.plans[key];
     const cur=plan.symbols.map(s=>r.curBySym[s]||0);   // alinear actual al universo del método
     $("#planBody").innerHTML=`<table class="qtbl plan"><thead><tr><th>Activo</th><th style="text-align:right">Actual</th><th></th><th style="text-align:right">Objetivo</th><th style="text-align:right">Acción</th></tr></thead><tbody>${planRows(plan.symbols,cur,plan.target)}</tbody></table>`;
+  },
+
+  // mapa de cursos (red neuronal)
+  pickCourse(i){
+    const c=(state.cache.cmapCourses||[])[i]; if(!c) return;
+    document.querySelectorAll(".cmap-node").forEach(n=>n.classList.toggle("sel",+n.dataset.i===i));
+    const box=$("#courseDetail"); if(!box) return;
+    box.innerHTML=`<div class="cmap-detail-full">
+      <span class="pill pill-blue">${esc(c.level||"Curso")}</span>
+      <h3>${esc(c.title||"Curso")}</h3>
+      <p>${esc(c.description||"Sin descripción.")}</p>
+      ${c.url
+        ? `<a class="btn btn-primary btn-sm" style="width:auto" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir curso →</a>`
+        : `<span class="cmap-nolink">Este curso aún no tiene enlace disponible.</span>`}
+    </div>`;
   },
 
   // admin: activar/desactivar premium

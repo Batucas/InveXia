@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InveXia · Gestión cuantitativa de inversiones</title>
+<meta name="description" content="InveXia lleva las herramientas cuantitativas de Wall Street a cualquier inversionista: optimización de carteras, redes de correlación y acceso real a los mercados de EE. UU.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E15; --bg2:#0D1220; --panel:#131A26; --panel2:#182234;
+    --line:rgba(255,255,255,.07); --line2:rgba(255,255,255,.13);
+    --text:#E8EDF5; --muted:#8BA0BC; --faint:#5A6b83;
+    --blue:#2E7DF6; --blue-300:#7FB0FF; --gold:#F5C451; --good:#34D399;
+    --maxw:1200px;
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Inter',system-ui,sans-serif; line-height:1.6;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  ::selection{background:rgba(46,125,246,.3)}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 clamp(1.2rem,4vw,2.5rem)}
+  .mono{font-family:'JetBrains Mono',monospace}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace; font-size:.72rem; letter-spacing:.22em;
+    text-transform:uppercase; color:var(--blue-300); display:inline-block;
+  }
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif;font-weight:600;line-height:1.05;letter-spacing:-.02em}
+
+  /* ---------- Nav ---------- */
+  nav{
+    position:fixed;top:0;left:0;right:0;z-index:50;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:1.1rem clamp(1.2rem,4vw,2.5rem);
+    transition:background .3s,border-color .3s,padding .3s;
+    border-bottom:1px solid transparent;
+  }
+  nav.scrolled{background:rgba(10,14,21,.82);backdrop-filter:blur(14px);border-bottom-color:var(--line);padding-top:.8rem;padding-bottom:.8rem}
+  .brand{font-family:'Space Grotesk';font-weight:700;font-size:1.35rem;letter-spacing:-.02em;display:flex;align-items:center;gap:.1rem}
+  .brand .x{color:var(--blue)}
+  .brand small{font-family:'JetBrains Mono';font-size:.6rem;letter-spacing:.15em;color:var(--faint);margin-left:.6rem;font-weight:400;text-transform:uppercase}
+  .nav-cta{
+    font-family:'Space Grotesk';font-weight:500;font-size:.9rem;
+    padding:.55rem 1.3rem;border:1px solid var(--line2);border-radius:100px;
+    transition:.25s var(--ease);color:var(--text);
+  }
+  .nav-cta:hover{background:var(--text);color:var(--bg);border-color:var(--text)}
+
+  /* ---------- Hero ---------- */
+  .hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden}
+  #net{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+  .hero::after{ /* viñeta para legibilidad */
+    content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:radial-gradient(ellipse 80% 60% at 30% 45%,transparent 30%,var(--bg) 92%),
+               linear-gradient(180deg,rgba(10,14,21,.4),transparent 20%,transparent 70%,var(--bg));
+  }
+  .hero-inner{position:relative;z-index:2;width:100%}
+  .hero h1{
+    font-size:clamp(2.6rem,7vw,5.4rem);font-weight:700;margin:1.3rem 0 0;max-width:14ch;
+  }
+  .hero h1 .accent{
+    background:linear-gradient(120deg,var(--blue-300),var(--gold));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .hero p.lead{
+    font-size:clamp(1.05rem,1.7vw,1.3rem);color:var(--muted);max-width:52ch;margin:1.6rem 0 0;font-weight:400;
+  }
+  .hero-cta{display:flex;gap:1rem;margin-top:2.4rem;flex-wrap:wrap}
+  .btn{
+    font-family:'Space Grotesk';font-weight:600;font-size:1rem;
+    padding:.9rem 1.8rem;border-radius:100px;cursor:pointer;border:1px solid transparent;
+    transition:.25s var(--ease);display:inline-flex;align-items:center;gap:.5rem;
+  }
+  .btn-primary{background:var(--blue);color:#fff;box-shadow:0 8px 30px -8px rgba(46,125,246,.6)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 40px -8px rgba(46,125,246,.75)}
+  .btn-ghost{border-color:var(--line2);color:var(--text)}
+  .btn-ghost:hover{border-color:var(--blue-300);background:rgba(46,125,246,.08)}
+  .hero-scroll{
+    position:absolute;bottom:1.8rem;left:50%;transform:translateX(-50%);z-index:2;
+    font-family:'JetBrains Mono';font-size:.66rem;letter-spacing:.2em;color:var(--faint);
+    text-transform:uppercase;display:flex;flex-direction:column;align-items:center;gap:.5rem;
+  }
+  .hero-scroll .line{width:1px;height:34px;background:linear-gradient(var(--faint),transparent);animation:pulse 2.2s var(--ease) infinite}
+  @keyframes pulse{0%,100%{opacity:.3;transform:scaleY(.7)}50%{opacity:1;transform:scaleY(1)}}
+  /* entrada del hero: CSS puro, sin depender del JS */
+  @keyframes heroUp{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+  .hero .eyebrow{animation:heroUp .8s .05s var(--ease) both}
+  .hero h1{animation:heroUp .85s .18s var(--ease) both}
+  .hero .lead{animation:heroUp .85s .34s var(--ease) both}
+  .hero-cta{animation:heroUp .85s .5s var(--ease) both}
+
+  /* ---------- Reveal on scroll ---------- */
+  .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  .reveal.d1{transition-delay:.08s}.reveal.d2{transition-delay:.16s}.reveal.d3{transition-delay:.24s}
+
+  /* ---------- Sections ---------- */
+  section{position:relative}
+  .band{padding:clamp(5rem,11vw,9rem) 0}
+  .sec-head{max-width:60ch}
+  .sec-head h2{font-size:clamp(1.9rem,4vw,3.1rem);margin:1rem 0 0}
+  .sec-head p{color:var(--muted);font-size:1.1rem;margin-top:1.1rem;max-width:52ch}
+
+  /* thesis */
+  .thesis{border-top:1px solid var(--line);background:linear-gradient(180deg,var(--bg),var(--bg2))}
+  .contrast{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:3rem}
+  .contrast .card{padding:2rem;border-radius:18px;border:1px solid var(--line)}
+  .contrast .bad{background:rgba(239,68,68,.04);border-color:rgba(239,68,68,.16)}
+  .contrast .good{background:rgba(46,125,246,.05);border-color:rgba(46,125,246,.22)}
+  .contrast h3{font-size:1.3rem;margin-bottom:.7rem;display:flex;align-items:center;gap:.6rem}
+  .contrast .bad h3{color:#F79389}.contrast .good h3{color:var(--blue-300)}
+  .contrast p{color:var(--muted);font-size:.98rem}
+  .contrast .tag{font-family:'JetBrains Mono';font-size:.66rem;letter-spacing:.15em;text-transform:uppercase;color:var(--faint)}
+
+  /* features */
+  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.3rem;margin-top:3rem}
+  .feat{
+    padding:1.9rem;border-radius:18px;background:var(--panel);border:1px solid var(--line);
+    transition:.3s var(--ease);position:relative;overflow:hidden;
+  }
+  .feat::before{content:"";position:absolute;inset:0;background:radial-gradient(400px circle at var(--mx,50%) var(--my,0%),rgba(46,125,246,.1),transparent 60%);opacity:0;transition:opacity .3s}
+  .feat:hover{transform:translateY(-5px);border-color:var(--line2);background:var(--panel2)}
+  .feat:hover::before{opacity:1}
+  .feat .ic{width:44px;height:44px;border-radius:12px;background:rgba(46,125,246,.12);display:grid;place-items:center;color:var(--blue-300);margin-bottom:1.1rem}
+  .feat .ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7}
+  .feat h3{font-size:1.2rem;margin-bottom:.5rem}
+  .feat p{color:var(--muted);font-size:.92rem}
+  .feat .num{position:absolute;top:1.4rem;right:1.6rem;font-family:'JetBrains Mono';font-size:.7rem;color:var(--faint)}
+
+  /* numbers */
+  .stats{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg2)}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+  .stat{text-align:center;padding:1rem}
+  .stat .n{font-family:'Space Grotesk';font-weight:700;font-size:clamp(2.2rem,5vw,3.4rem);line-height:1;background:linear-gradient(120deg,var(--text),var(--blue-300));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .stat .l{font-family:'JetBrains Mono';font-size:.72rem;letter-spacing:.1em;color:var(--muted);margin-top:.7rem;text-transform:uppercase}
+
+  /* quantnet showcase */
+  .qn{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center}
+  .qn-visual{position:relative;aspect-ratio:1;border-radius:20px;border:1px solid var(--line2);background:radial-gradient(circle at 50% 40%,var(--panel2),var(--bg));overflow:hidden}
+  #qnet{position:absolute;inset:0;width:100%;height:100%}
+  .qn-visual .badge{position:absolute;top:1rem;left:1rem;z-index:2;font-family:'JetBrains Mono';font-size:.62rem;letter-spacing:.18em;color:var(--gold);border:1px solid rgba(245,196,81,.3);padding:.3rem .7rem;border-radius:100px;background:rgba(10,14,21,.6)}
+  .qn ul{list-style:none;margin-top:1.6rem;display:flex;flex-direction:column;gap:1rem}
+  .qn li{display:flex;gap:.9rem;color:var(--muted);font-size:1rem}
+  .qn li b{color:var(--text);font-weight:600;font-family:'Space Grotesk'}
+  .qn li .dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--gold);margin-top:.55rem;box-shadow:0 0 12px var(--gold)}
+
+  /* final cta */
+  .final{text-align:center;border-top:1px solid var(--line);background:linear-gradient(180deg,var(--bg),var(--bg2))}
+  .final h2{font-size:clamp(2rem,5vw,3.6rem);max-width:18ch;margin:1rem auto 0}
+  .final p{color:var(--muted);font-size:1.1rem;margin:1.2rem auto 2.2rem;max-width:46ch}
+
+  footer{border-top:1px solid var(--line);padding:2.5rem 0;color:var(--faint);font-size:.85rem}
+  .foot-inner{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem}
+  footer .mono{font-size:.75rem}
+
+  /* ---------- Responsive ---------- */
+  @media(max-width:820px){
+    .contrast,.feat-grid,.qn{grid-template-columns:1fr}
+    .stat-grid{grid-template-columns:1fr 1fr;gap:1.5rem 1rem}
+    .qn-visual{max-width:420px;margin:0 auto}
+    nav .brand small{display:none}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .reveal{opacity:1;transform:none}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="brand">Inve<span class="x">X</span>ia<small>Gestión de inversiones</small></div>
+  <a href="/" class="nav-cta">Ingresar</a>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <canvas id="net"></canvas>
+  <div class="hero-inner wrap">
+    <span class="eyebrow">Gestión cuantitativa de inversiones</span>
+    <h1>El mercado es una <span class="accent">red viva.</span></h1>
+    <p class="lead">InveXia lleva las herramientas cuantitativas de Wall Street a cualquier inversionista: optimización de carteras, redes de correlación entre activos y acceso real a los mercados de Estados Unidos.</p>
+    <div class="hero-cta">
+      <a href="/" class="btn btn-primary">Comenzar ahora →</a>
+      <a href="#plataforma" class="btn btn-ghost">Explorar la plataforma</a>
+    </div>
+  </div>
+  <div class="hero-scroll"><span>Desliza</span><span class="line"></span></div>
+</header>
+
+<!-- THESIS -->
+<section class="band thesis" id="metodo">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">El problema</span>
+      <h2>Comprar acciones sin método es apostar.</h2>
+      <p>La mayoría invierte por corazonada: compra lo que suena, sin medir riesgo ni entender cómo se mueven sus activos entre sí. InveXia cambia el enfoque.</p>
+    </div>
+    <div class="contrast">
+      <div class="card bad reveal d1">
+        <span class="tag">Invertir por intuición</span>
+        <h3>✕ El método de la mayoría</h3>
+        <p>Comprar activos sueltos, concentrar el riesgo sin saberlo, reaccionar al pánico y a la euforia. Sin perfil, sin diversificación medida, sin saber cuándo dos posiciones son en realidad la misma apuesta.</p>
+      </div>
+      <div class="card good reveal d2">
+        <span class="tag">Invertir con InveXia</span>
+        <h3>✓ El método cuantitativo</h3>
+        <p>Un perfil de riesgo que te entiende, carteras optimizadas con los mismos modelos que usan los fondos, y una red que revela cómo se conectan tus activos. Decisiones con evidencia, no con ansiedad.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="band" id="plataforma">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">La plataforma</span>
+      <h2>Todo lo que un inversionista serio necesita, en un solo lugar.</h2>
+    </div>
+    <div class="feat-grid" id="featGrid">
+      <div class="feat reveal">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v9l6 3"/><circle cx="12" cy="12" r="9"/></svg></div>
+        <h3>Perfil de riesgo</h3>
+        <p>Un cuestionario inteligente traza tu tolerancia real al riesgo y tu horizonte, y ancla cada recomendación a tu perfil.</p>
+      </div>
+      <div class="feat reveal d1">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/></svg></div>
+        <h3>Optimización de carteras</h3>
+        <p>Markowitz, HRP (López de Prado) y Core-Satellite. Tres enfoques que maximizan tu retorno por unidad de riesgo, calculados sobre datos reales.</p>
+      </div>
+      <div class="feat reveal d2">
+        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="7" cy="18" r="2.4"/><circle cx="17" cy="17" r="2.4"/><path d="M8 7l8 0M7 8l0 8M8 17l7-1"/></svg></div>
+        <h3>QuantNet · Red de mercado</h3>
+        <p>Econofísica aplicada: visualiza el mercado como una red de correlaciones y cointegración. Descubre qué activos se mueven juntos y cuáles revierten a la media.</p>
+      </div>
+      <div class="feat reveal">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
+        <h3>Operar en EE. UU.</h3>
+        <p>Acceso real a los mercados de Estados Unidos a través de un bróker regulado. Tu cuenta, a tu nombre; InveXia como socio tecnológico.</p>
+      </div>
+      <div class="feat reveal d1">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 1 4 4c0 2-2 3-2 5M12 17v.5"/><rect x="4" y="3" width="16" height="18" rx="3"/></svg></div>
+        <h3>Asistente con IA</h3>
+        <p>Un asistente que conoce tu cartera y tu perfil, y responde tus dudas de inversión con contexto real, no respuestas genéricas.</p>
+      </div>
+      <div class="feat reveal d2">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h13a2 2 0 0 1 2 2v12M4 5v14h13M4 5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2"/></svg></div>
+        <h3>Quant Academy</h3>
+        <p>Aprende finanzas cuantitativas desde cero con cursos interactivos, simuladores y una ruta de aprendizaje pensada para el inversionista de hoy.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="band stats">
+  <div class="wrap">
+    <div class="stat-grid">
+      <div class="stat reveal"><div class="n" data-to="460" data-suf="+">0</div><div class="l">Activos en la red</div></div>
+      <div class="stat reveal d1"><div class="n" data-to="3">0</div><div class="l">Modelos de optimización</div></div>
+      <div class="stat reveal d2"><div class="n" data-to="12">0</div><div class="l">Meses de red histórica</div></div>
+      <div class="stat reveal d3"><div class="n" data-to="100" data-suf="%">0</div><div class="l">Datos reales de Wall Street</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- QUANTNET SHOWCASE -->
+<section class="band" id="quantnet">
+  <div class="wrap qn">
+    <div class="qn-text reveal">
+      <span class="eyebrow">Econofísica aplicada</span>
+      <h2 style="font-size:clamp(1.9rem,4vw,3rem);margin-top:1rem">Ve el mercado como nunca antes.</h2>
+      <p style="color:var(--muted);font-size:1.08rem;margin-top:1.1rem">QuantNet trata al mercado como un sistema físico: un tejido de conexiones que evoluciona en el tiempo. Es la herramienta que usan los quants, ahora al alcance de tu mano.</p>
+      <ul>
+        <li><span class="dot"></span><span><b>Redes de correlación</b> sobre log-retornos: qué activos laten al mismo compás.</span></li>
+        <li><span class="dot"></span><span><b>Cointegración por sector</b> para hallar pares de trading estadístico con reversión a la media.</span></li>
+        <li><span class="dot"></span><span><b>Comunidades y centralidad</b> que revelan la estructura oculta del riesgo sistémico.</span></li>
+      </ul>
+    </div>
+    <div class="qn-visual reveal d1">
+      <span class="badge">QUANTNET · LIVE</span>
+      <canvas id="qnet"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="band final">
+  <div class="wrap">
+    <span class="eyebrow reveal">Empieza hoy</span>
+    <h2 class="reveal d1">Invierte con la ventaja de las matemáticas.</h2>
+    <p class="reveal d2">Crea tu perfil, arma tu primera cartera optimizada y explora el mercado como una red viva. Sin tecnicismos que no entiendas.</p>
+    <div class="reveal d3"><a href="/" class="btn btn-primary" style="font-size:1.05rem;padding:1rem 2.2rem">Crear mi cuenta →</a></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div class="brand" style="font-size:1.1rem">Inve<span class="x">X</span>ia</div>
+    <div class="mono" style="color:var(--faint)">Gestión cuantitativa de inversiones</div>
+    <div class="mono" style="color:var(--faint)">© 2026 InveXia</div>
+  </div>
+</footer>
+
+<script>
+/* ============ Nav scroll state ============ */
+const nav=document.getElementById("nav");
+addEventListener("scroll",()=>nav.classList.toggle("scrolled",scrollY>40),{passive:true});
+
+/* ============ Reveal on scroll ============ */
+const io=new IntersectionObserver((es)=>{
+  es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target);} });
+},{threshold:.14,rootMargin:"0px 0px -8% 0px"});
+document.querySelectorAll(".reveal:not(.in)").forEach(el=>io.observe(el));
+
+/* ============ Feature hover glow (cursor-follow) ============ */
+document.querySelectorAll(".feat").forEach(f=>{
+  f.addEventListener("pointermove",e=>{
+    const r=f.getBoundingClientRect();
+    f.style.setProperty("--mx",(e.clientX-r.left)+"px");
+    f.style.setProperty("--my",(e.clientY-r.top)+"px");
+  });
+});
+
+/* ============ Animated counters ============ */
+const nums=document.querySelectorAll(".stat .n");
+const nio=new IntersectionObserver((es)=>{
+  es.forEach(e=>{
+    if(!e.isIntersecting) return; nio.unobserve(e.target);
+    const el=e.target, to=+el.dataset.to, suf=el.dataset.suf||""; const t0=performance.now(), dur=1400;
+    const tick=(t)=>{ const p=Math.min(1,(t-t0)/dur), k=1-Math.pow(1-p,3);
+      el.textContent=Math.round(to*k)+suf; if(p<1)requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  });
+},{threshold:.6});
+nums.forEach(n=>nio.observe(n));
+
+/* ============ Network canvas (hero + quantnet) ============ */
+const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+function networkCanvas(canvas,opts){
+  const ctx=canvas.getContext("2d"); let W,H,DPR,nodes=[],raf,mouse={x:.5,y:.5},tmouse={x:.5,y:.5};
+  const CFG=Object.assign({count:64,link:150,speed:.16,blue:"46,125,246",gold:"245,196,81",goldRatio:.16,parallax:14,r:2.1},opts);
+  function resize(){
+    DPR=Math.min(devicePixelRatio||1,2);
+    const b=canvas.getBoundingClientRect(); W=b.width; H=b.height;
+    canvas.width=W*DPR; canvas.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+    const target=Math.min(CFG.count,Math.round(W*H/13000));
+    nodes=Array.from({length:target},()=>({
+      x:Math.random()*W,y:Math.random()*H,
+      vx:(Math.random()-.5)*CFG.speed,vy:(Math.random()-.5)*CFG.speed,
+      gold:Math.random()<CFG.goldRatio, z:.5+Math.random()*.9,
+    }));
+  }
+  function step(){
+    tmouse.x+=(mouse.x-tmouse.x)*.05; tmouse.y+=(mouse.y-tmouse.y)*.05;
+    const ox=(tmouse.x-.5)*CFG.parallax, oy=(tmouse.y-.5)*CFG.parallax;
+    ctx.clearRect(0,0,W,H);
+    for(const n of nodes){
+      n.x+=n.vx; n.y+=n.vy;
+      if(n.x<0||n.x>W)n.vx*=-1; if(n.y<0||n.y>H)n.vy*=-1;
+    }
+    // edges
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const a=nodes[i],b=nodes[j];
+        const dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
+        if(d<CFG.link){
+          const al=(1-d/CFG.link)*.5;
+          const col=(a.gold&&b.gold)?CFG.gold:CFG.blue;
+          ctx.strokeStyle=`rgba(${col},${al})`; ctx.lineWidth=.7;
+          ctx.beginPath();
+          ctx.moveTo(a.x+ox*a.z,a.y+oy*a.z); ctx.lineTo(b.x+ox*b.z,b.y+oy*b.z); ctx.stroke();
+        }
+      }
+    }
+    // nodes
+    for(const n of nodes){
+      const col=n.gold?CFG.gold:CFG.blue;
+      const x=n.x+ox*n.z,y=n.y+oy*n.z, r=CFG.r*(n.gold?1.5:1);
+      const g=ctx.createRadialGradient(x,y,0,x,y,r*4);
+      g.addColorStop(0,`rgba(${col},.9)`); g.addColorStop(1,`rgba(${col},0)`);
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r*4,0,7); ctx.fill();
+      ctx.fillStyle=`rgba(${col},.95)`; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+    }
+    raf=requestAnimationFrame(step);
+  }
+  resize(); addEventListener("resize",resize,{passive:true});
+  if(opts.trackMouse) addEventListener("pointermove",e=>{mouse.x=e.clientX/innerWidth;mouse.y=e.clientY/innerHeight;},{passive:true});
+  if(reduce){ step(); cancelAnimationFrame(raf); } else step();
+  return {resize};
+}
+networkCanvas(document.getElementById("net"),{count:78,link:165,goldRatio:.14,parallax:20,trackMouse:true});
+networkCanvas(document.getElementById("qnet"),{count:40,link:120,goldRatio:.28,parallax:8,speed:.22,r:2.4});
+</script>
+</body>
+</html>
