@@ -679,14 +679,15 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 
 /* neuronas */
 .cmap-node{cursor:pointer}
-.cmap-node .halo{fill:var(--col);opacity:.10;transition:opacity .25s,r .25s}
-.cmap-node .core{fill:var(--col);stroke:var(--navy-950);stroke-width:2;
-  transform-box:fill-box;transform-origin:center;animation:cmapBreathe 3.2s ease-in-out infinite}
+.cmap-node .halo{fill:var(--col);opacity:.18;transition:opacity .25s,r .25s}
+.cmap-node .core{fill:var(--col);stroke:rgba(255,255,255,.3);stroke-width:1.5;
+  filter:drop-shadow(0 0 5px var(--col));transform-box:fill-box;transform-origin:center;animation:cmapBreathe 3.2s ease-in-out infinite}
 .cmap-node .cmap-label{fill:var(--muted);font-size:12.5px;transition:fill .25s}
 @keyframes cmapBreathe{0%,100%{opacity:.85}50%{opacity:1}}
 .cmap-node:hover .halo,.cmap-node.sel .halo{opacity:.28;r:30}
 .cmap-node:hover .cmap-label,.cmap-node.sel .cmap-label{fill:var(--text)}
-.cmap-node.sel .core{stroke:var(--col);stroke-width:3}
+.cmap-node.sel .core{stroke:#fff;stroke-width:2}
+.cmap-node:hover .core,.cmap-node.sel .core{filter:drop-shadow(0 0 11px var(--col))}
 .cmap-node:focus{outline:none}
 .cmap-node:focus .halo{opacity:.28;r:30}
 
@@ -706,4 +707,49 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 }
 @media(prefers-reduced-motion:reduce){
   .cmap-edges path,.cmap-node .core{animation:none}
+}
+
+/* ============================================================
+   v3.3 · Conexiones de cursos + pulido de movimiento
+   ============================================================ */
+/* selector de continuaciones (malla curricular) */
+.conn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.5rem;
+  max-height:220px;overflow-y:auto;padding:.3rem;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--navy-950)}
+.conn-opt{display:flex;align-items:center;gap:.55rem;padding:.5rem .6rem;border-radius:8px;cursor:pointer;transition:background .15s;font-size:.86rem}
+.conn-opt:hover{background:var(--navy-800)}
+.conn-opt input{accent-color:var(--blue-500);width:16px;height:16px;flex:0 0 auto}
+.conn-opt i{color:var(--faint);font-style:normal;font-size:.72rem;font-family:'JetBrains Mono'}
+
+/* ---- Pulido de movimiento (punto medio) ---- */
+:root{--tin:cubic-bezier(.22,.61,.36,1)}
+
+/* transición de entrada al cambiar de vista */
+@keyframes viewEnter{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+#main.view-enter>.page-head{animation:viewEnter .5s var(--tin) both}
+#main.view-enter>.card,
+#main.view-enter>.grid,
+#main.view-enter>.cmap-wrap,
+#main.view-enter>#courseForm,
+#main.view-enter>.mt{animation:viewEnter .55s var(--tin) both;animation-delay:.06s}
+
+/* elevación suave de tarjetas al pasar el cursor */
+.card,.list-item,.media-card,.qcard,.feat{transition:transform .22s var(--tin),border-color .22s var(--tin),box-shadow .22s var(--tin)}
+.media-card:hover,.qcard:hover{transform:translateY(-4px);border-color:var(--line-strong)}
+.list-item:hover{transform:translateX(3px);border-color:var(--line-strong)}
+
+/* botones e íconos con micro-respuesta */
+.btn{transition:transform .15s var(--tin),background .18s,border-color .18s,box-shadow .18s var(--tin)}
+.btn:active{transform:translateY(1px)}
+.nav a,.pill{transition:background .18s,color .18s}
+
+/* enlaces del menú lateral: subrayado que crece */
+.nav a{position:relative}
+.nav a[data-v]::after{content:"";position:absolute;left:14px;right:14px;bottom:6px;height:2px;
+  background:var(--blue-400);transform:scaleX(0);transform-origin:left;transition:transform .25s var(--tin);border-radius:2px;opacity:.0}
+.nav a[data-v]:hover::after{transform:scaleX(.4);opacity:.5}
+.nav a[data-v].on::after{transform:scaleX(1);opacity:1}
+
+@media(prefers-reduced-motion:reduce){
+  #main.view-enter>*{animation:none}
+  .card,.list-item,.media-card,.qcard,.feat,.btn{transition:none}
 }

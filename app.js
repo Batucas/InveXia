@@ -299,6 +299,7 @@ function route(){
 async function render(){
   const m=$("#main"); m.innerHTML=loading();
   m.classList.remove("wide");   // por defecto ancho normal; algunas vistas lo amplían
+  m.classList.remove("view-enter"); void m.offsetWidth; m.classList.add("view-enter");  // transición de entrada
   const admin=state.profile.role==="admin";
   try{
     if(admin){
@@ -1292,7 +1293,6 @@ function courseCard(c){
 const CMAP_LAYERS=["Básico","Intermedio","Avanzado"];
 const CMAP_COL={"Básico":"var(--blue-400)","Intermedio":"var(--gold)","Avanzado":"var(--good)"};
 function coursesNeuralMap(cs){
-  // agrupar por nivel; niveles desconocidos van a "Básico"
   const buckets=CMAP_LAYERS.map(L=>cs.filter(c=>(c.level||"Básico")===L));
   cs.forEach(c=>{ if(!CMAP_LAYERS.includes(c.level||"Básico")) buckets[0].push(c); });
   const layers=CMAP_LAYERS.map((L,i)=>({label:L,items:buckets[i]})).filter(l=>l.items.length);
@@ -1301,41 +1301,42 @@ function coursesNeuralMap(cs){
   const maxN=Math.max(...layers.map(l=>l.items.length),1);
   const H=Math.max(380, maxN*104+top+botPad);
   const xs=nL===1?[500]:layers.map((_,i)=>150+i*(700/(nL-1)));
-  // posiciones por nodo
-  const pos=layers.map((l,li)=>l.items.map((c,ci)=>{
-    const n=l.items.length, y=top+(ci+0.5)*((H-top-botPad)/n);
-    return {c,x:xs[li],y};
-  }));
-  // aristas entre capas adyacentes (densas, como una red neuronal)
-  let edges="";
-  for(let li=0; li<pos.length-1; li++){
-    for(const a of pos[li]) for(const b of pos[li+1]){
-      const dx=(b.x-a.x)*0.45;
-      edges+=`<path class="cmap-edge" d="M${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}"/>`;
-    }
-  }
-  // encabezados de capa
-  let heads="";
+  const P={}; const flat=[]; let nodes="";
   layers.forEach((l,li)=>{
-    heads+=`<text x="${xs[li]}" y="46" text-anchor="middle" class="cmap-head" fill="${CMAP_COL[l.label]}">${l.label.toUpperCase()}</text>
-      <line x1="${xs[li]-70}" y1="60" x2="${xs[li]+70}" y2="60" stroke="${CMAP_COL[l.label]}" stroke-opacity=".3"/>`;
+    const n=l.items.length;
+    l.items.forEach((c,ci)=>{
+      const x=xs[li], y=top+(ci+0.5)*((H-top-botPad)/n);
+      P[c.id]={x,y};
+      const col=CMAP_COL[l.label], title=c.title||"Curso";
+      const short=title.length>22?title.slice(0,21)+"…":title;
+      const i=flat.length; flat.push(c);
+      nodes+=`<g class="cmap-node" data-i="${i}" style="--col:${col}" tabindex="0" role="button" aria-label="${esc(title)}">
+        <circle class="halo" cx="${x}" cy="${y}" r="26"/>
+        <circle class="core" cx="${x}" cy="${y}" r="13"/>
+        <text x="${x}" y="${y+40}" text-anchor="middle" class="cmap-label">${esc(short)}</text></g>`;
+    });
   });
-  // nodos
-  let nodes="", idx=0; const flat=[];
-  pos.forEach((layer,li)=>layer.forEach(p=>{
-    const col=CMAP_COL[layers[li].label];
-    const title=(p.c.title||"Curso");
-    const short=title.length>22?title.slice(0,21)+"…":title;
-    flat.push(p.c);
-    nodes+=`<g class="cmap-node" data-i="${idx}" style="--col:${col}" tabindex="0" role="button" aria-label="${esc(title)}">
-      <circle class="halo" cx="${p.x}" cy="${p.y}" r="26"/>
-      <circle class="core" cx="${p.x}" cy="${p.y}" r="13"/>
-      <text x="${p.x}" y="${p.y+40}" text-anchor="middle" class="cmap-label">${esc(short)}</text>
-    </g>`;
-    idx++;
-  }));
-  return {svg:`<svg viewBox="0 0 ${W} ${H}" class="cmap-svg" preserveAspectRatio="xMidYMid meet" style="min-width:${Math.max(680,nL*260)}px">
-      <g class="cmap-edges">${edges}</g>${heads}${nodes}</svg>`, flat};
+  // aristas manuales (continuaciones) con flecha direccional
+  let edges="";
+  cs.forEach(c=>{
+    const a=P[c.id]; if(!a) return;
+    (Array.isArray(c.next_courses)?c.next_courses:[]).forEach(tid=>{
+      const b=P[tid]; if(!b||tid===c.id) return;
+      const ang=Math.atan2(b.y-a.y,b.x-a.x);
+      const sx=a.x+Math.cos(ang)*15, sy=a.y+Math.sin(ang)*15;      // sale del borde del nodo
+      const ex=b.x-Math.cos(ang)*19, ey=b.y-Math.sin(ang)*19;      // llega antes del nodo (deja ver la flecha)
+      let d;
+      if(Math.abs(b.x-a.x)<1){ const s=b.y>a.y?1:-1; d=`M${sx} ${sy} C ${sx+80} ${sy+18*s}, ${ex+80} ${ey-18*s}, ${ex} ${ey}`; }
+      else { const dx=(ex-sx)*0.45; d=`M${sx} ${sy} C ${sx+dx} ${sy}, ${ex-dx} ${ey}, ${ex} ${ey}`; }
+      edges+=`<path class="cmap-edge" d="${d}" marker-end="url(#cmapArrow)"/>`;
+    });
+  });
+  let heads="";
+  layers.forEach((l,li)=>{ heads+=`<text x="${xs[li]}" y="46" text-anchor="middle" class="cmap-head" fill="${CMAP_COL[l.label]}">${l.label.toUpperCase()}</text>
+    <line x1="${xs[li]-70}" y1="60" x2="${xs[li]+70}" y2="60" stroke="${CMAP_COL[l.label]}" stroke-opacity=".3"/>`; });
+  const defs=`<defs><marker id="cmapArrow" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto">
+    <path d="M0 0 L9 4.5 L0 9 z" fill="rgba(150,180,230,.65)"/></marker></defs>`;
+  return {svg:`<svg viewBox="0 0 ${W} ${H}" class="cmap-svg" preserveAspectRatio="xMidYMid meet" style="min-width:${Math.max(680,nL*260)}px">${defs}<g class="cmap-edges">${edges}</g>${heads}${nodes}</svg>`, flat};
 }
 
 async function viewCoursesClient(){
@@ -1734,7 +1735,8 @@ async function viewCoursesAdmin(){
   cs.forEach(c=>list.append(el(`<div class="list-item">
     ${c.image_url?`<img class="thumb" src="${esc(c.image_url)}" alt="" loading="lazy">`:""}
     <div class="li-main"><b>${esc(c.title)}</b><span>${esc(c.level||"")} · ${c.published?"Publicado":"Borrador"}</span></div>
-    <div class="flex"><button class="btn btn-ghost btn-sm" onclick="app.togglePub('${c.id}',${!c.published})">${c.published?"Ocultar":"Publicar"}</button>
+    <div class="flex"><button class="btn btn-ghost btn-sm" onclick="app.editCourse('${c.id}')">Editar</button>
+      <button class="btn btn-ghost btn-sm" onclick="app.togglePub('${c.id}',${!c.published})">${c.published?"Ocultar":"Publicar"}</button>
       <button class="btn btn-ghost btn-sm" onclick="app.delCourse('${c.id}')">Eliminar</button></div></div>`)));
   m.append(list);
 }
@@ -2356,26 +2358,50 @@ const app = {
   },
 
   // cursos
-  courseForm(){
-    const box=$("#courseForm"); if(box.dataset.open){ box.innerHTML=""; box.dataset.open=""; return; }
+  async courseForm(course){
+    const box=$("#courseForm");
+    if(box.dataset.open && !course){ box.innerHTML=""; box.dataset.open=""; return; }
     box.dataset.open="1";
+    const c=course||{};
+    // lista de otros cursos para elegir continuaciones
+    const all=await sb.from("courses").select("id,title,level").order("created_at").then(r=>r.data||[]);
+    const others=all.filter(x=>x.id!==c.id);
+    const nexts=Array.isArray(c.next_courses)?c.next_courses:[];
+    const pick=others.length
+      ? others.map(o=>`<label class="conn-opt"><input type="checkbox" value="${o.id}" ${nexts.includes(o.id)?"checked":""}>
+          <span>${esc(o.title)} <i>${esc(o.level||"")}</i></span></label>`).join("")
+      : `<p class="card-sub" style="margin:0">Crea más cursos para poder conectarlos.</p>`;
     box.innerHTML=`<div class="card">
-      <div class="field"><label>Imagen de referencia</label>${imagePicker("course")}</div>
-      <div class="field"><label>Título</label><input id="cT" class="input"></div>
+      ${course?`<div class="flex between"><b>Editar curso</b><button class="btn btn-ghost btn-sm" onclick="app.courseForm()">Cancelar</button></div><div class="divide"></div>`:""}
+      <input type="hidden" id="cId" value="${esc(c.id||"")}">
+      <div class="field"><label>Imagen de referencia</label>${imagePicker("course",c.image_url)}</div>
+      <div class="field"><label>Título</label><input id="cT" class="input" value="${esc(c.title||"")}"></div>
       <div class="flex" style="gap:.8rem"><div class="field" style="flex:1"><label>Nivel</label>
-        <select id="cL" class="input"><option>Básico</option><option>Intermedio</option><option>Avanzado</option></select></div>
-        <div class="field" style="flex:2"><label>Enlace (opcional)</label><input id="cU" class="input" placeholder="https://…"></div></div>
-      <div class="field"><label>Descripción</label><textarea id="cD" class="input"></textarea></div>
-      <div class="flex"><label class="flex" style="gap:.4rem;color:var(--muted);font-size:.85rem"><input type="checkbox" id="cP" checked> Publicar de inmediato</label>
-        <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="app.saveCourse()">Guardar curso</button></div></div>`;
+        <select id="cL" class="input">${["Básico","Intermedio","Avanzado"].map(l=>`<option ${c.level===l?"selected":""}>${l}</option>`).join("")}</select></div>
+        <div class="field" style="flex:2"><label>Enlace (opcional)</label><input id="cU" class="input" placeholder="https://…" value="${esc(c.url||"")}"></div></div>
+      <div class="field"><label>Descripción</label><textarea id="cD" class="input">${esc(c.description||"")}</textarea></div>
+      <div class="field"><label>Después de este curso, sigue… <span style="color:var(--faint);font-weight:400">(dibuja las flechas del mapa)</span></label>
+        <div class="conn-grid">${pick}</div></div>
+      <div class="flex"><label class="flex" style="gap:.4rem;color:var(--muted);font-size:.85rem"><input type="checkbox" id="cP" ${(c.published??true)?"checked":""}> Publicar de inmediato</label>
+        <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="app.saveCourse()">${course?"Guardar cambios":"Guardar curso"}</button></div></div>`;
+    if(course) box.scrollIntoView({behavior:"smooth",block:"start"});
+  },
+  async editCourse(id){
+    const c=await sb.from("courses").select("*").eq("id",id).single().then(r=>r.data);
+    if(!c) return ui.toast("No se encontró el curso","err");
+    app.courseForm(c);
   },
   async saveCourse(){
     const t=$("#cT").value.trim(); if(!t) return ui.toast("Ponle un título","err");
-    const {error}=await sb.from("courses").insert({ title:t, level:$("#cL").value,
-      url:$("#cU").value.trim()||null, description:$("#cD").value.trim(),
-      image_url:$("#url_course").value.trim()||null, published:$("#cP").checked });
+    const nexts=[...document.querySelectorAll(".conn-grid input:checked")].map(i=>i.value);
+    const row={ title:t, level:$("#cL").value, url:$("#cU").value.trim()||null,
+      description:$("#cD").value.trim(), image_url:$("#url_course").value.trim()||null,
+      published:$("#cP").checked, next_courses:nexts };
+    const id=$("#cId").value; let error;
+    if(id){ ({error}=await sb.from("courses").update(row).eq("id",id)); }
+    else { ({error}=await sb.from("courses").insert(row)); }
     if(error) return ui.toast(error.message,"err");
-    ui.toast("Curso creado","ok"); render();
+    ui.toast(id?"Cambios guardados":"Curso creado","ok"); render();
   },
   async togglePub(id,pub){ await sb.from("courses").update({published:pub}).eq("id",id); render(); },
   async delCourse(id){ if(!confirm("¿Eliminar este curso?"))return; await sb.from("courses").delete().eq("id",id); render(); },
