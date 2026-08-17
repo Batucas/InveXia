@@ -673,17 +673,20 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .cmap-head{font-family:'JetBrains Mono';font-size:12px;letter-spacing:.14em;font-weight:500}
 
 /* aristas: señal que fluye de una capa a la siguiente */
-.cmap-edges path{fill:none;stroke:var(--line-strong);stroke-width:1.1;
-  stroke-dasharray:4 9;animation:cmapFlow 1.4s linear infinite;opacity:.5}
+.cmap-edges path{fill:none;stroke:rgba(150,180,230,.4);stroke-width:1.3;
+  stroke-dasharray:3 7;animation:cmapFlow 1.1s linear infinite}
 @keyframes cmapFlow{to{stroke-dashoffset:-13}}
 
 /* neuronas */
 .cmap-node{cursor:pointer}
-.cmap-node .halo{fill:var(--col);opacity:.18;transition:opacity .25s,r .25s}
+.cmap-signals circle{pointer-events:none}
+.cmap-node .halo{fill:var(--col);opacity:.16;transform-box:fill-box;transform-origin:center;
+  animation:cmapHalo 3s ease-in-out infinite;transition:opacity .25s,r .25s}
+@keyframes cmapHalo{0%,100%{transform:scale(1);opacity:.14}50%{transform:scale(1.18);opacity:.26}}
 .cmap-node .core{fill:var(--col);stroke:rgba(255,255,255,.3);stroke-width:1.5;
   filter:drop-shadow(0 0 5px var(--col));transform-box:fill-box;transform-origin:center;animation:cmapBreathe 3.2s ease-in-out infinite}
 .cmap-node .cmap-label{fill:var(--muted);font-size:12.5px;transition:fill .25s}
-@keyframes cmapBreathe{0%,100%{opacity:.85}50%{opacity:1}}
+@keyframes cmapBreathe{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.08);opacity:1}}
 .cmap-node:hover .halo,.cmap-node.sel .halo{opacity:.28;r:30}
 .cmap-node:hover .cmap-label,.cmap-node.sel .cmap-label{fill:var(--text)}
 .cmap-node.sel .core{stroke:#fff;stroke-width:2}
@@ -706,7 +709,8 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
   .cmap-detail{min-height:auto}
 }
 @media(prefers-reduced-motion:reduce){
-  .cmap-edges path,.cmap-node .core{animation:none}
+  .cmap-edges path,.cmap-node .core,.cmap-node .halo{animation:none}
+  .cmap-signals{display:none}
 }
 
 /* ============================================================

@@ -1291,7 +1291,7 @@ function courseCard(c){
    ============================================================ */
 /* Mapa de cursos tipo red neuronal: capas por nivel, cursos como neuronas */
 const CMAP_LAYERS=["Básico","Intermedio","Avanzado"];
-const CMAP_COL={"Básico":"var(--blue-400)","Intermedio":"var(--gold)","Avanzado":"var(--good)"};
+const CMAP_COL={"Básico":"#4FA3FF","Intermedio":"#F5C451","Avanzado":"#3DD6A0"};
 function coursesNeuralMap(cs){
   const buckets=CMAP_LAYERS.map(L=>cs.filter(c=>(c.level||"Básico")===L));
   cs.forEach(c=>{ if(!CMAP_LAYERS.includes(c.level||"Básico")) buckets[0].push(c); });
@@ -1316,27 +1316,39 @@ function coursesNeuralMap(cs){
         <text x="${x}" y="${y+40}" text-anchor="middle" class="cmap-label">${esc(short)}</text></g>`;
     });
   });
-  // aristas manuales (continuaciones) con flecha direccional
-  let edges="";
+  // aristas manuales (continuaciones) con flecha direccional + señal que viaja
+  let edges="", signals=""; let ei=0;
   cs.forEach(c=>{
     const a=P[c.id]; if(!a) return;
+    const col=CMAP_COL[(c.level&&CMAP_LAYERS.includes(c.level))?c.level:"Básico"];
     (Array.isArray(c.next_courses)?c.next_courses:[]).forEach(tid=>{
       const b=P[tid]; if(!b||tid===c.id) return;
       const ang=Math.atan2(b.y-a.y,b.x-a.x);
-      const sx=a.x+Math.cos(ang)*15, sy=a.y+Math.sin(ang)*15;      // sale del borde del nodo
-      const ex=b.x-Math.cos(ang)*19, ey=b.y-Math.sin(ang)*19;      // llega antes del nodo (deja ver la flecha)
+      const sx=a.x+Math.cos(ang)*15, sy=a.y+Math.sin(ang)*15;
+      const ex=b.x-Math.cos(ang)*19, ey=b.y-Math.sin(ang)*19;
       let d;
       if(Math.abs(b.x-a.x)<1){ const s=b.y>a.y?1:-1; d=`M${sx} ${sy} C ${sx+80} ${sy+18*s}, ${ex+80} ${ey-18*s}, ${ex} ${ey}`; }
       else { const dx=(ex-sx)*0.45; d=`M${sx} ${sy} C ${sx+dx} ${sy}, ${ex-dx} ${ey}, ${ex} ${ey}`; }
-      edges+=`<path class="cmap-edge" d="${d}" marker-end="url(#cmapArrow)"/>`;
+      const id=`ce${ei++}`;
+      edges+=`<path id="${id}" class="cmap-edge" d="${d}" marker-end="url(#cmapArrow)"/>`;
+      // partícula viajando por la conexión (efecto red neuronal viva)
+      signals+=`<circle r="3" fill="${col}" opacity=".9" filter="url(#cmapGlow)">
+        <animateMotion dur="${(2.4+Math.random()*1.6).toFixed(2)}s" begin="${(Math.random()*2.4).toFixed(2)}s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="linear">
+          <mpath href="#${id}" xlink:href="#${id}"/></animateMotion>
+        <animate attributeName="opacity" values="0;.95;.95;0" keyTimes="0;.15;.85;1" dur="${(2.4+Math.random()*1.6).toFixed(2)}s" begin="${(Math.random()*2.4).toFixed(2)}s" repeatCount="indefinite"/>
+      </circle>`;
     });
   });
   let heads="";
   layers.forEach((l,li)=>{ heads+=`<text x="${xs[li]}" y="46" text-anchor="middle" class="cmap-head" fill="${CMAP_COL[l.label]}">${l.label.toUpperCase()}</text>
     <line x1="${xs[li]-70}" y1="60" x2="${xs[li]+70}" y2="60" stroke="${CMAP_COL[l.label]}" stroke-opacity=".3"/>`; });
-  const defs=`<defs><marker id="cmapArrow" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto">
-    <path d="M0 0 L9 4.5 L0 9 z" fill="rgba(150,180,230,.65)"/></marker></defs>`;
-  return {svg:`<svg viewBox="0 0 ${W} ${H}" class="cmap-svg" preserveAspectRatio="xMidYMid meet" style="min-width:${Math.max(680,nL*260)}px">${defs}<g class="cmap-edges">${edges}</g>${heads}${nodes}</svg>`, flat};
+  const defs=`<defs>
+    <marker id="cmapArrow" markerWidth="12" markerHeight="12" refX="8.5" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="rgba(180,205,245,.9)"/></marker>
+    <filter id="cmapGlow" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>`;
+  return {svg:`<svg viewBox="0 0 ${W} ${H}" class="cmap-svg" preserveAspectRatio="xMidYMid meet" style="min-width:${Math.max(680,nL*260)}px">${defs}<g class="cmap-edges">${edges}</g><g class="cmap-signals">${signals}</g>${heads}${nodes}</svg>`, flat};
 }
 
 async function viewCoursesClient(){
