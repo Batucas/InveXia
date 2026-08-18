@@ -848,3 +848,22 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 /* lista de entregas (admin) */
 .subs-list{display:flex;flex-direction:column;gap:1rem}
 .sub-card .sub-text{margin:.4rem 0}
+
+/* ============================================================
+   v3.7 · Cursos por módulos + barra de avance
+   ============================================================ */
+/* editor de módulos (admin) */
+.mod-editor{display:flex;flex-direction:column;gap:.9rem}
+.mod-block{border:1px solid var(--line);border-radius:12px;padding:.9rem;background:var(--navy-950);display:flex;flex-direction:column;gap:.5rem}
+.mod-head{display:flex;align-items:center;justify-content:space-between}
+.mod-num{font-family:'JetBrains Mono';font-size:.72rem;letter-spacing:.1em;color:var(--blue-300);text-transform:uppercase}
+.mod-block .mod-desc{min-height:64px}
+
+/* barra de avance (cliente) */
+.progress{height:9px;border-radius:20px;background:var(--navy-950);border:1px solid var(--line);overflow:hidden;margin-top:.6rem}
+.progress-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--blue-500),#3DD6A0);transition:width .5s var(--tin)}
+
+/* tarjeta de módulo (cliente) */
+.mod-card{border-left:3px solid var(--line)}
+.mod-card.mod-done{border-left-color:#3DD6A0}
+.mod-check{color:#3DD6A0;font-weight:800}

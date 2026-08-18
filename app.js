@@ -1388,6 +1388,7 @@ function coursesNeuralMap(cs, done){
   return {svg:`<svg viewBox="0 0 ${W} ${H}" class="cmap-svg" preserveAspectRatio="xMidYMid meet" style="min-width:${Math.max(680,nL*260)}px">${defs}<g class="cmap-edges">${edges}</g><g class="cmap-signals">${signals}</g>${heads}${nodes}</svg>`, flat};
 }
 
+function modId(){ return "m"+Math.random().toString(36).slice(2,9); }
 function ytEmbed(url){
   if(!url) return "";
   const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
@@ -1478,9 +1479,16 @@ async function viewCourseDetail(id){
   const pr = await sb.from("course_progress").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data);
   const sub = c.assignment ? await sb.from("course_submissions").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data) : null;
   state.cache.currentSub=sub;
-  const yt=ytEmbed(c.video_url);
-  const mats=Array.isArray(c.materials)?c.materials:[];
   const exam=Array.isArray(c.exam)?c.exam:[];
+  // módulos (con respaldo para cursos antiguos de un solo video)
+  let modules=Array.isArray(c.modules)?c.modules:[];
+  if(!modules.length && (c.video_url || (Array.isArray(c.materials)&&c.materials.length)))
+    modules=[{id:"legacy", title:"Lección", description:"", video_url:c.video_url||"", materials:Array.isArray(c.materials)?c.materials:[]}];
+  const modsDone=new Set(Array.isArray(pr?.modules_done)?pr.modules_done:[]);
+  state.cache.currentModuleIds=modules.map(m=>m.id);
+  state.cache.currentModulesDone=[...modsDone];
+  const doneCount=modules.filter(m=>modsDone.has(m.id)).length;
+  const pct=modules.length?Math.round(100*doneCount/modules.length):0;
   const doneChip = pr?.completed ? `<span class="pill pill-done">✓ Completado</span>` : "";
   m.innerHTML=head("Formación",esc(c.title||"Curso"),esc(c.level||""));
   m.append(el(`<div class="course-page">
@@ -1488,25 +1496,33 @@ async function viewCourseDetail(id){
       <button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
       <div class="flex" style="gap:.4rem;align-items:center">${doneChip}${c.premium?'<span class="pill pill-premium">PREMIUM</span>':""}<span class="pill pill-blue">${esc(c.level||"")}</span></div>
     </div>
-    ${yt?`<div class="course-video">${yt}</div>`:""}
     <div class="card"><h3>Sobre este curso</h3>
-      <p class="course-desc">${esc(c.description||"Sin descripción.")}</p>
-      <div class="flex" style="gap:.6rem;flex-wrap:wrap">
-        ${c.url?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir material externo →</a>`:""}
-        <button class="btn ${pr?.completed?"btn-ghost":"btn-primary"} btn-sm" style="width:auto" onclick="app.markComplete('${c.id}',${pr?.completed?"false":"true"})">
-          ${pr?.completed?"✓ Completado (marcar pendiente)":"Marcar como completado"}</button>
-      </div></div>
-    ${mats.length?`<div class="card"><h3>Materiales descargables</h3>
-      <div class="mat-dl">${mats.map(mt=>`<a class="mat-dl-item" href="${esc(mt.url)}" target="_blank" rel="noopener">
-        <span class="mat-ic">${mt.kind==="pdf"?"📄":"🖼️"}</span><span class="mat-name">${esc(mt.name||"archivo")}</span>
-        <span class="mat-dl-go">Descargar ↓</span></a>`).join("")}</div></div>`:""}
+      <p class="course-desc" style="margin-bottom:${c.url?".8rem":"0"}">${esc(c.description||"Sin descripción.")}</p>
+      ${c.url?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir material externo →</a>`:""}</div>
+    ${modules.length?`<div class="card"><div class="flex between" style="align-items:center"><b>Progreso del curso</b>
+        <span class="mono" style="color:var(--muted);font-size:.82rem">${doneCount}/${modules.length} módulos</span></div>
+      <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div></div>
+      ${modules.map((mo,mi)=>{ const done=modsDone.has(mo.id); const yt=ytEmbed(mo.video_url);
+        const mats=Array.isArray(mo.materials)?mo.materials:[];
+        return `<div class="card mod-card${done?" mod-done":""}">
+          <div class="flex between" style="flex-wrap:wrap;gap:.5rem;align-items:center">
+            <h3 style="margin:0">${done?'<span class="mod-check">✓</span> ':""}Módulo ${mi+1}${mo.title?" · "+esc(mo.title):""}</h3>
+            <button class="btn ${done?"btn-ghost":"btn-primary"} btn-sm" style="width:auto" onclick="app.toggleModule('${c.id}','${mo.id}',${done?"false":"true"})">${done?"Completado":"Marcar completado"}</button>
+          </div>
+          ${yt?`<div class="course-video" style="margin-top:.8rem">${yt}</div>`:""}
+          ${mo.description?`<p class="course-desc" style="margin-top:.8rem">${esc(mo.description)}</p>`:""}
+          ${mats.length?`<div class="mat-dl" style="margin-top:.6rem">${mats.map(mt=>`<a class="mat-dl-item" href="${esc(mt.url)}" target="_blank" rel="noopener">
+            <span class="mat-ic">${mt.kind==="pdf"?"📄":"🖼️"}</span><span class="mat-name">${esc(mt.name||"archivo")}</span>
+            <span class="mat-dl-go">Descargar ↓</span></a>`).join("")}</div>`:""}
+        </div>`; }).join("")}`
+      : `<div class="card empty"><p>Este curso todavía no tiene módulos cargados.</p></div>`}
     ${exam.length?`<div class="card" id="examCard"><h3>Examen del curso</h3>
       <p class="card-sub">${exam.length} pregunta${exam.length>1?"s":""} · opción múltiple · apruebas con 60%.
         ${pr?.exam_score!=null?` Tu última nota: <b style="color:${pr.exam_score>=60?"#3DD6A0":"var(--gold)"}">${Math.round(pr.exam_score)}%</b>.`:""}</p>
       <div id="examBody"></div>
       <button class="btn btn-primary btn-sm" id="examStartBtn" style="width:auto" onclick="app.startExam('${c.id}')">${pr?.exam_score!=null?"Repetir examen":"Comenzar examen"} →</button>
     </div>`:""}
-    ${c.assignment?`<div class="card"><h3>Tarea</h3>
+    ${c.assignment?`<div class="card"><h3>Tarea final</h3>
       <p class="course-desc">${esc(c.assignment)}</p>
       <div id="taskBody">${taskBodyHtml(sub, c.id)}</div>
     </div>`:""}
@@ -2180,11 +2196,18 @@ const app = {
     if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v15.sql":error.message,"err");
     ui.toast("Tarea entregada","ok"); viewCourseDetail(courseId);
   },
-  async markComplete(id,on){
-    const {error}=await saveProgress(id,{completed:on});
-    if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v14.sql":error.message,"err");
-    ui.toast(on?"Curso marcado como completado":"Marcado como pendiente","ok");
-    viewCourseDetail(id);
+  async toggleModule(courseId, moduleId, on){
+    let done=state.cache.currentModulesDone||[];
+    done = on ? [...new Set([...done, moduleId])] : done.filter(x=>x!==moduleId);
+    state.cache.currentModulesDone=done;
+    const ids=state.cache.currentModuleIds||[];
+    const allDone = ids.length>0 && ids.every(id=>done.includes(id));
+    const patch={ modules_done:done };
+    if(allDone) patch.completed=true;
+    const {error}=await saveProgress(courseId,patch);
+    if(error) return ui.toast(/relation|does not exist|column/i.test(error.message)?"Falta ejecutar migration_v17.sql":error.message,"err");
+    if(allDone) ui.toast("¡Completaste todos los módulos! Curso terminado 🎉","ok");
+    viewCourseDetail(courseId);
   },
   startExam(id){
     const c=state.cache.currentCourse||(state.cache.cmapCourses||[]).find(x=>x.id===id);
@@ -2626,6 +2649,11 @@ const app = {
       : `<p class="card-sub" style="margin:0">Crea más cursos para poder conectarlos.</p>`;
     state.cache.courseMaterials = Array.isArray(c.materials)?[...c.materials]:[];
     state.cache.courseExam = Array.isArray(c.exam)?JSON.parse(JSON.stringify(c.exam)):[];
+    // módulos: si el curso ya tiene, se usan; si es antiguo (video/materiales sueltos) se migra a un módulo
+    let mods = Array.isArray(c.modules)?JSON.parse(JSON.stringify(c.modules)):[];
+    if(!mods.length && (c.video_url || (Array.isArray(c.materials)&&c.materials.length)))
+      mods=[{id:modId(), title:"Módulo 1", description:"", video_url:c.video_url||"", materials:Array.isArray(c.materials)?[...c.materials]:[]}];
+    state.cache.courseModules = mods;
     box.innerHTML=`<div class="card">
       ${course?`<div class="flex between"><b>Editar curso</b><button class="btn btn-ghost btn-sm" onclick="app.courseForm()">Cancelar</button></div><div class="divide"></div>`:""}
       <input type="hidden" id="cId" value="${esc(c.id||"")}">
@@ -2634,13 +2662,10 @@ const app = {
       <div class="flex" style="gap:.8rem"><div class="field" style="flex:1"><label>Nivel</label>
         <select id="cL" class="input">${["Básico","Intermedio","Avanzado"].map(l=>`<option ${c.level===l?"selected":""}>${l}</option>`).join("")}</select></div>
         <div class="field" style="flex:2"><label>Enlace externo (opcional)</label><input id="cU" class="input" placeholder="https://…" value="${esc(c.url||"")}"></div></div>
-      <div class="field"><label>Video de YouTube <span style="color:var(--faint);font-weight:400">(se reproduce dentro de la plataforma)</span></label>
-        <input id="cV" class="input" placeholder="https://youtube.com/watch?v=… o https://youtu.be/…" value="${esc(c.video_url||"")}"></div>
-      <div class="field"><label>Descripción</label><textarea id="cD" class="input">${esc(c.description||"")}</textarea></div>
-      <div class="field"><label>Materiales descargables <span style="color:var(--faint);font-weight:400">(PDF o imágenes)</span></label>
-        <div id="matList" class="mat-list"></div>
-        <label class="btn btn-ghost btn-sm" style="cursor:pointer;width:auto;margin-top:.5rem">+ Subir archivo
-          <input type="file" accept=".pdf,image/*" hidden onchange="app.addMaterial(this)"></label></div>
+      <div class="field"><label>Descripción general del curso</label><textarea id="cD" class="input">${esc(c.description||"")}</textarea></div>
+      <div class="field"><label>Módulos <span style="color:var(--faint);font-weight:400">(cada uno con su video, descripción y materiales)</span></label>
+        <div id="modEditor" class="mod-editor"></div>
+        <button type="button" class="btn btn-ghost btn-sm" style="width:auto;margin-top:.5rem" onclick="app.addModule()">+ Agregar módulo</button></div>
       <div class="field"><label>Examen <span style="color:var(--faint);font-weight:400">(opción múltiple, se auto-califica)</span></label>
         <div id="examEditor" class="exam-editor"></div>
         <button type="button" class="btn btn-ghost btn-sm" style="width:auto;margin-top:.5rem" onclick="app.addExamQuestion()">+ Agregar pregunta</button></div>
@@ -2652,7 +2677,7 @@ const app = {
         <label class="flex" style="gap:.4rem;color:var(--muted);font-size:.85rem"><input type="checkbox" id="cP" ${(c.published??true)?"checked":""}> Publicar de inmediato</label>
         <label class="flex" style="gap:.4rem;color:var(--gold);font-size:.85rem"><input type="checkbox" id="cPrem" ${c.premium?"checked":""}> Curso premium</label>
         <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="app.saveCourse()">${course?"Guardar cambios":"Guardar curso"}</button></div></div>`;
-    app.renderMaterials(); app.renderExam();
+    app.renderMaterials(); app.renderExam(); app.renderModules();
     if(course) box.scrollIntoView({behavior:"smooth",block:"start"});
   },
   async editCourse(id){
@@ -2679,6 +2704,50 @@ const app = {
     }catch(e){ ui.toast(/bucket|not found/i.test(e.message)?"Falta el bucket 'media' (migration_v4.sql)":e.message,"err"); }
   },
   removeMaterial(i){ state.cache.courseMaterials.splice(i,1); app.renderMaterials(); },
+  renderModules(){
+    const box=$("#modEditor"); if(!box) return;
+    const mods=state.cache.courseModules||[];
+    box.innerHTML = mods.length ? mods.map((mo,mi)=>`<div class="mod-block" data-mid="${mo.id}">
+      <div class="mod-head"><span class="mod-num">Módulo ${mi+1}</span>
+        <div class="flex" style="gap:.3rem">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="app.moveModule('${mo.id}',-1)" ${mi===0?"disabled":""}>↑</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="app.moveModule('${mo.id}',1)" ${mi===mods.length-1?"disabled":""}>↓</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="app.removeModule('${mo.id}')">Quitar</button></div></div>
+      <input class="input mod-title" placeholder="Título del módulo" value="${esc(mo.title||"")}">
+      <input class="input mod-video" placeholder="Video de YouTube (opcional)" value="${esc(mo.video_url||"")}">
+      <textarea class="input mod-desc" placeholder="Descripción del módulo">${esc(mo.description||"")}</textarea>
+      <div class="mat-list" id="modMats_${mo.id}"></div>
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer;width:auto;margin-top:.4rem">+ Material
+        <input type="file" accept=".pdf,image/*" hidden onchange="app.addModuleMaterial('${mo.id}',this)"></label></div>`).join("")
+      : `<p class="card-sub" style="margin:.2rem 0">Sin módulos aún. Agrega el primero.</p>`;
+    (state.cache.courseModules||[]).forEach(mo=>app.renderModuleMats(mo.id));
+  },
+  renderModuleMats(mid){
+    const box=$("#modMats_"+mid); if(!box) return;
+    const mo=(state.cache.courseModules||[]).find(m=>m.id===mid); const mats=(mo&&mo.materials)||[];
+    box.innerHTML = mats.length ? mats.map((mt,i)=>`<div class="mat-item">
+      <span class="mat-ic">${mt.kind==="pdf"?"📄":"🖼️"}</span><span class="mat-name">${esc(mt.name||"archivo")}</span>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="app.removeModuleMaterial('${mid}',${i})">Quitar</button></div>`).join("") : "";
+  },
+  syncModules(){
+    document.querySelectorAll("#modEditor .mod-block").forEach(bl=>{
+      const mid=bl.dataset.mid; const mo=(state.cache.courseModules||[]).find(m=>m.id===mid); if(!mo) return;
+      mo.title=bl.querySelector(".mod-title").value;
+      mo.video_url=bl.querySelector(".mod-video").value;
+      mo.description=bl.querySelector(".mod-desc").value;
+    });
+  },
+  addModule(){ app.syncModules(); (state.cache.courseModules=state.cache.courseModules||[]).push({id:modId(),title:"",description:"",video_url:"",materials:[]}); app.renderModules(); },
+  removeModule(id){ app.syncModules(); state.cache.courseModules=state.cache.courseModules.filter(m=>m.id!==id); app.renderModules(); },
+  moveModule(id,dir){ app.syncModules(); const a=state.cache.courseModules; const i=a.findIndex(m=>m.id===id); const j=i+dir;
+    if(i<0||j<0||j>=a.length) return; [a[i],a[j]]=[a[j],a[i]]; app.renderModules(); },
+  async addModuleMaterial(mid,input){
+    const file=input.files?.[0]; if(!file) return; input.value=""; ui.toast("Subiendo archivo…","ok");
+    try{ const mat=await uploadFile(file); const mo=(state.cache.courseModules||[]).find(m=>m.id===mid);
+      if(mo){ (mo.materials=mo.materials||[]).push(mat); app.renderModuleMats(mid); } }
+    catch(e){ ui.toast(/bucket|not found|mime/i.test(e.message)?"Revisa migration_v16.sql (tipos permitidos)":e.message,"err"); }
+  },
+  removeModuleMaterial(mid,i){ const mo=(state.cache.courseModules||[]).find(m=>m.id===mid); if(mo){ mo.materials.splice(i,1); app.renderModuleMats(mid); } },
   renderExam(){
     const box=$("#examEditor"); if(!box) return;
     const qs=state.cache.courseExam||[];
@@ -2707,7 +2776,7 @@ const app = {
   removeExamQuestion(i){ app.syncExam(); state.cache.courseExam.splice(i,1); app.renderExam(); },
   async saveCourse(){
     const t=$("#cT").value.trim(); if(!t) return ui.toast("Ponle un título","err");
-    app.syncExam();
+    app.syncExam(); app.syncModules();
     // limpiar examen: quitar opciones vacías, descartar preguntas incompletas
     const exam=(state.cache.courseExam||[]).map(q=>{
       const opts=(q.options||[]).map(o=>(o||"").trim());
@@ -2716,11 +2785,16 @@ const app = {
       const correct=Math.max(0,clean.indexOf(correctText));
       return { q:(q.q||"").trim(), options:clean, correct };
     }).filter(q=>q.q && q.options.length>=2);
+    // módulos: descartar los completamente vacíos
+    const modules=(state.cache.courseModules||[]).map(m=>({
+      id:m.id||modId(), title:(m.title||"").trim(), description:(m.description||"").trim(),
+      video_url:(m.video_url||"").trim()||null, materials:Array.isArray(m.materials)?m.materials:[]
+    })).filter(m=>m.title || m.video_url || m.description || m.materials.length);
     const nexts=[...document.querySelectorAll(".conn-grid input:checked")].map(i=>i.value);
     const row={ title:t, level:$("#cL").value, url:$("#cU").value.trim()||null,
-      video_url:$("#cV").value.trim()||null, description:$("#cD").value.trim(),
-      image_url:$("#url_course").value.trim()||null, published:$("#cP").checked,
-      premium:$("#cPrem").checked, materials:state.cache.courseMaterials||[],
+      description:$("#cD").value.trim(), image_url:$("#url_course").value.trim()||null,
+      published:$("#cP").checked, premium:$("#cPrem").checked,
+      modules, video_url:null, materials:[],   // el contenido vive ahora en los módulos
       exam, assignment:$("#cA").value.trim()||null, next_courses:nexts };
     const id=$("#cId").value; let error;
     if(id){ ({error}=await sb.from("courses").update(row).eq("id",id)); }
