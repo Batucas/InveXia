@@ -209,9 +209,12 @@ function enterApp(){
   const p=state.profile, admin=p.role==="admin";
   $("#uName").textContent=p.full_name||"—";
   $("#uRole").textContent=admin?"Administrador":"Cliente";
-  const av=$("#uAvatar");
-  if(p.avatar_url) av.innerHTML=`<img src="${esc(p.avatar_url)}" alt="" onerror="this.parentNode.textContent='${initials(p.full_name)}'">`;
-  else av.textContent=initials(p.full_name);
+  const av=$("#uAvatar"), avm=$("#uAvatarMob");
+  const avHtml = p.avatar_url
+    ? `<img src="${esc(p.avatar_url)}" alt="" onerror="this.parentNode.textContent='${initials(p.full_name)}'">`
+    : initials(p.full_name);
+  if(p.avatar_url){ av.innerHTML=avHtml; if(avm) avm.innerHTML=avHtml; }
+  else { av.textContent=initials(p.full_name); if(avm) avm.textContent=initials(p.full_name); }
   buildNav(admin);
   if(!location.hash) location.hash = admin?"#/clientes":"#/inicio";
   else route();
@@ -332,6 +335,7 @@ async function render(){
       if(state.view==="quantnet")   return void await viewQuantNet();
       if(state.view==="simulador")  return void await viewSimulator();
       if(state.view==="mercado")    return void await viewFeed();
+      if(state.view==="cursos"&&state.param) return void await viewCourseDetail(state.param);
       if(state.view==="cursos")     return void await viewCoursesClient();
       if(state.view==="calendario") return void await viewCalendarClient();
       if(state.view==="mensajes")   return void await viewClientMessages();
@@ -557,7 +561,7 @@ function allocBars(a){
 }
 // Radar de 5 componentes (SVG)
 function radarChart(components){
-  const cx=170, cy=148, R=86, N=components.length;
+  const cx=200, cy=182, R=124, N=components.length;
   const ang=(i)=> -Math.PI/2 + i*2*Math.PI/N;
   const pt=(i,r)=>[cx+Math.cos(ang(i))*r, cy+Math.sin(ang(i))*r];
 
@@ -577,19 +581,19 @@ function radarChart(components){
   let dots="", labels="";
   components.forEach((c,i)=>{
     const [dx,dy]=pt(i,R*c.v01);
-    dots+=`<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="3.4" fill="var(--blue-400)" stroke="var(--navy-950)" stroke-width="1.5"/>`;
+    dots+=`<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="4.2" fill="var(--blue-400)" stroke="var(--navy-950)" stroke-width="1.5"/>`;
     const [ax,ay]=pt(i,R);
     const isLeft=ax<cx-5, isRight=ax>cx+5;
     const anchor = isLeft?"end":(isRight?"start":"middle");
-    const lx = ax + (isLeft?-8:(isRight?8:0));
-    const ly = ay + (ay<cy-5?-6:(ay>cy+5?16:-6));
+    const lx = ax + (isLeft?-11:(isRight?11:0));
+    const ly = ay + (ay<cy-5?-8:(ay>cy+5?18:-8));
     const lines=Array.isArray(c.label)?c.label:[c.label];
-    const tspans=lines.map((t,k)=>`<tspan x="${lx.toFixed(1)}" dy="${k===0?0:11}">${esc(t)}</tspan>`).join("");
-    labels+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" fill="var(--muted)" font-size="10" font-family="Inter">${tspans}</text>`;
-    labels+=`<text x="${lx.toFixed(1)}" y="${(ly+lines.length*11).toFixed(1)}" text-anchor="${anchor}" fill="var(--blue-300)" font-size="9.5" font-family="JetBrains Mono">${c.level}/5</text>`;
+    const tspans=lines.map((t,k)=>`<tspan x="${lx.toFixed(1)}" dy="${k===0?0:13}">${esc(t)}</tspan>`).join("");
+    labels+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" fill="var(--muted)" font-size="11.5" font-family="Inter">${tspans}</text>`;
+    labels+=`<text x="${lx.toFixed(1)}" y="${(ly+lines.length*13).toFixed(1)}" text-anchor="${anchor}" fill="var(--blue-300)" font-size="10.5" font-family="JetBrains Mono">${c.level}/5</text>`;
   });
 
-  return `<svg viewBox="0 0 340 300" width="100%" style="display:block">
+  return `<svg viewBox="0 0 400 372" width="100%" style="display:block">
     ${rings}${axes}
     <polygon points="${dpts}" fill="var(--blue-500)" fill-opacity=".22" stroke="var(--blue-400)" stroke-width="2"/>
     ${dots}${labels}
@@ -1068,7 +1072,7 @@ async function viewSimulator(){
       ${simField("years","Años",s.years,"")}
     </div>
     <div class="flex" style="gap:.8rem;flex-wrap:wrap">
-      ${simSlider("mu","Retorno esperado anual",(s.mu*100).toFixed(1),0,15,.5,"%")}
+      ${simSlider("mu","Retorno esperado anual",(s.mu*100).toFixed(1),0,30,.5,"%")}
       ${simSlider("sigma","Volatilidad anual",(s.sigma*100).toFixed(1),1,35,.5,"%")}
     </div>
     <div id="simOut" class="mt2"></div>
@@ -1243,6 +1247,16 @@ async function uploadImage(file,folder){
   return sb.storage.from("media").getPublicUrl(path).data.publicUrl;
 }
 
+async function uploadFile(file){
+  const isImg=file.type.startsWith("image/"), isPdf=file.type==="application/pdf";
+  if(!isImg&&!isPdf) throw new Error("Solo se permiten PDF o imágenes.");
+  if(file.size>15*1024*1024) throw new Error("El archivo supera los 15 MB.");
+  const ext=(file.name.split(".").pop()||"bin").toLowerCase();
+  const path=`materials/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const { error }=await sb.storage.from("media").upload(path,file,{ cacheControl:"3600", upsert:false });
+  if(error) throw new Error(error.message);
+  return { name:file.name, url:sb.storage.from("media").getPublicUrl(path).data.publicUrl, kind:isPdf?"pdf":"img" };
+}
 /* ============================================================
    CLIENTE · Mercado e ideas
    ============================================================ */
@@ -1319,8 +1333,9 @@ function coursesNeuralMap(cs){
       const col=CMAP_COL[l.label], title=c.title||"Curso";
       const short=title.length>22?title.slice(0,21)+"…":title;
       const i=flat.length; flat.push(c);
-      nodes+=`<g class="cmap-node" data-i="${i}" style="--col:${col}" tabindex="0" role="button" aria-label="${esc(title)}">
+      nodes+=`<g class="cmap-node${c.premium?" prem":""}" data-i="${i}" style="--col:${col}" tabindex="0" role="button" aria-label="${esc(title)}${c.premium?" (premium)":""}">
         <circle class="halo" cx="${x}" cy="${y}" r="26"/>
+        ${c.premium?`<circle class="prem-ring" cx="${x}" cy="${y}" r="19"/>`:""}
         <circle class="core" cx="${x}" cy="${y}" r="13"/>
         <text x="${x}" y="${y+40}" text-anchor="middle" class="cmap-label">${esc(short)}</text></g>`;
     });
@@ -1358,6 +1373,44 @@ function coursesNeuralMap(cs){
       <feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>`;
   return {svg:`<svg viewBox="0 0 ${W} ${H}" class="cmap-svg" preserveAspectRatio="xMidYMid meet" style="min-width:${Math.max(680,nL*260)}px">${defs}<g class="cmap-edges">${edges}</g><g class="cmap-signals">${signals}</g>${heads}${nodes}</svg>`, flat};
+}
+
+function ytEmbed(url){
+  if(!url) return "";
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
+  const id = m ? m[1] : "";
+  if(!id) return "";
+  return `<iframe src="https://www.youtube.com/embed/${id}" title="Video del curso" loading="lazy"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+}
+
+async function viewCourseDetail(id){
+  const cache=state.cache.cmapCourses||[];
+  const c = cache.find(x=>x.id===id) || await sb.from("courses").select("*").eq("id",id).single().then(r=>r.data);
+  const m=$("#main");
+  if(!c){ m.innerHTML=head("Formación","Curso","No encontrado"); m.append(el(`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>`)); return; }
+  const locked = c.premium && !(state.profile.role==="admin" || state.profile.premium_courses);
+  if(locked){ m.innerHTML=head("Formación",esc(c.title),"Premium");
+    m.append(el(`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
+      <div class="card empty" style="margin-top:1rem"><div class="lock-note" style="margin:0">🔒 Este es un curso premium. Pídele acceso a tu asesor para desbloquearlo.</div></div>`)); return; }
+  const yt=ytEmbed(c.video_url);
+  const mats=Array.isArray(c.materials)?c.materials:[];
+  m.innerHTML=head("Formación",esc(c.title||"Curso"),esc(c.level||""));
+  m.append(el(`<div class="course-page">
+    <div class="flex between" style="flex-wrap:wrap;gap:.6rem">
+      <button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
+      <div class="flex" style="gap:.4rem">${c.premium?'<span class="pill pill-premium">PREMIUM</span>':""}<span class="pill pill-blue">${esc(c.level||"")}</span></div>
+    </div>
+    ${yt?`<div class="course-video">${yt}</div>`:""}
+    <div class="card"><h3>Sobre este curso</h3>
+      <p class="course-desc">${esc(c.description||"Sin descripción.")}</p>
+      ${c.url?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir material externo →</a>`:""}</div>
+    ${mats.length?`<div class="card"><h3>Materiales descargables</h3>
+      <div class="mat-dl">${mats.map(mt=>`<a class="mat-dl-item" href="${esc(mt.url)}" target="_blank" rel="noopener">
+        <span class="mat-ic">${mt.kind==="pdf"?"📄":"🖼️"}</span><span class="mat-name">${esc(mt.name||"archivo")}</span>
+        <span class="mat-dl-go">Descargar ↓</span></a>`).join("")}</div></div>`:""}
+    ${!yt&&!mats.length&&!c.url?`<div class="card empty"><p>Este curso todavía no tiene contenido cargado.</p></div>`:""}
+  </div>`));
 }
 
 async function viewCoursesClient(){
@@ -1655,6 +1708,12 @@ async function viewAdminClient(uid){
       <div><h3 style="margin:0">Red de mercado · QuantNet (premium)</h3>
         <p class="card-sub" style="margin:0">Habilita el terminal de red de correlaciones para este cliente.</p></div>
       <label class="tgl"><input type="checkbox" id="qnChk" ${client.premium_quantnet?"checked":""} onchange="app.toggleQuantnet('${uid}',this.checked)"><span class="tgl-track"></span></label>
+    </div>
+    <div class="divide"></div>
+    <div class="flex between" style="align-items:flex-start">
+      <div><h3 style="margin:0">Cursos premium</h3>
+        <p class="card-sub" style="margin:0">Da acceso a los cursos marcados como premium para este cliente.</p></div>
+      <label class="tgl"><input type="checkbox" id="cuChk" ${client.premium_courses?"checked":""} onchange="app.toggleCourses('${uid}',this.checked)"><span class="tgl-track"></span></label>
     </div>
   </div>`));
 
@@ -1979,15 +2038,19 @@ const app = {
     const c=(state.cache.cmapCourses||[])[i]; if(!c) return;
     document.querySelectorAll(".cmap-node").forEach(n=>n.classList.toggle("sel",+n.dataset.i===i));
     const box=$("#courseDetail"); if(!box) return;
+    const locked = c.premium && !(state.profile.role==="admin" || state.profile.premium_courses);
     box.innerHTML=`<div class="cmap-detail-full">
-      <span class="pill pill-blue">${esc(c.level||"Curso")}</span>
+      <div class="flex" style="gap:.4rem;flex-wrap:wrap;margin-bottom:.2rem">
+        <span class="pill pill-blue">${esc(c.level||"Curso")}</span>
+        ${c.premium?`<span class="pill pill-premium">PREMIUM</span>`:""}</div>
       <h3>${esc(c.title||"Curso")}</h3>
       <p>${esc(c.description||"Sin descripción.")}</p>
-      ${c.url
-        ? `<a class="btn btn-primary btn-sm" style="width:auto" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir curso →</a>`
-        : `<span class="cmap-nolink">Este curso aún no tiene enlace disponible.</span>`}
+      ${locked
+        ? `<div class="lock-note">🔒 Curso premium. Pídele acceso a tu asesor para desbloquearlo.</div>`
+        : `<button class="btn btn-primary btn-sm" style="width:auto" onclick="app.openCourse('${c.id}')">Entrar al curso →</button>`}
     </div>`;
   },
+  openCourse(id){ location.hash="#/cursos/"+id; },
 
   // admin: activar/desactivar premium
   async togglePremium(uid,on){
@@ -1999,6 +2062,11 @@ const app = {
     const {error}=await sb.from("profiles").update({premium_quantnet:on}).eq("id",uid);
     if(error){ ui.toast(error.message,"err"); const c=$("#qnChk"); if(c)c.checked=!on; return; }
     ui.toast(on?"QuantNet habilitado":"QuantNet deshabilitado","ok");
+  },
+  async toggleCourses(uid,on){
+    const {error}=await sb.from("profiles").update({premium_courses:on}).eq("id",uid);
+    if(error){ ui.toast(error.message,"err"); const c=$("#cuChk"); if(c)c.checked=!on; return; }
+    ui.toast(on?"Cursos premium habilitados":"Cursos premium deshabilitados","ok");
   },
 
   // operar (Alpaca sandbox)
@@ -2204,9 +2272,9 @@ const app = {
     if(error) return ui.toast(error.message,"err");
     Object.assign(state.profile,upd);
     $("#uName").textContent=state.profile.full_name||"—";
-    const av=$("#uAvatar");
-    if(upd.avatar_url) av.innerHTML=`<img src="${esc(upd.avatar_url)}" alt="">`;
-    else av.textContent=initials(state.profile.full_name);
+    const av=$("#uAvatar"), avm=$("#uAvatarMob");
+    if(upd.avatar_url){ av.innerHTML=`<img src="${esc(upd.avatar_url)}" alt="">`; if(avm) avm.innerHTML=`<img src="${esc(upd.avatar_url)}" alt="">`; }
+    else { av.textContent=initials(state.profile.full_name); if(avm) avm.textContent=initials(state.profile.full_name); }
     ui.toast("Perfil actualizado","ok");
   },
 
@@ -2392,6 +2460,7 @@ const app = {
       ? others.map(o=>`<label class="conn-opt"><input type="checkbox" value="${o.id}" ${nexts.includes(o.id)?"checked":""}>
           <span>${esc(o.title)} <i>${esc(o.level||"")}</i></span></label>`).join("")
       : `<p class="card-sub" style="margin:0">Crea más cursos para poder conectarlos.</p>`;
+    state.cache.courseMaterials = Array.isArray(c.materials)?[...c.materials]:[];
     box.innerHTML=`<div class="card">
       ${course?`<div class="flex between"><b>Editar curso</b><button class="btn btn-ghost btn-sm" onclick="app.courseForm()">Cancelar</button></div><div class="divide"></div>`:""}
       <input type="hidden" id="cId" value="${esc(c.id||"")}">
@@ -2399,12 +2468,21 @@ const app = {
       <div class="field"><label>Título</label><input id="cT" class="input" value="${esc(c.title||"")}"></div>
       <div class="flex" style="gap:.8rem"><div class="field" style="flex:1"><label>Nivel</label>
         <select id="cL" class="input">${["Básico","Intermedio","Avanzado"].map(l=>`<option ${c.level===l?"selected":""}>${l}</option>`).join("")}</select></div>
-        <div class="field" style="flex:2"><label>Enlace (opcional)</label><input id="cU" class="input" placeholder="https://…" value="${esc(c.url||"")}"></div></div>
+        <div class="field" style="flex:2"><label>Enlace externo (opcional)</label><input id="cU" class="input" placeholder="https://…" value="${esc(c.url||"")}"></div></div>
+      <div class="field"><label>Video de YouTube <span style="color:var(--faint);font-weight:400">(se reproduce dentro de la plataforma)</span></label>
+        <input id="cV" class="input" placeholder="https://youtube.com/watch?v=… o https://youtu.be/…" value="${esc(c.video_url||"")}"></div>
       <div class="field"><label>Descripción</label><textarea id="cD" class="input">${esc(c.description||"")}</textarea></div>
+      <div class="field"><label>Materiales descargables <span style="color:var(--faint);font-weight:400">(PDF o imágenes)</span></label>
+        <div id="matList" class="mat-list"></div>
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;width:auto;margin-top:.5rem">+ Subir archivo
+          <input type="file" accept=".pdf,image/*" hidden onchange="app.addMaterial(this)"></label></div>
       <div class="field"><label>Después de este curso, sigue… <span style="color:var(--faint);font-weight:400">(dibuja las flechas del mapa)</span></label>
         <div class="conn-grid">${pick}</div></div>
-      <div class="flex"><label class="flex" style="gap:.4rem;color:var(--muted);font-size:.85rem"><input type="checkbox" id="cP" ${(c.published??true)?"checked":""}> Publicar de inmediato</label>
+      <div class="flex" style="gap:1.2rem;flex-wrap:wrap;align-items:center">
+        <label class="flex" style="gap:.4rem;color:var(--muted);font-size:.85rem"><input type="checkbox" id="cP" ${(c.published??true)?"checked":""}> Publicar de inmediato</label>
+        <label class="flex" style="gap:.4rem;color:var(--gold);font-size:.85rem"><input type="checkbox" id="cPrem" ${c.premium?"checked":""}> Curso premium</label>
         <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="app.saveCourse()">${course?"Guardar cambios":"Guardar curso"}</button></div></div>`;
+    app.renderMaterials();
     if(course) box.scrollIntoView({behavior:"smooth",block:"start"});
   },
   async editCourse(id){
@@ -2412,12 +2490,32 @@ const app = {
     if(!c) return ui.toast("No se encontró el curso","err");
     app.courseForm(c);
   },
+  renderMaterials(){
+    const box=$("#matList"); if(!box) return;
+    const mats=state.cache.courseMaterials||[];
+    box.innerHTML = mats.length ? mats.map((mt,i)=>`<div class="mat-item">
+      <span class="mat-ic">${mt.kind==="pdf"?"📄":"🖼️"}</span>
+      <span class="mat-name">${esc(mt.name||"archivo")}</span>
+      <button class="btn btn-ghost btn-sm" onclick="app.removeMaterial(${i})">Quitar</button></div>`).join("")
+      : `<p class="card-sub" style="margin:.2rem 0">Sin materiales aún.</p>`;
+  },
+  async addMaterial(input){
+    const file=input.files?.[0]; if(!file) return; input.value="";
+    ui.toast("Subiendo archivo…","ok");
+    try{
+      const mat=await uploadFile(file);
+      (state.cache.courseMaterials=state.cache.courseMaterials||[]).push(mat);
+      app.renderMaterials();
+    }catch(e){ ui.toast(/bucket|not found/i.test(e.message)?"Falta el bucket 'media' (migration_v4.sql)":e.message,"err"); }
+  },
+  removeMaterial(i){ state.cache.courseMaterials.splice(i,1); app.renderMaterials(); },
   async saveCourse(){
     const t=$("#cT").value.trim(); if(!t) return ui.toast("Ponle un título","err");
     const nexts=[...document.querySelectorAll(".conn-grid input:checked")].map(i=>i.value);
     const row={ title:t, level:$("#cL").value, url:$("#cU").value.trim()||null,
-      description:$("#cD").value.trim(), image_url:$("#url_course").value.trim()||null,
-      published:$("#cP").checked, next_courses:nexts };
+      video_url:$("#cV").value.trim()||null, description:$("#cD").value.trim(),
+      image_url:$("#url_course").value.trim()||null, published:$("#cP").checked,
+      premium:$("#cPrem").checked, materials:state.cache.courseMaterials||[], next_courses:nexts };
     const id=$("#cId").value; let error;
     if(id){ ({error}=await sb.from("courses").update(row).eq("id",id)); }
     else { ({error}=await sb.from("courses").insert(row)); }

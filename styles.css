@@ -488,7 +488,7 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
    v2.6 · Radar de perfil + sugerencia con IA
    ============================================================ */
 .radar{background:var(--navy-950);border:1px solid var(--line);border-radius:var(--r-md);
-  padding:1.4rem 1rem .8rem;max-width:360px;margin:0 auto}
+  padding:1.6rem 1.2rem 1rem;max-width:520px;margin:0 auto}
 
 .ai-suggest{margin-top:1rem}
 .ai-suggest .ai-head{display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem}
@@ -757,3 +757,39 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
   #main.view-enter>*{animation:none}
   .card,.list-item,.media-card,.qcard,.feat,.btn{transition:none}
 }
+
+/* ============================================================
+   v3.4 · Curso (LMS Fase 1): video, materiales, premium, avatar móvil
+   ============================================================ */
+/* avatar en barra superior móvil */
+.avatar-mob{width:32px;height:32px;border-radius:8px;flex:0 0 auto}
+
+/* marca premium en el mapa de cursos */
+.cmap-node.prem .prem-ring{fill:none;stroke:var(--gold);stroke-width:1.6;stroke-dasharray:3 3;opacity:.85;
+  transform-box:fill-box;transform-origin:center;animation:premSpin 14s linear infinite}
+@keyframes premSpin{to{transform:rotate(360deg)}}
+
+.lock-note{background:rgba(245,196,81,.08);border:1px solid rgba(245,196,81,.28);color:var(--gold);
+  border-radius:10px;padding:.7rem .9rem;font-size:.85rem;margin-top:.4rem}
+
+/* página de curso */
+.course-page{display:flex;flex-direction:column;gap:1.1rem;max-width:860px}
+.course-video{position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;
+  border:1px solid var(--line);background:#000}
+.course-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.course-desc{color:var(--muted);line-height:1.6;white-space:pre-wrap;margin-bottom:1rem}
+
+/* materiales descargables (cliente) */
+.mat-dl{display:flex;flex-direction:column;gap:.55rem}
+.mat-dl-item{display:flex;align-items:center;gap:.7rem;padding:.7rem .9rem;border:1px solid var(--line);
+  border-radius:10px;background:var(--navy-950);transition:.2s var(--tin);text-decoration:none;color:var(--text)}
+.mat-dl-item:hover{border-color:var(--blue-400);transform:translateX(3px)}
+.mat-ic{font-size:1.1rem;flex:0 0 auto}
+.mat-name{flex:1;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mat-dl-go{font-size:.78rem;color:var(--blue-300);font-family:'JetBrains Mono';flex:0 0 auto}
+
+/* materiales en el formulario admin */
+.mat-list{display:flex;flex-direction:column;gap:.4rem}
+.mat-item{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border:1px solid var(--line);border-radius:8px;background:var(--navy-950)}
+.mat-item .mat-name{font-size:.85rem}
+.mat-item .btn{margin-left:auto}
