@@ -319,6 +319,7 @@ async function render(){
       if(state.view==="clientes")      return void await viewAdminClients();
       if(state.view==="notificaciones") return void await viewNotifications();
       if(state.view==="publicaciones") return void await viewPostsAdmin();
+      if(state.view==="cursos"&&state.param) return void await viewCourseSubmissions(state.param);
       if(state.view==="cursos")        return void await viewCoursesAdmin();
       if(state.view==="calendario")    return void await viewCalendarAdmin();
       if(state.view==="mensajes")      return void await viewAdminInbox();
@@ -1257,6 +1258,15 @@ async function uploadFile(file){
   if(error) throw new Error(error.message);
   return { name:file.name, url:sb.storage.from("media").getPublicUrl(path).data.publicUrl, kind:isPdf?"pdf":"img" };
 }
+
+async function uploadAny(file){
+  if(file.size>15*1024*1024) throw new Error("El archivo supera los 15 MB.");
+  const ext=(file.name.split(".").pop()||"bin").toLowerCase();
+  const path=`submissions/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const { error }=await sb.storage.from("media").upload(path,file,{ cacheControl:"3600", upsert:false });
+  if(error) throw new Error(error.message);
+  return { name:file.name, url:sb.storage.from("media").getPublicUrl(path).data.publicUrl };
+}
 /* ============================================================
    CLIENTE · Mercado e ideas
    ============================================================ */
@@ -1387,9 +1397,72 @@ function ytEmbed(url){
     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
 }
 
+function subFileLink(sub){
+  return (sub&&sub.file_url) ? `<a class="mat-dl-item" href="${esc(sub.file_url)}" target="_blank" rel="noopener"><span class="mat-ic">📎</span><span class="mat-name">${esc(sub.file_name||"archivo adjunto")}</span><span class="mat-dl-go">Ver ↗</span></a>` : "";
+}
+function subFormHtml(sub, courseId){
+  return `<div class="sub-form">
+    <textarea id="subText" class="input" placeholder="Escribe tu respuesta…">${sub?esc(sub.text||""):""}</textarea>
+    <div class="flex" style="gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.5rem">
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer;width:auto">Adjuntar archivo
+        <input type="file" id="subFile" hidden onchange="app.subFilePicked(this)"></label>
+      <span id="subFileName" class="sub-filename">${sub&&sub.file_name?esc(sub.file_name):"Ningún archivo nuevo"}</span>
+      <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="app.submitAssignment('${courseId}')">Entregar tarea</button>
+    </div></div>`;
+}
+function subStateHtml(sub, courseId){
+  const graded = sub.status==="graded";
+  return `<div class="sub-state">
+    ${graded
+      ? `<div class="sub-grade">Calificación: <b>${sub.grade!=null?sub.grade:"—"}</b></div>
+         ${sub.feedback?`<div class="sub-fb"><b>Retroalimentación del asesor:</b><br>${esc(sub.feedback)}</div>`:""}`
+      : `<div class="sub-pending">⏳ Tu entrega fue enviada y está en revisión.</div>`}
+    <div class="sub-mine">
+      ${sub.text?`<p class="sub-text">${esc(sub.text)}</p>`:""}
+      ${subFileLink(sub)}
+    </div>
+    <button class="btn btn-ghost btn-sm" style="width:auto;margin-top:.6rem" onclick="app.editSubmission('${courseId}')">Volver a entregar</button>
+  </div>`;
+}
+function taskBodyHtml(sub, courseId){ return sub ? subStateHtml(sub,courseId) : subFormHtml(null,courseId); }
+
 async function saveProgress(courseId, patch){
   const row={ user_id:state.profile.id, course_id:courseId, updated_at:new Date().toISOString(), ...patch };
   return sb.from("course_progress").upsert(row, { onConflict:"user_id,course_id" });
+}
+
+async function viewCourseSubmissions(courseId){
+  const m=$("#main");
+  const c=await sb.from("courses").select("id,title,assignment").eq("id",courseId).single().then(r=>r.data);
+  m.innerHTML=head("Formación", c?esc(c.title):"Entregas", "Tareas entregadas por los clientes");
+  m.append(el(`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver a cursos</button>`));
+  if(!c){ return; }
+  if(c.assignment) m.append(el(`<div class="card" style="margin-top:1rem"><h3>Consigna</h3><p class="course-desc" style="margin:0">${esc(c.assignment)}</p></div>`));
+  const subs=await sb.from("course_submissions").select("*").eq("course_id",courseId).order("submitted_at",{ascending:false}).then(r=>r.data||[]);
+  if(!subs.length){ m.append(el(`<div class="card empty" style="margin-top:1rem"><p>Aún no hay entregas para este curso.</p></div>`)); return; }
+  // nombres de los clientes
+  const ids=[...new Set(subs.map(s=>s.user_id))];
+  const profs=await sb.from("profiles").select("id,full_name,email").in("id",ids).then(r=>r.data||[]);
+  const nameOf=(uid)=>{ const p=profs.find(x=>x.id===uid); return p?(p.full_name||p.email||"Cliente"):"Cliente"; };
+  const wrap=el(`<div class="subs-list" style="margin-top:1rem"></div>`);
+  subs.forEach(s=>{
+    wrap.append(el(`<div class="card sub-card">
+      <div class="flex between" style="flex-wrap:wrap;gap:.4rem">
+        <b>${esc(nameOf(s.user_id))}</b>
+        <span class="pill ${s.status==="graded"?"pill-done":"pill-blue"}">${s.status==="graded"?"Calificada":"Por revisar"}</span>
+      </div>
+      <span class="card-sub" style="display:block;margin:.2rem 0 .6rem">Entregada: ${new Date(s.submitted_at).toLocaleString("es")}</span>
+      ${s.text?`<p class="sub-text">${esc(s.text)}</p>`:""}
+      ${subFileLink(s)}
+      <div class="divide"></div>
+      <div class="flex" style="gap:.8rem;flex-wrap:wrap;align-items:flex-end">
+        <div class="field" style="width:130px"><label>Calificación</label><input class="input" id="grade_${s.id}" value="${s.grade!=null?s.grade:""}" placeholder="0-100"></div>
+        <div class="field" style="flex:1;min-width:220px"><label>Retroalimentación</label><textarea class="input" id="fb_${s.id}" placeholder="Comentario para el cliente…">${esc(s.feedback||"")}</textarea></div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="width:auto;margin-top:.5rem" onclick="app.gradeSubmission('${s.id}','${courseId}')">Guardar calificación</button>
+    </div>`));
+  });
+  m.append(wrap);
 }
 
 async function viewCourseDetail(id){
@@ -1403,6 +1476,8 @@ async function viewCourseDetail(id){
     m.append(el(`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
       <div class="card empty" style="margin-top:1rem"><div class="lock-note" style="margin:0">🔒 Este es un curso premium. Pídele acceso a tu asesor para desbloquearlo.</div></div>`)); return; }
   const pr = await sb.from("course_progress").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data);
+  const sub = c.assignment ? await sb.from("course_submissions").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data) : null;
+  state.cache.currentSub=sub;
   const yt=ytEmbed(c.video_url);
   const mats=Array.isArray(c.materials)?c.materials:[];
   const exam=Array.isArray(c.exam)?c.exam:[];
@@ -1430,6 +1505,10 @@ async function viewCourseDetail(id){
         ${pr?.exam_score!=null?` Tu última nota: <b style="color:${pr.exam_score>=60?"#3DD6A0":"var(--gold)"}">${Math.round(pr.exam_score)}%</b>.`:""}</p>
       <div id="examBody"></div>
       <button class="btn btn-primary btn-sm" id="examStartBtn" style="width:auto" onclick="app.startExam('${c.id}')">${pr?.exam_score!=null?"Repetir examen":"Comenzar examen"} →</button>
+    </div>`:""}
+    ${c.assignment?`<div class="card"><h3>Tarea</h3>
+      <p class="course-desc">${esc(c.assignment)}</p>
+      <div id="taskBody">${taskBodyHtml(sub, c.id)}</div>
     </div>`:""}
   </div>`));
 }
@@ -1839,6 +1918,7 @@ async function viewCoursesAdmin(){
     ${c.image_url?`<img class="thumb" src="${esc(c.image_url)}" alt="" loading="lazy">`:""}
     <div class="li-main"><b>${esc(c.title)}</b><span>${esc(c.level||"")} · ${c.published?"Publicado":"Borrador"}</span></div>
     <div class="flex"><button class="btn btn-ghost btn-sm" onclick="app.editCourse('${c.id}')">Editar</button>
+      ${c.assignment?`<button class="btn btn-ghost btn-sm" onclick="location.hash='#/cursos/${c.id}'">Entregas</button>`:""}
       <button class="btn btn-ghost btn-sm" onclick="app.togglePub('${c.id}',${!c.published})">${c.published?"Ocultar":"Publicar"}</button>
       <button class="btn btn-ghost btn-sm" onclick="app.delCourse('${c.id}')">Eliminar</button></div></div>`)));
   m.append(list);
@@ -2074,6 +2154,32 @@ const app = {
     </div>`;
   },
   openCourse(id){ location.hash="#/cursos/"+id; },
+  editSubmission(courseId){ const b=$("#taskBody"); if(b) b.innerHTML=subFormHtml(state.cache.currentSub,courseId); },
+  async gradeSubmission(subId,courseId){
+    const g=$("#grade_"+subId)?.value.trim();
+    const fb=$("#fb_"+subId)?.value.trim()||null;
+    const grade = g==="" ? null : Number(g);
+    if(g!=="" && !isFinite(grade)) return ui.toast("La calificación debe ser un número","err");
+    const {error}=await sb.from("course_submissions").update({ grade, feedback:fb, status:"graded", graded_at:new Date().toISOString() }).eq("id",subId);
+    if(error) return ui.toast(error.message,"err");
+    ui.toast("Calificación guardada","ok"); viewCourseSubmissions(courseId);
+  },
+  subFilePicked(input){ const f=input.files?.[0]; const s=$("#subFileName"); if(s) s.textContent=f?f.name:"Ningún archivo nuevo"; },
+  async submitAssignment(courseId){
+    const text=($("#subText")?.value||"").trim();
+    const file=$("#subFile")?.files?.[0];
+    const hadFile=state.cache.currentSub?.file_url;
+    if(!text && !file && !hadFile) return ui.toast("Escribe una respuesta o adjunta un archivo","err");
+    const btn=document.querySelector('#taskBody .btn-primary'); if(btn){ btn.disabled=true; btn.textContent="Enviando…"; }
+    let fileData=null;
+    if(file){ try{ fileData=await uploadAny(file); }catch(e){ ui.toast(e.message,"err"); if(btn){btn.disabled=false;btn.textContent="Entregar tarea";} return; } }
+    const row={ course_id:courseId, user_id:state.profile.id, text:text||null,
+      status:"submitted", grade:null, feedback:null, graded_at:null, submitted_at:new Date().toISOString() };
+    if(fileData){ row.file_url=fileData.url; row.file_name=fileData.name; }
+    const {error}=await sb.from("course_submissions").upsert(row,{onConflict:"course_id,user_id"});
+    if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v15.sql":error.message,"err");
+    ui.toast("Tarea entregada","ok"); viewCourseDetail(courseId);
+  },
   async markComplete(id,on){
     const {error}=await saveProgress(id,{completed:on});
     if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v14.sql":error.message,"err");
@@ -2538,6 +2644,8 @@ const app = {
       <div class="field"><label>Examen <span style="color:var(--faint);font-weight:400">(opción múltiple, se auto-califica)</span></label>
         <div id="examEditor" class="exam-editor"></div>
         <button type="button" class="btn btn-ghost btn-sm" style="width:auto;margin-top:.5rem" onclick="app.addExamQuestion()">+ Agregar pregunta</button></div>
+      <div class="field"><label>Tarea <span style="color:var(--faint);font-weight:400">(instrucciones para el cliente; vacío = sin tarea)</span></label>
+        <textarea id="cA" class="input" placeholder="Describe la tarea que el cliente debe entregar…">${esc(c.assignment||"")}</textarea></div>
       <div class="field"><label>Después de este curso, sigue… <span style="color:var(--faint);font-weight:400">(dibuja las flechas del mapa)</span></label>
         <div class="conn-grid">${pick}</div></div>
       <div class="flex" style="gap:1.2rem;flex-wrap:wrap;align-items:center">
@@ -2613,7 +2721,7 @@ const app = {
       video_url:$("#cV").value.trim()||null, description:$("#cD").value.trim(),
       image_url:$("#url_course").value.trim()||null, published:$("#cP").checked,
       premium:$("#cPrem").checked, materials:state.cache.courseMaterials||[],
-      exam, next_courses:nexts };
+      exam, assignment:$("#cA").value.trim()||null, next_courses:nexts };
     const id=$("#cId").value; let error;
     if(id){ ({error}=await sb.from("courses").update(row).eq("id",id)); }
     else { ({error}=await sb.from("courses").insert(row)); }
