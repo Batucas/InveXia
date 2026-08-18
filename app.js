@@ -151,7 +151,15 @@ const auth = {
     }catch(e){ box.textContent=translateErr(e.message); box.classList.add("err"); }
     finally{ btn.disabled=false; btn.textContent=prev; }
   },
-  async logout(){ await sb.auth.signOut(); location.href="/"; },
+  async logout(){
+    // cubrir la pantalla al instante para que no asome el login (el "puente")
+    const s=document.createElement("div");
+    s.style.cssText="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;background:#0A1120";
+    s.innerHTML='<div style="font-family:\'Sora\',system-ui,sans-serif;font-weight:700;font-size:1.7rem;color:#EAF1FB;letter-spacing:-.02em">Inve<span style="color:#2E7DF6">X</span>ia</div><div style="width:26px;height:26px;border:3px solid rgba(255,255,255,.14);border-top-color:#2E7DF6;border-radius:50%;animation:splashSpin .7s linear infinite"></div>';
+    document.body.appendChild(s);
+    await sb.auth.signOut();
+    location.href="/";
+  },
 };
 window.auth = auth;
 
