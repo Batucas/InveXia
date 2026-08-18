@@ -52,6 +52,37 @@
     transition:.25s var(--ease);color:var(--text);
   }
   .nav-cta:hover{background:var(--text);color:var(--bg);border-color:var(--text)}
+  .nav-actions{display:flex;gap:.6rem;align-items:center}
+  .nav-cta{cursor:pointer;font-family:'Space Grotesk';font-weight:500;font-size:.9rem;background:var(--blue);color:#fff;border:1px solid var(--blue);border-radius:100px;padding:.55rem 1.3rem;transition:.25s var(--ease)}
+  .nav-cta:hover{background:var(--blue-300);border-color:var(--blue-300);color:var(--bg)}
+  .nav-cta.ghost{background:transparent;color:var(--text);border-color:var(--line2)}
+  .nav-cta.ghost:hover{background:rgba(46,125,246,.1);border-color:var(--blue-300);color:var(--text)}
+
+  /* ---------- Modal de autenticación ---------- */
+  .auth-overlay{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;
+    padding:1.2rem;background:rgba(6,9,15,.72);backdrop-filter:blur(8px);opacity:0;transition:opacity .25s var(--ease)}
+  .auth-overlay.show{display:flex;opacity:1}
+  .auth-modal{width:100%;max-width:410px;background:var(--panel);border:1px solid var(--line2);
+    border-radius:20px;padding:2rem;position:relative;box-shadow:0 40px 90px -20px rgba(0,0,0,.7);
+    transform:translateY(14px) scale(.98);transition:transform .3s var(--ease)}
+  .auth-overlay.show .auth-modal{transform:none}
+  .auth-close{position:absolute;top:1rem;right:1.1rem;background:none;border:none;color:var(--faint);font-size:1.1rem;cursor:pointer;transition:color .2s}
+  .auth-close:hover{color:var(--text)}
+  .auth-tabs{display:flex;gap:.3rem;background:var(--bg2);border:1px solid var(--line);border-radius:100px;padding:.28rem;margin:1.1rem 0 1.3rem}
+  .auth-tab{flex:1;padding:.55rem;border:none;background:none;color:var(--muted);font-family:'Space Grotesk';font-weight:500;font-size:.9rem;border-radius:100px;cursor:pointer;transition:.22s var(--ease)}
+  .auth-tab.active{background:var(--blue);color:#fff}
+  .auth-fields{display:flex;flex-direction:column;gap:.9rem}
+  .af label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:.35rem;font-weight:500}
+  .af label .opt{color:var(--faint);font-weight:400}
+  .af input{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;
+    padding:.75rem .9rem;color:var(--text);font-family:'Inter';font-size:.95rem;transition:border-color .2s,box-shadow .2s}
+  .af input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,125,246,.18)}
+  .af.reg-only{display:none}
+  .auth-modal.register .af.reg-only{display:block}
+  .auth-msg{min-height:1.2rem;font-size:.83rem;margin:.9rem 0 .3rem;text-align:center}
+  .auth-msg.err{color:#F79389}.auth-msg.ok{color:var(--good)}
+  .auth-spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:aspin .7s linear infinite}
+  @keyframes aspin{to{transform:rotate(360deg)}}
 
   /* ---------- Hero ---------- */
   .hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden}
@@ -178,7 +209,10 @@
 
 <nav id="nav">
   <div class="brand">Inve<span class="x">X</span>ia<small>Gestión de inversiones</small></div>
-  <a href="/app.html" class="nav-cta">Ingresar</a>
+  <div class="nav-actions">
+    <button class="nav-cta ghost" data-auth="login">Iniciar sesión</button>
+    <button class="nav-cta" data-auth="register">Crear cuenta</button>
+  </div>
 </nav>
 
 <!-- HERO -->
@@ -189,7 +223,7 @@
     <h1>El mercado es una <span class="accent">red viva.</span></h1>
     <p class="lead">InveXia lleva las herramientas cuantitativas de Wall Street a cualquier inversionista: optimización de carteras, redes de correlación entre activos y acceso real a los mercados de Estados Unidos.</p>
     <div class="hero-cta">
-      <a href="/app.html" class="btn btn-primary">Comenzar ahora →</a>
+      <button class="btn btn-primary" data-auth="register">Comenzar ahora →</button>
       <a href="#plataforma" class="btn btn-ghost">Explorar la plataforma</a>
     </div>
   </div>
@@ -299,7 +333,7 @@
     <span class="eyebrow reveal">Empieza hoy</span>
     <h2 class="reveal d1">Invierte con la ventaja de las matemáticas.</h2>
     <p class="reveal d2">Crea tu perfil, arma tu primera cartera optimizada y explora el mercado como una red viva. Sin tecnicismos que no entiendas.</p>
-    <div class="reveal d3"><a href="/app.html" class="btn btn-primary" style="font-size:1.05rem;padding:1rem 2.2rem">Crear mi cuenta →</a></div>
+    <div class="reveal d3"><button class="btn btn-primary" data-auth="register" style="font-size:1.05rem;padding:1rem 2.2rem">Crear mi cuenta →</button></div>
   </div>
 </section>
 
@@ -310,6 +344,26 @@
     <div class="mono" style="color:var(--faint)">© 2026 InveXia</div>
   </div>
 </footer>
+
+<!-- MODAL DE AUTENTICACIÓN -->
+<div id="authOverlay" class="auth-overlay" aria-hidden="true">
+  <div class="auth-modal" role="dialog" aria-modal="true" aria-label="Acceso a InveXia">
+    <button class="auth-close" id="authClose" aria-label="Cerrar">✕</button>
+    <div class="brand" style="font-size:1.3rem;margin-bottom:.3rem">Inve<span class="x">X</span>ia</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-mode="login">Iniciar sesión</button>
+      <button class="auth-tab" data-mode="register">Crear cuenta</button>
+    </div>
+    <div class="auth-fields">
+      <div class="af reg-only"><label>Nombre completo</label><input id="aName" type="text" autocomplete="name" placeholder="Tu nombre"></div>
+      <div class="af"><label>Correo electrónico</label><input id="aEmail" type="email" autocomplete="email" placeholder="tucorreo@ejemplo.com"></div>
+      <div class="af reg-only"><label>Teléfono <span class="opt">(opcional)</span></label><input id="aPhone" type="tel" autocomplete="tel" placeholder="+591 …"></div>
+      <div class="af"><label>Contraseña</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+    </div>
+    <div id="authMsg" class="auth-msg"></div>
+    <button id="authSubmit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.4rem">Iniciar sesión</button>
+  </div>
+</div>
 
 <script>
 /* ============ Nav scroll state ============ */
@@ -400,6 +454,80 @@ function networkCanvas(canvas,opts){
 }
 networkCanvas(document.getElementById("net"),{count:78,link:165,goldRatio:.14,parallax:20,trackMouse:true});
 networkCanvas(document.getElementById("qnet"),{count:40,link:120,goldRatio:.28,parallax:8,speed:.22,r:2.4});
+</script>
+
+<script type="module">
+/* ============ Autenticación (Supabase) ============ */
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const overlay=document.getElementById("authOverlay");
+const modal=overlay.querySelector(".auth-modal");
+const msg=document.getElementById("authMsg");
+const submit=document.getElementById("authSubmit");
+let mode="login";
+
+function setMode(m){
+  mode=m;
+  modal.classList.toggle("register",m==="register");
+  document.querySelectorAll(".auth-tab").forEach(t=>t.classList.toggle("active",t.dataset.mode===m));
+  submit.textContent = m==="register"?"Crear cuenta":"Iniciar sesión";
+  document.getElementById("aPass").setAttribute("autocomplete", m==="register"?"new-password":"current-password");
+  msg.textContent=""; msg.className="auth-msg";
+}
+function openAuth(m){ setMode(m||"login"); overlay.classList.add("show"); overlay.setAttribute("aria-hidden","false");
+  setTimeout(()=>document.getElementById(m==="register"?"aName":"aEmail")?.focus(),80); }
+function closeAuth(){ overlay.classList.remove("show"); overlay.setAttribute("aria-hidden","true"); }
+
+document.querySelectorAll("[data-auth]").forEach(b=>b.addEventListener("click",()=>openAuth(b.dataset.auth)));
+document.querySelectorAll(".auth-tab").forEach(t=>t.addEventListener("click",()=>setMode(t.dataset.mode)));
+document.getElementById("authClose").addEventListener("click",closeAuth);
+overlay.addEventListener("click",e=>{ if(e.target===overlay) closeAuth(); });
+addEventListener("keydown",e=>{ if(e.key==="Escape"&&overlay.classList.contains("show")) closeAuth(); });
+
+function translateErr(m=""){
+  if(/Invalid login/i.test(m)) return "Correo o contraseña incorrectos.";
+  if(/already registered/i.test(m)) return "Ese correo ya tiene una cuenta.";
+  if(/at least 6/i.test(m)) return "La contraseña debe tener al menos 6 caracteres.";
+  if(/rate limit/i.test(m)) return "Demasiados intentos. Espera un momento.";
+  if(/fetch|Failed|path/i.test(m)) return "No se pudo conectar. Revisa tu conexión.";
+  return m;
+}
+
+async function doAuth(){
+  const email=document.getElementById("aEmail").value.trim();
+  const pass=document.getElementById("aPass").value;
+  const name=document.getElementById("aName").value.trim();
+  const phone=document.getElementById("aPhone").value.trim();
+  msg.textContent=""; msg.className="auth-msg";
+  if(!email||!pass){ msg.textContent="Completa correo y contraseña."; msg.classList.add("err"); return; }
+  if(mode==="register" && !name){ msg.textContent="Ingresa tu nombre completo."; msg.classList.add("err"); return; }
+  submit.disabled=true; const prev=submit.textContent; submit.innerHTML='<span class="auth-spin"></span>';
+  try{
+    if(mode==="register"){
+      const { data, error } = await sb.auth.signUp({ email, password:pass, options:{ data:{ full_name:name, phone } } });
+      if(error) throw error;
+      if(data.session){ msg.textContent="Cuenta creada. Entrando…"; msg.classList.add("ok"); location.href="/app.html"; return; }
+      msg.textContent="Cuenta creada. Revisa tu correo para confirmarla."; msg.classList.add("ok");
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password:pass });
+      if(error) throw error;
+      msg.textContent="Entrando…"; msg.classList.add("ok"); location.href="/app.html"; return;
+    }
+  }catch(e){ msg.textContent=translateErr(e.message); msg.classList.add("err"); }
+  finally{ submit.disabled=false; submit.textContent=prev; }
+}
+submit.addEventListener("click",doAuth);
+document.getElementById("aPass").addEventListener("keydown",e=>{ if(e.key==="Enter") doAuth(); });
+
+/* Si ya hay sesión, ofrecer ir directo al panel */
+(async ()=>{
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){
+    document.querySelector(".nav-actions").innerHTML='<a class="nav-cta" href="/app.html">Ir al panel →</a>';
+  }
+})();
 </script>
 </body>
 </html>
