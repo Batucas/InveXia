@@ -11,8 +11,15 @@
 </head>
 <body>
 
+<!-- ============ CARGA (evita el parpadeo del login) ============ -->
+<div id="splash" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;background:#0A1120">
+  <div style="font-family:'Sora',system-ui,sans-serif;font-weight:700;font-size:1.7rem;color:#EAF1FB;letter-spacing:-.02em">Inve<span style="color:#2E7DF6">X</span>ia</div>
+  <div style="width:26px;height:26px;border:3px solid rgba(255,255,255,.14);border-top-color:#2E7DF6;border-radius:50%;animation:splashSpin .7s linear infinite"></div>
+</div>
+<style>@keyframes splashSpin{to{transform:rotate(360deg)}}</style>
+
 <!-- ============ ACCESO ============ -->
-<div id="auth" class="auth-wrap">
+<div id="auth" class="auth-wrap hidden">
   <div class="auth-hero">
     <div class="brand" style="font-size:1.4rem">
       <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="7" stroke="#4FA3FF" stroke-width="1.4" opacity=".5"/><ellipse cx="20" cy="20" rx="17" ry="7" stroke="#4FA3FF" stroke-width="1.2" opacity=".45" transform="rotate(35 20 20)"/><ellipse cx="20" cy="20" rx="17" ry="7" stroke="#2DD4BF" stroke-width="1.2" opacity=".35" transform="rotate(-35 20 20)"/><path d="M11 27 L18 15 M18 27 L11 15" stroke="#EAF1FB" stroke-width="2.4" stroke-linecap="round"/><path d="M22 27 L29 15 M29 27 L22 15" stroke="#2E7DF6" stroke-width="2.4" stroke-linecap="round"/></svg>

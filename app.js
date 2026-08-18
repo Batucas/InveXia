@@ -192,8 +192,9 @@ async function loadProfile(){
     state.profile.phone=metaPhone;
   }
 }
-function showAuth(){ $("#app").classList.add("hidden"); $("#auth").classList.remove("hidden"); $("#bellBtn")?.classList.add("hidden"); $("#bellPanel")?.classList.add("hidden"); $("#sideToggle")?.classList.add("hidden"); }
+function showAuth(){ document.getElementById("splash")?.remove(); $("#app").classList.add("hidden"); $("#auth").classList.remove("hidden"); $("#bellBtn")?.classList.add("hidden"); $("#bellPanel")?.classList.add("hidden"); $("#sideToggle")?.classList.add("hidden"); }
 function enterApp(){
+  document.getElementById("splash")?.remove();
   $("#auth").classList.add("hidden"); $("#app").classList.remove("hidden");
   $("#bellBtn")?.classList.remove("hidden");
   $("#sideToggle")?.classList.remove("hidden");
