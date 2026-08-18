@@ -1315,7 +1315,8 @@ function courseCard(c){
 /* Mapa de cursos tipo red neuronal: capas por nivel, cursos como neuronas */
 const CMAP_LAYERS=["Básico","Intermedio","Avanzado"];
 const CMAP_COL={"Básico":"#4FA3FF","Intermedio":"#F5C451","Avanzado":"#3DD6A0"};
-function coursesNeuralMap(cs){
+function coursesNeuralMap(cs, done){
+  done = done || new Set();
   const buckets=CMAP_LAYERS.map(L=>cs.filter(c=>(c.level||"Básico")===L));
   cs.forEach(c=>{ if(!CMAP_LAYERS.includes(c.level||"Básico")) buckets[0].push(c); });
   const layers=CMAP_LAYERS.map((L,i)=>({label:L,items:buckets[i]})).filter(l=>l.items.length);
@@ -1333,10 +1334,12 @@ function coursesNeuralMap(cs){
       const col=CMAP_COL[l.label], title=c.title||"Curso";
       const short=title.length>22?title.slice(0,21)+"…":title;
       const i=flat.length; flat.push(c);
-      nodes+=`<g class="cmap-node${c.premium?" prem":""}" data-i="${i}" style="--col:${col}" tabindex="0" role="button" aria-label="${esc(title)}${c.premium?" (premium)":""}">
+      const isDone=done.has(c.id);
+      nodes+=`<g class="cmap-node${c.premium?" prem":""}${isDone?" done":""}" data-i="${i}" style="--col:${col}" tabindex="0" role="button" aria-label="${esc(title)}${c.premium?" (premium)":""}${isDone?" (completado)":""}">
         <circle class="halo" cx="${x}" cy="${y}" r="26"/>
         ${c.premium?`<circle class="prem-ring" cx="${x}" cy="${y}" r="19"/>`:""}
         <circle class="core" cx="${x}" cy="${y}" r="13"/>
+        ${isDone?`<g class="cmap-done"><circle cx="${x+14}" cy="${y-14}" r="7.5"/><text x="${x+14}" y="${y-10.7}">✓</text></g>`:""}
         <text x="${x}" y="${y+40}" text-anchor="middle" class="cmap-label">${esc(short)}</text></g>`;
     });
   });
@@ -1384,40 +1387,60 @@ function ytEmbed(url){
     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
 }
 
+async function saveProgress(courseId, patch){
+  const row={ user_id:state.profile.id, course_id:courseId, updated_at:new Date().toISOString(), ...patch };
+  return sb.from("course_progress").upsert(row, { onConflict:"user_id,course_id" });
+}
+
 async function viewCourseDetail(id){
   const cache=state.cache.cmapCourses||[];
   const c = cache.find(x=>x.id===id) || await sb.from("courses").select("*").eq("id",id).single().then(r=>r.data);
   const m=$("#main");
   if(!c){ m.innerHTML=head("Formación","Curso","No encontrado"); m.append(el(`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>`)); return; }
+  state.cache.currentCourse=c;
   const locked = c.premium && !(state.profile.role==="admin" || state.profile.premium_courses);
   if(locked){ m.innerHTML=head("Formación",esc(c.title),"Premium");
     m.append(el(`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
       <div class="card empty" style="margin-top:1rem"><div class="lock-note" style="margin:0">🔒 Este es un curso premium. Pídele acceso a tu asesor para desbloquearlo.</div></div>`)); return; }
+  const pr = await sb.from("course_progress").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data);
   const yt=ytEmbed(c.video_url);
   const mats=Array.isArray(c.materials)?c.materials:[];
+  const exam=Array.isArray(c.exam)?c.exam:[];
+  const doneChip = pr?.completed ? `<span class="pill pill-done">✓ Completado</span>` : "";
   m.innerHTML=head("Formación",esc(c.title||"Curso"),esc(c.level||""));
   m.append(el(`<div class="course-page">
     <div class="flex between" style="flex-wrap:wrap;gap:.6rem">
       <button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
-      <div class="flex" style="gap:.4rem">${c.premium?'<span class="pill pill-premium">PREMIUM</span>':""}<span class="pill pill-blue">${esc(c.level||"")}</span></div>
+      <div class="flex" style="gap:.4rem;align-items:center">${doneChip}${c.premium?'<span class="pill pill-premium">PREMIUM</span>':""}<span class="pill pill-blue">${esc(c.level||"")}</span></div>
     </div>
     ${yt?`<div class="course-video">${yt}</div>`:""}
     <div class="card"><h3>Sobre este curso</h3>
       <p class="course-desc">${esc(c.description||"Sin descripción.")}</p>
-      ${c.url?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir material externo →</a>`:""}</div>
+      <div class="flex" style="gap:.6rem;flex-wrap:wrap">
+        ${c.url?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir material externo →</a>`:""}
+        <button class="btn ${pr?.completed?"btn-ghost":"btn-primary"} btn-sm" style="width:auto" onclick="app.markComplete('${c.id}',${pr?.completed?"false":"true"})">
+          ${pr?.completed?"✓ Completado (marcar pendiente)":"Marcar como completado"}</button>
+      </div></div>
     ${mats.length?`<div class="card"><h3>Materiales descargables</h3>
       <div class="mat-dl">${mats.map(mt=>`<a class="mat-dl-item" href="${esc(mt.url)}" target="_blank" rel="noopener">
         <span class="mat-ic">${mt.kind==="pdf"?"📄":"🖼️"}</span><span class="mat-name">${esc(mt.name||"archivo")}</span>
         <span class="mat-dl-go">Descargar ↓</span></a>`).join("")}</div></div>`:""}
-    ${!yt&&!mats.length&&!c.url?`<div class="card empty"><p>Este curso todavía no tiene contenido cargado.</p></div>`:""}
+    ${exam.length?`<div class="card" id="examCard"><h3>Examen del curso</h3>
+      <p class="card-sub">${exam.length} pregunta${exam.length>1?"s":""} · opción múltiple · apruebas con 60%.
+        ${pr?.exam_score!=null?` Tu última nota: <b style="color:${pr.exam_score>=60?"#3DD6A0":"var(--gold)"}">${Math.round(pr.exam_score)}%</b>.`:""}</p>
+      <div id="examBody"></div>
+      <button class="btn btn-primary btn-sm" id="examStartBtn" style="width:auto" onclick="app.startExam('${c.id}')">${pr?.exam_score!=null?"Repetir examen":"Comenzar examen"} →</button>
+    </div>`:""}
   </div>`));
 }
 
 async function viewCoursesClient(){
   const cs=await sb.from("courses").select("*").eq("published",true).order("created_at",{ascending:false}).then(r=>r.data||[]);
+  const prog=await sb.from("course_progress").select("course_id,completed").eq("user_id",state.profile.id).then(r=>r.data||[]);
+  const done=new Set((prog||[]).filter(p=>p.completed).map(p=>p.course_id));
   const m=$("#main"); m.innerHTML=head("Formación","Cursos","Tu ruta de aprendizaje, conectada como una red.");
   if(!cs.length){ m.append(el(`<div class="card empty">${icon("book")}<p style="margin-top:.4rem">Aún no hay cursos publicados.</p></div>`)); return; }
-  const {svg,flat}=coursesNeuralMap(cs);
+  const {svg,flat}=coursesNeuralMap(cs, done);
   m.append(el(`<div class="cmap-wrap">
     <div class="cmap-scroll card">${svg}</div>
     <div id="courseDetail" class="cmap-detail card">
@@ -2051,6 +2074,41 @@ const app = {
     </div>`;
   },
   openCourse(id){ location.hash="#/cursos/"+id; },
+  async markComplete(id,on){
+    const {error}=await saveProgress(id,{completed:on});
+    if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v14.sql":error.message,"err");
+    ui.toast(on?"Curso marcado como completado":"Marcado como pendiente","ok");
+    viewCourseDetail(id);
+  },
+  startExam(id){
+    const c=state.cache.currentCourse||(state.cache.cmapCourses||[]).find(x=>x.id===id);
+    const exam=(c&&c.exam)||[]; if(!exam.length) return;
+    state.cache.currentExam={id,exam};
+    const body=$("#examBody"); const btn=$("#examStartBtn"); if(btn) btn.style.display="none";
+    body.innerHTML = exam.map((q,qi)=>`<div class="quiz-q" data-qi="${qi}">
+      <p class="quiz-qtext">${qi+1}. ${esc(q.q)}</p>
+      <div class="quiz-opts">${q.options.map((o,oi)=>`<label class="quiz-opt">
+        <input type="radio" name="q${qi}" value="${oi}"><span>${esc(o)}</span></label>`).join("")}</div></div>`).join("")
+      + `<button class="btn btn-primary btn-sm" style="width:auto;margin-top:.4rem" onclick="app.submitExam('${id}')">Enviar respuestas</button>
+         <div id="quizResult"></div>`;
+  },
+  async submitExam(id){
+    const cur=state.cache.currentExam; if(!cur||cur.id!==id) return;
+    const exam=cur.exam;
+    let correct=0, answered=0;
+    exam.forEach((q,qi)=>{ const sel=document.querySelector(`input[name="q${qi}"]:checked`);
+      if(sel){ answered++; if(+sel.value===q.correct) correct++; } });
+    if(answered<exam.length) return ui.toast("Responde todas las preguntas","err");
+    const score=Math.round(100*correct/exam.length), passed=score>=60;
+    const patch = passed ? {exam_score:score, completed:true} : {exam_score:score};
+    const {error}=await saveProgress(id,patch);
+    if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v14.sql":error.message,"err");
+    const res=$("#quizResult");
+    if(res) res.innerHTML=`<div class="quiz-result ${passed?"pass":"fail"}">
+      ${passed?"✓":"✕"} Obtuviste <b>${score}%</b> (${correct}/${exam.length}).
+      ${passed?" ¡Aprobado! El curso quedó marcado como completado.":" Necesitas 60% para aprobar — puedes intentarlo otra vez."}
+      <div style="margin-top:.6rem"><button class="btn btn-ghost btn-sm" style="width:auto" onclick="viewCourseDetail('${id}')">Volver al curso</button></div></div>`;
+  },
 
   // admin: activar/desactivar premium
   async togglePremium(uid,on){
@@ -2461,6 +2519,7 @@ const app = {
           <span>${esc(o.title)} <i>${esc(o.level||"")}</i></span></label>`).join("")
       : `<p class="card-sub" style="margin:0">Crea más cursos para poder conectarlos.</p>`;
     state.cache.courseMaterials = Array.isArray(c.materials)?[...c.materials]:[];
+    state.cache.courseExam = Array.isArray(c.exam)?JSON.parse(JSON.stringify(c.exam)):[];
     box.innerHTML=`<div class="card">
       ${course?`<div class="flex between"><b>Editar curso</b><button class="btn btn-ghost btn-sm" onclick="app.courseForm()">Cancelar</button></div><div class="divide"></div>`:""}
       <input type="hidden" id="cId" value="${esc(c.id||"")}">
@@ -2476,13 +2535,16 @@ const app = {
         <div id="matList" class="mat-list"></div>
         <label class="btn btn-ghost btn-sm" style="cursor:pointer;width:auto;margin-top:.5rem">+ Subir archivo
           <input type="file" accept=".pdf,image/*" hidden onchange="app.addMaterial(this)"></label></div>
+      <div class="field"><label>Examen <span style="color:var(--faint);font-weight:400">(opción múltiple, se auto-califica)</span></label>
+        <div id="examEditor" class="exam-editor"></div>
+        <button type="button" class="btn btn-ghost btn-sm" style="width:auto;margin-top:.5rem" onclick="app.addExamQuestion()">+ Agregar pregunta</button></div>
       <div class="field"><label>Después de este curso, sigue… <span style="color:var(--faint);font-weight:400">(dibuja las flechas del mapa)</span></label>
         <div class="conn-grid">${pick}</div></div>
       <div class="flex" style="gap:1.2rem;flex-wrap:wrap;align-items:center">
         <label class="flex" style="gap:.4rem;color:var(--muted);font-size:.85rem"><input type="checkbox" id="cP" ${(c.published??true)?"checked":""}> Publicar de inmediato</label>
         <label class="flex" style="gap:.4rem;color:var(--gold);font-size:.85rem"><input type="checkbox" id="cPrem" ${c.premium?"checked":""}> Curso premium</label>
         <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="app.saveCourse()">${course?"Guardar cambios":"Guardar curso"}</button></div></div>`;
-    app.renderMaterials();
+    app.renderMaterials(); app.renderExam();
     if(course) box.scrollIntoView({behavior:"smooth",block:"start"});
   },
   async editCourse(id){
@@ -2509,13 +2571,49 @@ const app = {
     }catch(e){ ui.toast(/bucket|not found/i.test(e.message)?"Falta el bucket 'media' (migration_v4.sql)":e.message,"err"); }
   },
   removeMaterial(i){ state.cache.courseMaterials.splice(i,1); app.renderMaterials(); },
+  renderExam(){
+    const box=$("#examEditor"); if(!box) return;
+    const qs=state.cache.courseExam||[];
+    box.innerHTML = qs.length ? qs.map((q,qi)=>`<div class="exam-q" data-qi="${qi}">
+      <div class="exam-q-head"><span class="exam-q-num">Pregunta ${qi+1}</span>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="app.removeExamQuestion(${qi})">Quitar</button></div>
+      <input class="input exam-qtext" placeholder="Escribe la pregunta" value="${esc(q.q||"")}">
+      <div class="exam-opts">${[0,1,2,3].map(oi=>`<label class="exam-opt-row">
+        <input type="radio" name="correct-${qi}" ${q.correct===oi?"checked":""}>
+        <input class="input exam-opt" placeholder="Opción ${oi+1}" value="${esc((q.options&&q.options[oi])||"")}"></label>`).join("")}</div>
+      <p class="exam-hint">Marca el círculo de la respuesta correcta.</p></div>`).join("")
+      : `<p class="card-sub" style="margin:.2rem 0">Sin preguntas. Este curso no tendrá examen.</p>`;
+  },
+  syncExam(){
+    const qs=[];
+    document.querySelectorAll("#examEditor .exam-q").forEach(qd=>{
+      const q=qd.querySelector(".exam-qtext").value.trim();
+      const opts=[...qd.querySelectorAll(".exam-opt")].map(i=>i.value.trim());
+      const radios=[...qd.querySelectorAll('input[type=radio]')];
+      let correct=radios.findIndex(r=>r.checked); if(correct<0) correct=0;
+      qs.push({q, options:opts, correct});
+    });
+    state.cache.courseExam=qs;
+  },
+  addExamQuestion(){ app.syncExam(); (state.cache.courseExam=state.cache.courseExam||[]).push({q:"",options:["","","",""],correct:0}); app.renderExam(); },
+  removeExamQuestion(i){ app.syncExam(); state.cache.courseExam.splice(i,1); app.renderExam(); },
   async saveCourse(){
     const t=$("#cT").value.trim(); if(!t) return ui.toast("Ponle un título","err");
+    app.syncExam();
+    // limpiar examen: quitar opciones vacías, descartar preguntas incompletas
+    const exam=(state.cache.courseExam||[]).map(q=>{
+      const opts=(q.options||[]).map(o=>(o||"").trim());
+      const correctText=opts[q.correct]||"";
+      const clean=opts.filter(o=>o);
+      const correct=Math.max(0,clean.indexOf(correctText));
+      return { q:(q.q||"").trim(), options:clean, correct };
+    }).filter(q=>q.q && q.options.length>=2);
     const nexts=[...document.querySelectorAll(".conn-grid input:checked")].map(i=>i.value);
     const row={ title:t, level:$("#cL").value, url:$("#cU").value.trim()||null,
       video_url:$("#cV").value.trim()||null, description:$("#cD").value.trim(),
       image_url:$("#url_course").value.trim()||null, published:$("#cP").checked,
-      premium:$("#cPrem").checked, materials:state.cache.courseMaterials||[], next_courses:nexts };
+      premium:$("#cPrem").checked, materials:state.cache.courseMaterials||[],
+      exam, next_courses:nexts };
     const id=$("#cId").value; let error;
     if(id){ ({error}=await sb.from("courses").update(row).eq("id",id)); }
     else { ({error}=await sb.from("courses").insert(row)); }

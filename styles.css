@@ -793,3 +793,37 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .mat-item{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border:1px solid var(--line);border-radius:8px;background:var(--navy-950)}
 .mat-item .mat-name{font-size:.85rem}
 .mat-item .btn{margin-left:auto}
+
+/* ============================================================
+   v3.5 · LMS Fase 2: progreso (mapa) + examen
+   ============================================================ */
+/* badge de completado en el mapa */
+.cmap-done circle{fill:#3DD6A0;stroke:var(--navy-950);stroke-width:1.6}
+.cmap-done text{fill:#04140D;font-size:9.5px;font-weight:800;text-anchor:middle;font-family:'Sora',sans-serif}
+.cmap-node.done .cmap-label{fill:#8FE8C8}
+.pill-done{background:rgba(61,214,160,.15);color:#3DD6A0}
+
+/* editor de examen (admin) */
+.exam-editor{display:flex;flex-direction:column;gap:.8rem}
+.exam-q{border:1px solid var(--line);border-radius:10px;padding:.8rem;background:var(--navy-950)}
+.exam-q-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}
+.exam-q-num{font-family:'JetBrains Mono';font-size:.72rem;letter-spacing:.1em;color:var(--blue-300);text-transform:uppercase}
+.exam-qtext{margin-bottom:.5rem}
+.exam-opts{display:flex;flex-direction:column;gap:.4rem}
+.exam-opt-row{display:flex;align-items:center;gap:.55rem}
+.exam-opt-row input[type=radio]{accent-color:#3DD6A0;width:16px;height:16px;flex:0 0 auto}
+.exam-opt{flex:1}
+.exam-hint{font-size:.74rem;color:var(--faint);margin-top:.45rem}
+
+/* examen (cliente) */
+.quiz-q{padding:.9rem 0;border-bottom:1px solid var(--line)}
+.quiz-qtext{color:var(--text);font-weight:600;margin-bottom:.6rem}
+.quiz-opts{display:flex;flex-direction:column;gap:.45rem}
+.quiz-opt{display:flex;align-items:center;gap:.6rem;padding:.55rem .8rem;border:1px solid var(--line);
+  border-radius:9px;cursor:pointer;transition:.18s var(--tin);color:var(--muted)}
+.quiz-opt:hover{border-color:var(--blue-400);background:rgba(46,125,246,.05)}
+.quiz-opt input{accent-color:var(--blue-500);width:16px;height:16px}
+.quiz-opt:has(input:checked){border-color:var(--blue-400);background:rgba(46,125,246,.08);color:var(--text)}
+.quiz-result{margin-top:.9rem;padding:.9rem 1rem;border-radius:10px;font-size:.9rem}
+.quiz-result.pass{background:rgba(61,214,160,.1);border:1px solid rgba(61,214,160,.3);color:#8FE8C8}
+.quiz-result.fail{background:rgba(245,196,81,.08);border:1px solid rgba(245,196,81,.28);color:var(--gold)}
