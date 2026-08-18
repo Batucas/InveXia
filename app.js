@@ -151,7 +151,7 @@ const auth = {
     }catch(e){ box.textContent=translateErr(e.message); box.classList.add("err"); }
     finally{ btn.disabled=false; btn.textContent=prev; }
   },
-  async logout(){ await sb.auth.signOut(); location.hash=""; },
+  async logout(){ await sb.auth.signOut(); location.href="/"; },
 };
 window.auth = auth;
 
