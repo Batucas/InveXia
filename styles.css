@@ -919,7 +919,7 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .ct-btn:hover{color:var(--text);border-color:var(--line-strong)}
 .ct-btn.on{background:rgba(46,125,246,.12);border-color:rgba(46,125,246,.35);color:var(--text)}
 
-.courses-canvas{position:relative;width:100%;height:74vh;min-height:520px;border:1px solid var(--line);
+.courses-canvas{position:relative;width:100%;height:84vh;min-height:640px;border:1px solid var(--line);
   border-radius:16px;overflow:hidden;background:var(--navy-950)}
 .courses-canvas.neural{height:auto;min-height:0;border:0;background:transparent}
 
@@ -931,7 +931,7 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .mnode .mbox{fill:var(--navy-850);stroke:var(--line);stroke-width:1.5}
 .mnode:hover .mbox{stroke:var(--gold)}
 .mnode .mt{fill:var(--text);font-family:'Inter';font-weight:500;font-size:12.5px}
-.mnode .mlvl{fill:var(--faint);font-family:'JetBrains Mono';font-size:8.5px;letter-spacing:.1em;text-transform:uppercase}
+.mnode .mlvl{font-family:'JetBrains Mono';font-size:8.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.95}
 .mnode.apex .mbox{fill:rgba(245,196,81,.12);stroke:var(--gold);stroke-width:2}
 .mnode.apex .mt{font-family:'Sora';font-weight:700;font-size:16px;fill:var(--gold)}
 .mnode.dim{opacity:.16}.mnode.hl .mbox{stroke:var(--gold);stroke-width:2.4}
@@ -955,7 +955,12 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .malla-controls button:hover{border-color:var(--gold);color:var(--gold)}
 .malla-legend{position:absolute;left:16px;bottom:14px;background:rgba(13,26,46,.85);backdrop-filter:blur(6px);
   border:1px solid var(--line);border-radius:12px;padding:11px 13px;max-width:220px}
-.malla-legend .mlh{font-family:'JetBrains Mono';font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
+.malla-legend .mlh{display:flex;align-items:center;justify-content:space-between;gap:12px;font-family:'JetBrains Mono';font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
+.mleg-btn{background:none;border:1px solid var(--line);color:var(--muted);width:20px;height:20px;border-radius:6px;cursor:pointer;font-size:.9rem;line-height:1;display:grid;place-items:center;flex:none}
+.mleg-btn:hover{border-color:var(--gold);color:var(--gold)}
+.malla-legend.min{padding:8px 11px}
+.malla-legend.min .mlh{margin-bottom:0}
+.malla-legend.min .mlrows{display:none}
 .mlrow{display:flex;align-items:center;gap:8px;font-size:.72rem;color:var(--muted);margin:4px 0}
 .msw{width:11px;height:11px;border-radius:3px;flex:none}
 .malla-hint{position:absolute;right:16px;bottom:14px;font-family:'JetBrains Mono';font-size:.62rem;color:var(--faint);
@@ -992,5 +997,5 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
   .malla-title{max-width:78%}.malla-title h1{font-size:.95rem}
   .malla-legend{max-width:150px;padding:8px 10px}.mlrow{font-size:.66rem}
   .malla-hint{display:none}
-  .courses-canvas{height:68vh}
+  .courses-canvas{height:74vh}
 }

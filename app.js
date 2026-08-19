@@ -1344,7 +1344,7 @@ function buildMalla(host, cs, done){
   host.innerHTML=`
     <div class="malla-title"><h1>Malla del inversor</h1><p>De <b>Básico</b> a <span class="mgoal">Quant Financiero</span> · cada curso abre el siguiente.</p></div>
     <div class="malla-controls"><button data-z="in" title="Acercar">+</button><button data-z="out" title="Alejar">−</button><button data-z="fit" title="Reencuadrar">⤢</button></div>
-    <div class="malla-legend"><div class="mlh">Áreas</div><div class="mlrows"></div></div>
+    <div class="malla-legend"><div class="mlh"><span>Áreas</span><button class="mleg-btn" title="Minimizar">–</button></div><div class="mlrows"></div></div>
     <div class="malla-hint">Arrastra para mover · rueda o pellizca para zoom · toca un curso</div>
     <svg class="malla-svg"><defs>
       <marker id="mArrow" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="rgba(203,162,74,.7)"/></marker>
@@ -1402,8 +1402,8 @@ function buildMalla(host, cs, done){
   nodes.forEach(n=>{
     const g=E("g",{class:"mnode"+(n.apex?" apex":""),transform:`translate(${n.x},${n.y})`});
     g.appendChild(E("rect",{class:"mbox",x:0,y:0,width:n.w,height:n.h,rx:12}));
-    g.appendChild(E("rect",{class:"maccent",x:0,y:8,width:4,height:n.h-16,rx:2,fill:MCATS[n.cat]?MCATS[n.cat].c:"#59b6a6"}));
-    if(!n.apex){ const lv=E("text",{class:"mlvl",x:16,y:18}); lv.textContent=MCATS[n.cat].n; g.appendChild(lv); }
+    g.appendChild(E("rect",{class:"maccent",x:0,y:8,width:5,height:n.h-16,rx:2,fill:MCATS[n.cat]?MCATS[n.cat].c:"#59b6a6"}));
+    if(!n.apex){ const lv=E("text",{class:"mlvl",x:18,y:18,fill:MCATS[n.cat]?MCATS[n.cat].c:"#94A8C7"}); lv.textContent=MCATS[n.cat].n; g.appendChild(lv); }
     const startY=n.apex? n.h/2-(n.lines.length-1)*11 : 34;
     n.lines.forEach((ln,i)=>{ const t=E("text",{class:"mt",x:n.apex?n.w/2:16,y:startY+i*(n.apex?20:15),"text-anchor":n.apex?"middle":"start"}); t.textContent=ln; g.appendChild(t); });
     if(n.done){ g.appendChild(E("circle",{class:"mdone-bg",cx:n.w-14,cy:14,r:8}));
@@ -1416,7 +1416,7 @@ function buildMalla(host, cs, done){
   // interacción pan/zoom
   let tx=0,ty=0,scale=1;
   const apply=()=>vp.setAttribute("transform",`translate(${tx},${ty}) scale(${scale})`);
-  function fit(){ const r=svg.getBoundingClientRect(); const s=Math.min(r.width/CW,r.height/CH)*0.94;
+  function fit(){ const r=svg.getBoundingClientRect(); const s=Math.min(r.width/CW,r.height/CH)*0.97;
     scale=s; tx=(r.width-CW*s)/2; ty=(r.height-CH*s)/2; apply(); }
   let drag=false,px,py,moved=false;
   svg.addEventListener("pointerdown",e=>{drag=true;moved=false;px=e.clientX;py=e.clientY;svg.classList.add("grabbing");});
@@ -1462,6 +1462,8 @@ function buildMalla(host, cs, done){
   }
   host.querySelector(".malla-close").onclick=deselect;
   host.querySelector(".mlrows").innerHTML=Object.values(MCATS).map(c=>`<div class="mlrow"><span class="msw" style="background:${c.c}"></span>${c.n}</div>`).join("");
+  const _lg=host.querySelector(".malla-legend"),_lb=host.querySelector(".mleg-btn");
+  if(_lb) _lb.onclick=()=>{ _lg.classList.toggle("min"); _lb.textContent=_lg.classList.contains("min")?"+":"–"; };
   requestAnimationFrame(fit);
 }
 
