@@ -1325,6 +1325,146 @@ function courseCard(c){
 /* Mapa de cursos tipo red neuronal: capas por nivel, cursos como neuronas */
 const CMAP_LAYERS=["Básico","Intermedio","Avanzado"];
 const CMAP_COL={"Básico":"#4FA3FF","Intermedio":"#F5C451","Avanzado":"#3DD6A0"};
+/* ===================== Mapa tipo malla (estilo Camino Quant) ===================== */
+const MCATS = {
+  fund:{n:"Fundamentos & mercados",c:"#59b6a6"}, econ:{n:"Economía",c:"#7f9cc9"},
+  rv:{n:"Renta variable & análisis",c:"#cba24a"}, rf:{n:"Renta fija",c:"#c8955a"},
+  mp:{n:"Materias primas",c:"#c98a4a"}, alt:{n:"Alternativos & macro",c:"#9d7bc0"},
+  risk:{n:"Gestión del riesgo",c:"#c96a6a"}, deriv:{n:"Derivados & opciones",c:"#e0894f"},
+  hedge:{n:"Coberturas & ingeniería de precio",c:"#d76a9c"}, quant:{n:"Núcleo cuantitativo",c:"#6a86d8"}
+};
+const MLEVELS = ["Básico","Intermedio","Avanzado","Quant Financiero"];
+function levelIdx(lv){ return ({ "Básico":0,"Intermedio":1,"Avanzado":2 })[lv] ?? 0; }
+function mwrap(t,max){ const w=(t||"").split(" "),out=[]; let cur="";
+  for(const word of w){ if((cur+" "+word).trim().length>max){out.push(cur.trim());cur=word;} else cur+=" "+word; }
+  if(cur.trim())out.push(cur.trim()); return out.slice(0,3); }
+
+function buildMalla(host, cs, done){
+  const NS="http://www.w3.org/2000/svg";
+  host.innerHTML=`
+    <div class="malla-title"><h1>Malla del inversor</h1><p>De <b>Básico</b> a <span class="mgoal">Quant Financiero</span> · cada curso abre el siguiente.</p></div>
+    <div class="malla-controls"><button data-z="in" title="Acercar">+</button><button data-z="out" title="Alejar">−</button><button data-z="fit" title="Reencuadrar">⤢</button></div>
+    <div class="malla-legend"><div class="mlh">Áreas</div><div class="mlrows"></div></div>
+    <div class="malla-hint">Arrastra para mover · rueda o pellizca para zoom · toca un curso</div>
+    <svg class="malla-svg"><defs>
+      <marker id="mArrow" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="rgba(203,162,74,.7)"/></marker>
+      <filter id="mGlow" x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs><g class="malla-vp"></g></svg>
+    <aside class="malla-panel"><button class="malla-close">×</button><div class="malla-pinner"></div></aside>`;
+  const svg=host.querySelector(".malla-svg"), vp=host.querySelector(".malla-vp");
+  const panel=host.querySelector(".malla-panel"), pinner=host.querySelector(".malla-pinner");
+  const E=(tag,attrs)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;};
+
+  // datos
+  const nodes=cs.map(c=>({ id:c.id, lvl:levelIdx(c.level), cat:MCATS[c.category]?c.category:"fund",
+    t:c.title||"Curso", d:c.description||"", modules:Array.isArray(c.modules)?c.modules:[],
+    premium:!!c.premium, done:done.has(c.id), next:(Array.isArray(c.next_courses)?c.next_courses:[]) }));
+  const idset=new Set(nodes.map(n=>n.id));
+  const apex={id:"__apex__",lvl:3,t:"Quant Financiero",apex:true,cat:"quant"}; nodes.push(apex);
+  const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const edges=[];
+  cs.forEach(c=>{ const nx=(c.next_courses||[]).filter(t=>idset.has(t));
+    if(nx.length) nx.forEach(t=>edges.push([c.id,t])); else edges.push([c.id,"__apex__"]); });
+  const out={}; nodes.forEach(n=>out[n.id]=[]); edges.forEach(([a,b])=>out[a].push(b));
+
+  // layout
+  const COLX=[40,430,840,1300], NW=210, APEXW=250, GAP=26;
+  nodes.forEach(n=>{ n.lines=mwrap(n.t,n.apex?18:24); n.w=n.apex?APEXW:NW; n.h=(n.apex?46:26)+n.lines.length*(n.apex?20:15); });
+  let CH=0;
+  for(let L=0;L<4;L++){ const col=nodes.filter(n=>n.lvl===L); const tot=col.reduce((a,n)=>a+n.h,0)+GAP*Math.max(0,col.length-1); CH=Math.max(CH,tot); }
+  CH+=150;
+  for(let L=0;L<4;L++){ const col=nodes.filter(n=>n.lvl===L); const tot=col.reduce((a,n)=>a+n.h,0)+GAP*Math.max(0,col.length-1); let y=(CH-tot)/2; col.forEach(n=>{ n.x=COLX[L]+(L===3?-(APEXW-NW)/2:0); n.y=y; y+=n.h+GAP; }); }
+  const CW=COLX[3]+APEXW+60;
+
+  // bandas de nivel
+  MLEVELS.forEach((name,L)=>{
+    const cx=COLX[L]+(L===3?APEXW:NW)/2+(L===3?-(APEXW-NW)/2:0);
+    const k=E("text",{x:cx,y:40,"text-anchor":"middle",class:"mband-key"}); k.textContent=(L===3?"OBJETIVO":"NIVEL "+(L+1)); vp.appendChild(k);
+    const b=E("text",{x:cx,y:70,"text-anchor":"middle",class:"mband"}); b.textContent=name; vp.appendChild(b);
+  });
+
+  // aristas + señales
+  const edgeEls={};
+  edges.forEach(([a,b],i)=>{
+    const s=byId[a],t=byId[b]; if(!s||!t) return;
+    const x1=s.x+s.w,y1=s.y+s.h/2,x2=t.x,y2=t.y+t.h/2; const dx=Math.max(40,(x2-x1)*0.5);
+    const d=`M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
+    const pid="me"+i;
+    const p=E("path",{id:pid,class:"medge",d,"marker-end":"url(#mArrow)"}); vp.appendChild(p); edgeEls[a+">"+b]=p;
+    const sig=E("circle",{r:2.6,fill:MCATS[s.cat]?MCATS[s.cat].c:"#cba24a",filter:"url(#mGlow)",class:"msignal"});
+    const am=E("animateMotion",{dur:(2.6+Math.random()*1.8).toFixed(2)+"s",begin:(Math.random()*2.6).toFixed(2)+"s",repeatCount:"indefinite"});
+    const mp=E("mpath",{}); mp.setAttribute("href","#"+pid); mp.setAttributeNS("http://www.w3.org/1999/xlink","href","#"+pid);
+    am.appendChild(mp); sig.appendChild(am); vp.appendChild(sig);
+  });
+
+  // nodos
+  const nodeEls={};
+  nodes.forEach(n=>{
+    const g=E("g",{class:"mnode"+(n.apex?" apex":""),transform:`translate(${n.x},${n.y})`});
+    g.appendChild(E("rect",{class:"mbox",x:0,y:0,width:n.w,height:n.h,rx:12}));
+    g.appendChild(E("rect",{class:"maccent",x:0,y:8,width:4,height:n.h-16,rx:2,fill:MCATS[n.cat]?MCATS[n.cat].c:"#59b6a6"}));
+    if(!n.apex){ const lv=E("text",{class:"mlvl",x:16,y:18}); lv.textContent=MCATS[n.cat].n; g.appendChild(lv); }
+    const startY=n.apex? n.h/2-(n.lines.length-1)*11 : 34;
+    n.lines.forEach((ln,i)=>{ const t=E("text",{class:"mt",x:n.apex?n.w/2:16,y:startY+i*(n.apex?20:15),"text-anchor":n.apex?"middle":"start"}); t.textContent=ln; g.appendChild(t); });
+    if(n.done){ g.appendChild(E("circle",{class:"mdone-bg",cx:n.w-14,cy:14,r:8}));
+      const ck=E("text",{class:"mdone-ck",x:n.w-14,y:17.5,"text-anchor":"middle"}); ck.textContent="✓"; g.appendChild(ck); }
+    else if(n.premium){ const lk=E("text",{class:"mprem",x:n.w-14,y:18,"text-anchor":"middle"}); lk.textContent="🔒"; g.appendChild(lk); }
+    g.addEventListener("click",e=>{ e.stopPropagation(); if(moved)return; select(n.id); });
+    vp.appendChild(g); nodeEls[n.id]=g;
+  });
+
+  // interacción pan/zoom
+  let tx=0,ty=0,scale=1;
+  const apply=()=>vp.setAttribute("transform",`translate(${tx},${ty}) scale(${scale})`);
+  function fit(){ const r=svg.getBoundingClientRect(); const s=Math.min(r.width/CW,r.height/CH)*0.94;
+    scale=s; tx=(r.width-CW*s)/2; ty=(r.height-CH*s)/2; apply(); }
+  let drag=false,px,py,moved=false;
+  svg.addEventListener("pointerdown",e=>{drag=true;moved=false;px=e.clientX;py=e.clientY;svg.classList.add("grabbing");});
+  svg.addEventListener("pointermove",e=>{if(!drag)return;const dx=e.clientX-px,dy=e.clientY-py;if(Math.abs(dx)+Math.abs(dy)>3)moved=true;tx+=dx;ty+=dy;px=e.clientX;py=e.clientY;apply();});
+  addEventListener("pointerup",()=>{drag=false;svg.classList.remove("grabbing");});
+  svg.addEventListener("click",()=>{ if(!moved) deselect(); });
+  svg.addEventListener("wheel",e=>{ e.preventDefault(); const r=svg.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+    const f=e.deltaY<0?1.12:0.89, ns=Math.max(0.2,Math.min(3,scale*f)); tx=mx-(mx-tx)*(ns/scale); ty=my-(my-ty)*(ns/scale); scale=ns; apply(); },{passive:false});
+  // pinch móvil
+  let pts=new Map(), pd0=0, ps0=1;
+  svg.addEventListener("pointerdown",e=>pts.set(e.pointerId,e));
+  svg.addEventListener("pointermove",e=>{ if(!pts.has(e.pointerId))return; pts.set(e.pointerId,e);
+    if(pts.size===2){ drag=false; const [a,b]=[...pts.values()]; const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+      if(!pd0){pd0=d;ps0=scale;} else { scale=Math.max(0.2,Math.min(3,ps0*d/pd0)); apply(); } } });
+  const clr=e=>{ pts.delete(e.pointerId); if(pts.size<2) pd0=0; }; addEventListener("pointerup",clr); addEventListener("pointercancel",clr);
+  host.querySelector('[data-z="in"]').onclick=()=>{ const r=svg.getBoundingClientRect(),mx=r.width/2,my=r.height/2,ns=Math.min(3,scale*1.2); tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;apply(); };
+  host.querySelector('[data-z="out"]').onclick=()=>{ const r=svg.getBoundingClientRect(),mx=r.width/2,my=r.height/2,ns=Math.max(0.2,scale/1.2); tx=mx-(mx-tx)*(ns/scale);ty=my-(my-ty)*(ns/scale);scale=ns;apply(); };
+  host.querySelector('[data-z="fit"]').onclick=fit;
+
+  // panel
+  function deselect(){ panel.classList.remove("open"); Object.values(nodeEls).forEach(g=>g.classList.remove("dim","hl")); Object.values(edgeEls).forEach(p=>p.classList.remove("dim","up")); }
+  function select(id){
+    const n=byId[id]; if(!n) return; const targets=out[id]||[]; const keep=new Set([id,...targets]);
+    Object.entries(nodeEls).forEach(([k,g])=>{ g.classList.toggle("dim",!keep.has(k)); g.classList.toggle("hl",k===id); });
+    Object.entries(edgeEls).forEach(([k,p])=>{ const on=targets.some(t=>k===id+">"+t); p.classList.toggle("up",on); p.classList.toggle("dim",!on); });
+    if(n.apex){ pinner.innerHTML=`<div class="mkicker" style="color:var(--gold)">Meta final</div><h2>Quant Financiero</h2>
+      <div class="mdesc">Has recorrido toda la malla, del primer concepto de inversión hasta el núcleo cuantitativo. Aquí termina el camino del inversor. 🎓</div>`;
+      panel.classList.add("open"); return; }
+    const locked = n.premium && !(state.profile.role==="admin"||state.profile.premium_courses);
+    const nx=targets.filter(t=>t!=="__apex__");
+    pinner.innerHTML=`
+      <div class="mkicker" style="color:${MCATS[n.cat].c}">${MLEVELS[n.lvl]} · ${MCATS[n.cat].n}</div>
+      <h2>${esc(n.t)}</h2>
+      <div class="mchips">${n.done?'<span class="mchip done">✓ Completado</span>':""}${n.premium?'<span class="mchip prem">PREMIUM</span>':""}</div>
+      <div class="mdesc">${esc(n.d||"Sin descripción.")}</div>
+      ${n.modules.length?`<div class="msec">Módulos del curso</div><ul>${n.modules.map((mo,i)=>`<li class="mtopic">${esc(mo.title||("Módulo "+(i+1)))}</li>`).join("")}</ul>`:""}
+      ${locked?`<div class="malla-lock">🔒 Curso premium. Pídele acceso a tu asesor para desbloquearlo.</div>`
+        :`<button class="malla-enter" onclick="app.openCourse('${n.id}')">Entrar al curso →</button>`}
+      ${nx.length?`<div class="msec">Continúa con</div>${nx.map(t=>`<button class="munlock" data-go="${t}">→ <b>${esc(byId[t].t)}</b></button>`).join("")}`
+        :`<div class="msec">Siguiente</div><button class="munlock" data-go="__apex__">→ <b>Quant Financiero</b> · meta final</button>`}`;
+    pinner.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>select(b.getAttribute("data-go")));
+    panel.classList.add("open");
+  }
+  host.querySelector(".malla-close").onclick=deselect;
+  host.querySelector(".mlrows").innerHTML=Object.values(MCATS).map(c=>`<div class="mlrow"><span class="msw" style="background:${c.c}"></span>${c.n}</div>`).join("");
+  requestAnimationFrame(fit);
+}
+
 function coursesNeuralMap(cs, done){
   done = done || new Set();
   const buckets=CMAP_LAYERS.map(L=>cs.filter(c=>(c.level||"Básico")===L));
@@ -1584,17 +1724,27 @@ async function viewCoursesClient(){
   const cs=await sb.from("courses").select("*").eq("published",true).order("created_at",{ascending:false}).then(r=>r.data||[]);
   const prog=await sb.from("course_progress").select("course_id,completed").eq("user_id",state.profile.id).then(r=>r.data||[]);
   const done=new Set((prog||[]).filter(p=>p.completed).map(p=>p.course_id));
-  const m=$("#main"); m.innerHTML=head("Formación","Cursos","Tu ruta de aprendizaje, conectada como una red.");
+  const m=$("#main"); m.classList.add("wide");
+  m.innerHTML=head("Formación","Cursos","Tu ruta de aprendizaje, de Básico a Quant Financiero.");
   if(!cs.length){ m.append(el(`<div class="card empty">${icon("book")}<p style="margin-top:.4rem">Aún no hay cursos publicados.</p></div>`)); return; }
+  const view=state.coursesView||"malla";
+  m.append(el(`<div class="courses-toggle">
+    <button class="ct-btn ${view==="malla"?"on":""}" onclick="app.setCoursesView('malla')">Malla curricular</button>
+    <button class="ct-btn ${view==="neural"?"on":""}" onclick="app.setCoursesView('neural')">Red neuronal</button></div>`));
+  const host=el(`<div class="courses-canvas ${view}"></div>`); m.append(host);
+  state.cache.cmapCourses=cs;
+  if(view==="malla") buildMalla(host, cs, done);
+  else renderNeural(host, cs, done);
+}
+function renderNeural(host, cs, done){
   const {svg,flat}=coursesNeuralMap(cs, done);
-  m.append(el(`<div class="cmap-wrap">
+  host.innerHTML=`<div class="cmap-wrap">
     <div class="cmap-scroll card">${svg}</div>
     <div id="courseDetail" class="cmap-detail card">
       <div class="cmap-detail-empty">${icon("book")}<p>Toca una neurona del mapa para ver el curso.</p></div>
-    </div>
-  </div>`));
+    </div></div>`;
   state.cache.cmapCourses=flat;
-  document.querySelectorAll(".cmap-node").forEach(g=>{
+  host.querySelectorAll(".cmap-node").forEach(g=>{
     const pick=()=>app.pickCourse(+g.dataset.i);
     g.addEventListener("click",pick);
     g.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();} });
@@ -2221,6 +2371,7 @@ const app = {
     </div>`;
   },
   openCourse(id){ location.hash="#/cursos/"+id; },
+  setCoursesView(v){ state.coursesView=v; viewCoursesClient(); },
   editSubmission(courseId){ const b=$("#taskBody"); if(b) b.innerHTML=subFormHtml(state.cache.currentSub,courseId); },
   async gradeSubmission(subId,courseId){
     const g=$("#grade_"+subId)?.value.trim();
@@ -2732,6 +2883,8 @@ const app = {
       <div class="field"><label>Título</label><input id="cT" class="input" value="${esc(c.title||"")}"></div>
       <div class="flex" style="gap:.8rem"><div class="field" style="flex:1"><label>Nivel</label>
         <select id="cL" class="input">${["Básico","Intermedio","Avanzado"].map(l=>`<option ${c.level===l?"selected":""}>${l}</option>`).join("")}</select></div>
+        <div class="field" style="flex:1"><label>Categoría</label>
+          <select id="cCat" class="input">${Object.entries(MCATS).map(([k,v])=>`<option value="${k}" ${(c.category||"fund")===k?"selected":""}>${v.n}</option>`).join("")}</select></div>
         <div class="field" style="flex:2"><label>Enlace externo (opcional)</label><input id="cU" class="input" placeholder="https://…" value="${esc(c.url||"")}"></div></div>
       <div class="field"><label>Descripción general del curso</label><textarea id="cD" class="input">${esc(c.description||"")}</textarea></div>
       <div class="field"><label>Módulos <span style="color:var(--faint);font-weight:400">(cada uno con su video, descripción y materiales)</span></label>
@@ -2862,7 +3015,7 @@ const app = {
       video_url:(m.video_url||"").trim()||null, materials:Array.isArray(m.materials)?m.materials:[]
     })).filter(m=>m.title || m.video_url || m.description || m.materials.length);
     const nexts=[...document.querySelectorAll(".conn-grid input:checked")].map(i=>i.value);
-    const row={ title:t, level:$("#cL").value, url:$("#cU").value.trim()||null,
+    const row={ title:t, level:$("#cL").value, category:$("#cCat").value, url:$("#cU").value.trim()||null,
       description:$("#cD").value.trim(), image_url:$("#url_course").value.trim()||null,
       published:$("#cP").checked, premium:$("#cPrem").checked,
       modules, video_url:null, materials:[],   // el contenido vive ahora en los módulos

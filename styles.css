@@ -909,3 +909,88 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
   .course-layout{grid-template-columns:1fr}
   .course-curriculum{position:static;order:-1}
 }
+
+/* ============================================================
+   v3.9 · Mapa tipo malla (estilo Camino Quant) + selector
+   ============================================================ */
+.courses-toggle{display:flex;gap:.4rem;margin-bottom:.9rem}
+.ct-btn{padding:.5rem 1rem;border-radius:9px;border:1px solid var(--line);background:transparent;
+  color:var(--muted);font-family:'Inter';font-size:.85rem;font-weight:600;cursor:pointer;transition:.18s var(--tin)}
+.ct-btn:hover{color:var(--text);border-color:var(--line-strong)}
+.ct-btn.on{background:rgba(46,125,246,.12);border-color:rgba(46,125,246,.35);color:var(--text)}
+
+.courses-canvas{position:relative;width:100%;height:74vh;min-height:520px;border:1px solid var(--line);
+  border-radius:16px;overflow:hidden;background:var(--navy-950)}
+.courses-canvas.neural{height:auto;min-height:0;border:0;background:transparent}
+
+.malla-svg{width:100%;height:100%;display:block;cursor:grab;touch-action:none;
+  background:radial-gradient(1200px 700px at 15% -10%,#122038 0,transparent 55%),
+    radial-gradient(900px 520px at 100% 0,#171233 0,transparent 50%),var(--navy-950)}
+.malla-svg.grabbing{cursor:grabbing}
+.mnode{cursor:pointer}
+.mnode .mbox{fill:var(--navy-850);stroke:var(--line);stroke-width:1.5}
+.mnode:hover .mbox{stroke:var(--gold)}
+.mnode .mt{fill:var(--text);font-family:'Inter';font-weight:500;font-size:12.5px}
+.mnode .mlvl{fill:var(--faint);font-family:'JetBrains Mono';font-size:8.5px;letter-spacing:.1em;text-transform:uppercase}
+.mnode.apex .mbox{fill:rgba(245,196,81,.12);stroke:var(--gold);stroke-width:2}
+.mnode.apex .mt{font-family:'Sora';font-weight:700;font-size:16px;fill:var(--gold)}
+.mnode.dim{opacity:.16}.mnode.hl .mbox{stroke:var(--gold);stroke-width:2.4}
+.mdone-bg{fill:#3DD6A0;stroke:var(--navy-950);stroke-width:1.5}
+.mdone-ck{fill:#04140D;font-size:10px;font-weight:800;font-family:'Sora'}
+.mprem{font-size:11px}
+.medge{fill:none;stroke:#33405e;stroke-width:1.6}
+.medge.up{stroke:var(--gold);stroke-width:2.4;opacity:.95}
+.medge.dim{opacity:.06}
+.msignal{opacity:.85}
+.mband{fill:var(--faint);font-family:'Sora';font-size:20px;opacity:.5;font-weight:600}
+.mband-key{fill:var(--faint);font-family:'JetBrains Mono';font-size:9px;letter-spacing:.2em;opacity:.6}
+
+.malla-title{position:absolute;top:14px;left:16px;pointer-events:none;max-width:60%}
+.malla-title h1{font-family:'Sora';font-weight:700;font-size:1.1rem;margin:0;color:var(--text)}
+.malla-title p{margin:3px 0 0;color:var(--muted);font-size:.78rem}
+.malla-title .mgoal{color:var(--gold)}
+.malla-controls{position:absolute;top:14px;right:16px;display:flex;gap:6px}
+.malla-controls button{width:34px;height:34px;border-radius:9px;background:rgba(13,26,46,.85);
+  border:1px solid var(--line);color:var(--muted);font-size:1rem;cursor:pointer}
+.malla-controls button:hover{border-color:var(--gold);color:var(--gold)}
+.malla-legend{position:absolute;left:16px;bottom:14px;background:rgba(13,26,46,.85);backdrop-filter:blur(6px);
+  border:1px solid var(--line);border-radius:12px;padding:11px 13px;max-width:220px}
+.malla-legend .mlh{font-family:'JetBrains Mono';font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
+.mlrow{display:flex;align-items:center;gap:8px;font-size:.72rem;color:var(--muted);margin:4px 0}
+.msw{width:11px;height:11px;border-radius:3px;flex:none}
+.malla-hint{position:absolute;right:16px;bottom:14px;font-family:'JetBrains Mono';font-size:.62rem;color:var(--faint);
+  background:rgba(13,26,46,.7);border:1px solid var(--line);border-radius:8px;padding:6px 9px}
+
+.malla-panel{position:absolute;top:0;right:0;height:100%;width:min(360px,92%);background:var(--navy-900);
+  border-left:1px solid var(--line);transform:translateX(100%);transition:transform .28s var(--tin);
+  overflow-y:auto;z-index:5;box-shadow:-20px 0 50px rgba(0,0,0,.4)}
+.malla-panel.open{transform:translateX(0)}
+.malla-pinner{padding:22px 20px 36px}
+.malla-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--faint);font-size:1.5rem;cursor:pointer;z-index:2}
+.mkicker{font-family:'JetBrains Mono';font-size:.64rem;letter-spacing:.13em;text-transform:uppercase;margin-bottom:6px}
+.malla-pinner h2{font-family:'Sora';font-weight:700;font-size:1.35rem;margin:0 0 10px;line-height:1.2;color:var(--text)}
+.mchips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.mchip{font-family:'JetBrains Mono';font-size:.6rem;border-radius:99px;padding:3px 9px;border:1px solid var(--line)}
+.mchip.done{color:#3DD6A0;border-color:rgba(61,214,160,.4)}.mchip.prem{color:var(--gold);border-color:rgba(245,196,81,.4)}
+.mdesc{color:var(--muted);font-size:.9rem;line-height:1.6;margin-bottom:14px}
+.msec{font-family:'JetBrains Mono';font-size:.62rem;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+  margin:16px 0 8px;border-top:1px solid var(--line);padding-top:13px}
+.malla-pinner ul{list-style:none;margin:0;padding:0}
+.mtopic{display:flex;gap:9px;padding:5px 0;font-size:.85rem;color:var(--muted)}
+.mtopic::before{content:"›";color:var(--gold)}
+.malla-enter{display:block;width:100%;text-align:center;background:var(--blue-500);border:1px solid var(--blue-500);
+  border-radius:9px;padding:.6rem;margin-top:.6rem;color:#fff;font-weight:600;cursor:pointer;font-size:.88rem}
+.malla-enter:hover{filter:brightness(1.08)}
+.malla-lock{background:rgba(245,196,81,.08);border:1px solid rgba(245,196,81,.28);color:var(--gold);
+  border-radius:9px;padding:.7rem .9rem;font-size:.83rem;margin-top:.6rem}
+.munlock{display:block;width:100%;text-align:left;background:var(--navy-950);border:1px solid var(--line);
+  border-radius:9px;padding:9px 12px;margin-bottom:7px;color:var(--muted);cursor:pointer;font-size:.84rem}
+.munlock:hover{border-color:var(--gold);color:var(--text)}
+.munlock b{color:var(--gold);font-weight:600}
+
+@media(max-width:720px){
+  .malla-title{max-width:78%}.malla-title h1{font-size:.95rem}
+  .malla-legend{max-width:150px;padding:8px 10px}.mlrow{font-size:.66rem}
+  .malla-hint{display:none}
+  .courses-canvas{height:68vh}
+}
