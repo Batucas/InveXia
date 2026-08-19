@@ -867,3 +867,45 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .mod-card{border-left:3px solid var(--line)}
 .mod-card.mod-done{border-left-color:#3DD6A0}
 .mod-check{color:#3DD6A0;font-weight:800}
+
+/* ============================================================
+   v3.8 · Reproductor de curso estilo Udemy (2 columnas)
+   ============================================================ */
+.course-wrap{width:100%}
+.course-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem}
+.course-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:1.3rem;align-items:start}
+.course-main{min-width:0}
+.course-main .course-video{margin-bottom:0}
+.course-video--empty{display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:.85rem}
+
+/* panel de contenido */
+.pane-body{background:var(--navy-900);border:1px solid var(--line);border-radius:0 0 14px 14px;border-top:0;padding:1.4rem}
+.course-main .course-video{border-radius:14px 14px 0 0}
+.pane-title{font-size:1.3rem;color:var(--text);margin:0 0 .7rem;line-height:1.25}
+.pane-mats{margin-top:1.1rem}
+.pane-mats h4{font-size:.9rem;color:var(--text);margin:0 0 .5rem}
+.pane-nav{display:flex;justify-content:space-between;gap:.8rem;margin-top:1.4rem;padding-top:1.1rem;border-top:1px solid var(--line)}
+
+/* currículo lateral */
+.course-curriculum{position:sticky;top:1rem;padding:1.1rem;align-self:start}
+.curr-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;color:var(--text)}
+.curr-head .mono{color:var(--muted);font-size:.8rem}
+.curr-list{display:flex;flex-direction:column;gap:.3rem;margin-top:.8rem}
+.curr-item{display:flex;align-items:center;gap:.7rem;width:100%;text-align:left;padding:.6rem .7rem;
+  border:1px solid transparent;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer;
+  font-family:'Inter';font-size:.86rem;transition:.18s var(--tin)}
+.curr-item:hover{background:var(--navy-950);color:var(--text)}
+.curr-item.active{background:rgba(46,125,246,.1);border-color:rgba(46,125,246,.3);color:var(--text)}
+.curr-item.locked{opacity:.5;cursor:not-allowed}
+.curr-item.extra{border-top:1px dashed var(--line);border-radius:0;margin-top:.2rem;padding-top:.7rem}
+.curr-ic{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  background:var(--navy-950);border:1px solid var(--line);font-size:.75rem;font-family:'JetBrains Mono';color:var(--muted)}
+.curr-ic.done{background:#3DD6A0;border-color:#3DD6A0;color:#04140D;font-weight:800}
+.curr-title{flex:1;line-height:1.3}
+.curr-note{font-size:.76rem;color:var(--gold);margin:.7rem 0 0;line-height:1.4}
+.curr-complete{width:100%;margin-top:1rem}
+
+@media(max-width:900px){
+  .course-layout{grid-template-columns:1fr}
+  .course-curriculum{position:static;order:-1}
+}

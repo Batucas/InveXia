@@ -1479,55 +1479,106 @@ async function viewCourseDetail(id){
   const pr = await sb.from("course_progress").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data);
   const sub = c.assignment ? await sb.from("course_submissions").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data) : null;
   state.cache.currentSub=sub;
-  const exam=Array.isArray(c.exam)?c.exam:[];
-  // módulos (con respaldo para cursos antiguos de un solo video)
   let modules=Array.isArray(c.modules)?c.modules:[];
   if(!modules.length && (c.video_url || (Array.isArray(c.materials)&&c.materials.length)))
     modules=[{id:"legacy", title:"Lección", description:"", video_url:c.video_url||"", materials:Array.isArray(c.materials)?c.materials:[]}];
-  const modsDone=new Set(Array.isArray(pr?.modules_done)?pr.modules_done:[]);
-  state.cache.currentModuleIds=modules.map(m=>m.id);
-  state.cache.currentModulesDone=[...modsDone];
-  const doneCount=modules.filter(m=>modsDone.has(m.id)).length;
-  const pct=modules.length?Math.round(100*doneCount/modules.length):0;
-  const doneChip = pr?.completed ? `<span class="pill pill-done">✓ Completado</span>` : "";
-  m.innerHTML=head("Formación",esc(c.title||"Curso"),esc(c.level||""));
-  m.append(el(`<div class="course-page">
-    <div class="flex between" style="flex-wrap:wrap;gap:.6rem">
+  const keep = (state.cache.cd && state.cache.cd.c && state.cache.cd.c.id===id) ? state.cache.courseSel : null;
+  const cd={ c, modules, exam:Array.isArray(c.exam)?c.exam:[], sub,
+    prExamScore: pr?.exam_score!=null?pr.exam_score:null,
+    modsDone: Array.isArray(pr?.modules_done)?[...pr.modules_done]:[], completed: !!pr?.completed };
+  state.cache.cd=cd;
+  if(keep) state.cache.courseSel=keep;
+  else { const fu=modules.findIndex(mo=>!cd.modsDone.includes(mo.id)); state.cache.courseSel={type:"module",idx:fu<0?0:fu}; }
+  renderCourse();
+}
+
+function courseAllDone(cd){ return cd.modules.length>0 && cd.modules.every(mo=>cd.modsDone.includes(mo.id)); }
+
+function renderCourse(){
+  const cd=state.cache.cd; if(!cd) return;
+  const m=$("#main"); const sel=state.cache.courseSel;
+  const doneChip = cd.completed ? `<span class="pill pill-done">✓ Completado</span>` : "";
+  m.innerHTML=head("Formación",esc(cd.c.title||"Curso"),esc(cd.c.level||""));
+  m.append(el(`<div class="course-wrap">
+    <div class="course-top">
       <button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
-      <div class="flex" style="gap:.4rem;align-items:center">${doneChip}${c.premium?'<span class="pill pill-premium">PREMIUM</span>':""}<span class="pill pill-blue">${esc(c.level||"")}</span></div>
+      <div class="flex" style="gap:.4rem;align-items:center">${doneChip}${cd.c.premium?'<span class="pill pill-premium">PREMIUM</span>':""}<span class="pill pill-blue">${esc(cd.c.level||"")}</span></div>
     </div>
-    <div class="card"><h3>Sobre este curso</h3>
-      <p class="course-desc" style="margin-bottom:${c.url?".8rem":"0"}">${esc(c.description||"Sin descripción.")}</p>
-      ${c.url?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.url)}" target="_blank" rel="noopener">Abrir material externo →</a>`:""}</div>
-    ${modules.length?`<div class="card"><div class="flex between" style="align-items:center"><b>Progreso del curso</b>
-        <span class="mono" style="color:var(--muted);font-size:.82rem">${doneCount}/${modules.length} módulos</span></div>
-      <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div></div>
-      ${modules.map((mo,mi)=>{ const done=modsDone.has(mo.id); const yt=ytEmbed(mo.video_url);
-        const mats=Array.isArray(mo.materials)?mo.materials:[];
-        return `<div class="card mod-card${done?" mod-done":""}">
-          <div class="flex between" style="flex-wrap:wrap;gap:.5rem;align-items:center">
-            <h3 style="margin:0">${done?'<span class="mod-check">✓</span> ':""}Módulo ${mi+1}${mo.title?" · "+esc(mo.title):""}</h3>
-            <button class="btn ${done?"btn-ghost":"btn-primary"} btn-sm" style="width:auto" onclick="app.toggleModule('${c.id}','${mo.id}',${done?"false":"true"})">${done?"Completado":"Marcar completado"}</button>
-          </div>
-          ${yt?`<div class="course-video" style="margin-top:.8rem">${yt}</div>`:""}
-          ${mo.description?`<p class="course-desc" style="margin-top:.8rem">${esc(mo.description)}</p>`:""}
-          ${mats.length?`<div class="mat-dl" style="margin-top:.6rem">${mats.map(mt=>`<a class="mat-dl-item" href="${esc(mt.url)}" target="_blank" rel="noopener">
-            <span class="mat-ic">${mt.kind==="pdf"?"📄":"🖼️"}</span><span class="mat-name">${esc(mt.name||"archivo")}</span>
-            <span class="mat-dl-go">Descargar ↓</span></a>`).join("")}</div>`:""}
-        </div>`; }).join("")}`
-      : `<div class="card empty"><p>Este curso todavía no tiene módulos cargados.</p></div>`}
-    ${exam.length?`<div class="card" id="examCard"><h3>Examen del curso</h3>
-      <p class="card-sub">${exam.length} pregunta${exam.length>1?"s":""} · opción múltiple · apruebas con 60%.
-        ${pr?.exam_score!=null?` Tu última nota: <b style="color:${pr.exam_score>=60?"#3DD6A0":"var(--gold)"}">${Math.round(pr.exam_score)}%</b>.`:""}</p>
-      <div id="examBody"></div>
-      <button class="btn btn-primary btn-sm" id="examStartBtn" style="width:auto" onclick="app.startExam('${c.id}')">${pr?.exam_score!=null?"Repetir examen":"Comenzar examen"} →</button>
-    </div>`:""}
-    ${c.assignment?`<div class="card"><h3>Tarea final</h3>
-      <p class="course-desc">${esc(c.assignment)}</p>
-      <div id="taskBody">${taskBodyHtml(sub, c.id)}</div>
-    </div>`:""}
+    <div class="course-layout">
+      <div class="course-main" id="coursePane">${coursePane(cd,sel)}</div>
+      <aside class="course-curriculum card" id="courseCurriculum">${renderCurriculum(cd)}</aside>
+    </div>
   </div>`));
 }
+
+function coursePane(cd,sel){
+  if(sel.type==="exam") return coursePaneExam(cd);
+  if(sel.type==="task") return coursePaneTask(cd);
+  return coursePaneModule(cd, sel.idx||0);
+}
+
+function coursePaneModule(cd, idx){
+  const mo=cd.modules[idx]; if(!mo) return `<div class="card empty"><p>Este curso todavía no tiene módulos.</p></div>`;
+  const done=cd.modsDone.includes(mo.id); const yt=ytEmbed(mo.video_url);
+  const mats=Array.isArray(mo.materials)?mo.materials:[]; const last=idx===cd.modules.length-1;
+  const nextLabel = done ? (last?"Módulo completado":"Siguiente módulo →") : (last?"Completar módulo ✓":"Completar y continuar →");
+  return `${yt?`<div class="course-video">${yt}</div>`:`<div class="course-video course-video--empty"><span>Este módulo no tiene video</span></div>`}
+    <div class="pane-body">
+      <h2 class="pane-title">${done?'<span class="mod-check">✓</span> ':""}Módulo ${idx+1}${mo.title?" · "+esc(mo.title):""}</h2>
+      ${mo.description?`<p class="course-desc">${esc(mo.description)}</p>`:""}
+      ${mats.length?`<div class="pane-mats"><h4>Materiales del módulo</h4><div class="mat-dl">${mats.map(mt=>`<a class="mat-dl-item" href="${esc(mt.url)}" target="_blank" rel="noopener"><span class="mat-ic">${mt.kind==="pdf"?"📄":"🖼️"}</span><span class="mat-name">${esc(mt.name||"archivo")}</span><span class="mat-dl-go">Descargar ↓</span></a>`).join("")}</div></div>`:""}
+      <div class="pane-nav">
+        <button class="btn btn-ghost btn-sm" style="width:auto" ${idx===0?"disabled":""} onclick="app.courseGo(${idx-1})">← Anterior</button>
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="app.completeAndNext(${idx})">${nextLabel}</button>
+      </div>
+    </div>`;
+}
+
+function coursePaneExam(cd){
+  const exam=cd.exam;
+  return `<div class="pane-body">
+    <h2 class="pane-title">Examen final</h2>
+    <p class="card-sub">${exam.length} pregunta${exam.length>1?"s":""} · opción múltiple · apruebas con 60%.${cd.prExamScore!=null?` Tu última nota: <b style="color:${cd.prExamScore>=60?"#3DD6A0":"var(--gold)"}">${Math.round(cd.prExamScore)}%</b>.`:""}</p>
+    <div id="examBody"></div>
+    <button class="btn btn-primary btn-sm" id="examStartBtn" style="width:auto" onclick="app.startExam('${cd.c.id}')">${cd.prExamScore!=null?"Repetir examen":"Comenzar examen"} →</button>
+  </div>`;
+}
+
+function coursePaneTask(cd){
+  return `<div class="pane-body">
+    <h2 class="pane-title">Tarea final</h2>
+    <p class="course-desc">${esc(cd.c.assignment||"")}</p>
+    <div id="taskBody">${taskBodyHtml(cd.sub, cd.c.id)}</div>
+  </div>`;
+}
+
+function renderCurriculum(cd){
+  const n=cd.modules.length, doneN=cd.modules.filter(mo=>cd.modsDone.includes(mo.id)).length;
+  const allDone=courseAllDone(cd); const sel=state.cache.courseSel;
+  let items=cd.modules.map((mo,i)=>{
+    const done=cd.modsDone.includes(mo.id), active=sel.type==="module"&&(sel.idx||0)===i;
+    return `<button class="curr-item${active?" active":""}" onclick="app.courseGo(${i})">
+      <span class="curr-ic ${done?"done":""}">${done?"✓":(i+1)}</span>
+      <span class="curr-title">${esc(mo.title||("Módulo "+(i+1)))}</span></button>`;
+  }).join("");
+  if(cd.exam.length){
+    const active=sel.type==="exam";
+    items+=`<button class="curr-item extra${active?" active":""}${allDone?"":" locked"}" ${allDone?`onclick="app.courseSel('exam')"`:"disabled"}>
+      <span class="curr-ic">${allDone?"📝":"🔒"}</span><span class="curr-title">Examen final</span></button>`;
+  }
+  if(cd.c.assignment){
+    const active=sel.type==="task";
+    items+=`<button class="curr-item extra${active?" active":""}${allDone?"":" locked"}" ${allDone?`onclick="app.courseSel('task')"`:"disabled"}>
+      <span class="curr-ic">${allDone?"📤":"🔒"}</span><span class="curr-title">Tarea final</span></button>`;
+  }
+  return `<div class="curr-head"><b>Contenido del curso</b><span class="mono">${doneN}/${n}</span></div>
+    <div class="progress"><div class="progress-fill" style="width:${n?Math.round(100*doneN/n):0}%"></div></div>
+    <div class="curr-list">${items}</div>
+    ${(cd.exam.length||cd.c.assignment)&&!allDone?`<p class="curr-note">🔒 Completa todos los módulos para desbloquear el examen y la tarea.</p>`:""}
+    <button class="btn ${cd.completed?"btn-ghost":"btn-primary"} btn-sm curr-complete" onclick="app.markCourseComplete(${cd.completed?"false":"true"})">${cd.completed?"✓ Curso completado":"Marcar curso como completado"}</button>`;
+}
+
+function refreshCurriculum(){ const box=document.getElementById("courseCurriculum"); if(box&&state.cache.cd) box.innerHTML=renderCurriculum(state.cache.cd); }
 
 async function viewCoursesClient(){
   const cs=await sb.from("courses").select("*").eq("published",true).order("created_at",{ascending:false}).then(r=>r.data||[]);
@@ -2196,18 +2247,37 @@ const app = {
     if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v15.sql":error.message,"err");
     ui.toast("Tarea entregada","ok"); viewCourseDetail(courseId);
   },
-  async toggleModule(courseId, moduleId, on){
-    let done=state.cache.currentModulesDone||[];
-    done = on ? [...new Set([...done, moduleId])] : done.filter(x=>x!==moduleId);
-    state.cache.currentModulesDone=done;
-    const ids=state.cache.currentModuleIds||[];
-    const allDone = ids.length>0 && ids.every(id=>done.includes(id));
-    const patch={ modules_done:done };
-    if(allDone) patch.completed=true;
-    const {error}=await saveProgress(courseId,patch);
+  courseGo(idx){ state.cache.courseSel={type:"module",idx}; renderCourse(); window.scrollTo({top:0,behavior:"smooth"}); },
+  courseSel(type){ const cd=state.cache.cd; if(!cd) return;
+    if((type==="exam"||type==="task") && !courseAllDone(cd)) return ui.toast("Completa todos los módulos primero","err");
+    state.cache.courseSel={type}; renderCourse(); window.scrollTo({top:0,behavior:"smooth"}); },
+  async completeAndNext(idx){
+    const cd=state.cache.cd; if(!cd) return; const mo=cd.modules[idx]; if(!mo) return;
+    if(!cd.modsDone.includes(mo.id)){
+      cd.modsDone.push(mo.id);
+      const allDone=courseAllDone(cd);
+      const patch={modules_done:cd.modsDone}; if(allDone) patch.completed=true;
+      const {error}=await saveProgress(cd.c.id,patch);
+      if(error){ cd.modsDone=cd.modsDone.filter(x=>x!==mo.id);
+        return ui.toast(/relation|does not exist|column/i.test(error.message)?"Falta ejecutar migration_v17.sql":error.message,"err"); }
+      if(allDone){ cd.completed=true; ui.toast("¡Completaste todos los módulos! 🎉","ok"); }
+    }
+    const allDone=courseAllDone(cd);
+    if(idx<cd.modules.length-1) state.cache.courseSel={type:"module",idx:idx+1};
+    else if(allDone && cd.exam.length) state.cache.courseSel={type:"exam"};
+    else if(allDone && cd.c.assignment) state.cache.courseSel={type:"task"};
+    else state.cache.courseSel={type:"module",idx};
+    renderCourse(); window.scrollTo({top:0,behavior:"smooth"});
+  },
+  async markCourseComplete(on){
+    const cd=state.cache.cd; if(!cd) return;
+    const patch={completed:on};
+    if(on) patch.modules_done=cd.modules.map(mo=>mo.id);
+    const {error}=await saveProgress(cd.c.id,patch);
     if(error) return ui.toast(/relation|does not exist|column/i.test(error.message)?"Falta ejecutar migration_v17.sql":error.message,"err");
-    if(allDone) ui.toast("¡Completaste todos los módulos! Curso terminado 🎉","ok");
-    viewCourseDetail(courseId);
+    cd.completed=on; if(on) cd.modsDone=cd.modules.map(mo=>mo.id);
+    ui.toast(on?"Curso marcado como completado 🎉":"Marcado como pendiente","ok");
+    renderCourse();
   },
   startExam(id){
     const c=state.cache.currentCourse||(state.cache.cmapCourses||[]).find(x=>x.id===id);
@@ -2232,11 +2302,12 @@ const app = {
     const patch = passed ? {exam_score:score, completed:true} : {exam_score:score};
     const {error}=await saveProgress(id,patch);
     if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v14.sql":error.message,"err");
+    const cd=state.cache.cd; if(cd){ cd.prExamScore=score; if(passed) cd.completed=true; refreshCurriculum(); }
     const res=$("#quizResult");
     if(res) res.innerHTML=`<div class="quiz-result ${passed?"pass":"fail"}">
       ${passed?"✓":"✕"} Obtuviste <b>${score}%</b> (${correct}/${exam.length}).
-      ${passed?" ¡Aprobado! El curso quedó marcado como completado.":" Necesitas 60% para aprobar — puedes intentarlo otra vez."}
-      <div style="margin-top:.6rem"><button class="btn btn-ghost btn-sm" style="width:auto" onclick="viewCourseDetail('${id}')">Volver al curso</button></div></div>`;
+      ${passed?" ¡Aprobado! El curso quedó completado.":" Necesitas 60% para aprobar — puedes intentarlo otra vez."}
+      <div style="margin-top:.6rem"><button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.courseGo(0)">Volver a los módulos</button></div></div>`;
   },
 
   // admin: activar/desactivar premium
