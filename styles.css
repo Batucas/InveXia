@@ -1042,3 +1042,18 @@ input[type=range]:focus-visible{box-shadow:0 0 0 3px var(--glow)}
 .rc-note{color:var(--muted);font-size:.8rem;line-height:1.45;padding-left:.7rem;position:relative}
 .rc-note::before{content:"›";position:absolute;left:0;color:var(--sig)}
 .rc-sector{margin-top:.5rem;font-family:'JetBrains Mono';font-size:.66rem;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+
+/* ============================================================
+   v4.2 · Brief macro (Lepton-AI)
+   ============================================================ */
+.brief-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+.brief-kicker{font-family:'JetBrains Mono';font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--blue-300)}
+.brief-title{font-family:'Sora';font-weight:700;font-size:1.5rem;color:var(--text);margin:.3rem 0 .2rem;line-height:1.2}
+.brief-when{font-family:'JetBrains Mono';font-size:.75rem;color:var(--faint)}
+.brief-summary{background:linear-gradient(135deg,rgba(46,125,246,.1),rgba(61,214,160,.06));
+  border:1px solid rgba(46,125,246,.22);border-radius:12px;padding:1rem 1.2rem;color:var(--text);
+  font-size:1.02rem;line-height:1.6;margin-bottom:1.2rem}
+.brief-sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}
+.brief-sec h3{margin:0 0 .5rem;font-size:1rem;color:var(--text)}
+.brief-sec p{margin:0;color:var(--muted);line-height:1.65;font-size:.9rem}
+.brief-disc{margin-top:1.2rem;font-size:.76rem;color:var(--faint);font-style:italic;text-align:center}

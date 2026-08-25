@@ -236,6 +236,7 @@ const NAV_CLIENT=[
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
   ["radar","Radar",icon("radar")],
+  ["brief","Brief macro",icon("brief")],
   ["simulador","Simulador",icon("chart")],
   ["asistente","Asistente IA",icon("bot")],
   ["mercado","Mercado e ideas",icon("news")],
@@ -248,6 +249,7 @@ const NAV_ADMIN=[
   ["clientes","Clientes",icon("users")],
   ["quantnet","Red de mercado",icon("net")],
   ["publicaciones","Noticias e ideas",icon("news")],
+  ["brief","Brief macro",icon("brief")],
   ["cursos","Cursos",icon("book")],
   ["calendario","Calendario",icon("cal")],
   ["mensajes","Mensajes",icon("chat")],
@@ -325,6 +327,7 @@ async function render(){
       if(state.view==="clientes")      return void await viewAdminClients();
       if(state.view==="notificaciones") return void await viewNotifications();
       if(state.view==="publicaciones") return void await viewPostsAdmin();
+      if(state.view==="brief")         return void await viewBrief();
       if(state.view==="cursos"&&state.param) return void await viewCourseSubmissions(state.param);
       if(state.view==="cursos")        return void await viewCoursesAdmin();
       if(state.view==="calendario")    return void await viewCalendarAdmin();
@@ -341,6 +344,7 @@ async function render(){
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
       if(state.view==="quantnet")   return void await viewQuantNet();
       if(state.view==="radar")      return void await viewRadar();
+      if(state.view==="brief")      return void await viewBrief();
       if(state.view==="simulador")  return void await viewSimulator();
       if(state.view==="mercado")    return void await viewFeed();
       if(state.view==="cursos"&&state.param) return void await viewCourseDetail(state.param);
@@ -1817,6 +1821,44 @@ function renderRadarGrid(){
     </div>`; }).join("");
 }
 
+/* ===================== Brief macro (Lepton-AI) ===================== */
+async function viewBrief(){
+  const admin = state.profile.role==="admin";
+  const m=$("#main");
+  m.innerHTML=head("Análisis","Brief macro","Análisis del mercado generado por IA a partir del Radar.");
+  m.append(el(`<div id="briefShell"><div class="radar-loading">Cargando el brief…</div></div>`));
+  let b=null;
+  try{
+    const url=sb.storage.from("media").getPublicUrl("brief/brief_latest.json").data.publicUrl;
+    const r=await fetch(url,{cache:"no-store"}); if(r.ok) b=await r.json();
+  }catch(e){}
+  state.cache.brief=b;
+  renderBrief();
+}
+function renderBrief(){
+  const b=state.cache.brief, admin=state.profile.role==="admin", box=$("#briefShell"); if(!box) return;
+  const genBtn = admin ? `<button class="btn btn-primary btn-sm" id="briefGen" style="width:auto" onclick="app.generateBrief()">${b?"Regenerar brief":"Generar brief ahora"} ✦</button>` : "";
+  if(!b){
+    box.innerHTML=`<div class="card empty">${icon("brief")}
+      <h3 style="margin:.5rem 0 .2rem">Aún no hay brief publicado</h3>
+      <p style="color:var(--muted)">${admin?"Genera el primero con un clic — la IA analizará las señales del Radar.":"Tu asesor publicará pronto el análisis del mercado."}</p>
+      ${genBtn?`<div style="margin-top:.9rem">${genBtn}</div>`:""}</div>`;
+    return;
+  }
+  const when=b.generated_at?new Date(b.generated_at).toLocaleString("es"):"—";
+  box.innerHTML=`
+    <div class="brief-head">
+      <div><div class="brief-kicker">✦ Brief IA · ${esc(b.universe||"")}</div>
+        <h2 class="brief-title">${esc(b.titulo||"Brief del mercado")}</h2>
+        <div class="brief-when">${esc(when)} · ${b.signals_used||0} señales analizadas</div></div>
+      ${genBtn}
+    </div>
+    ${b.resumen?`<div class="brief-summary">${esc(b.resumen)}</div>`:""}
+    <div class="brief-sections">${(b.secciones||[]).map(s=>`<div class="brief-sec card">
+      <h3>${esc(s.titulo||"")}</h3><p>${esc(s.cuerpo||"").replace(/\n/g,"<br>")}</p></div>`).join("")}</div>
+    ${b.disclaimer?`<p class="brief-disc">${esc(b.disclaimer)}</p>`:""}`;
+}
+
 async function viewCoursesClient(){
   const cs=await sb.from("courses").select("*").eq("published",true).order("created_at",{ascending:false}).then(r=>r.data||[]);
   const prog=await sb.from("course_progress").select("course_id,completed").eq("user_id",state.profile.id).then(r=>r.data||[]);
@@ -2471,6 +2513,18 @@ const app = {
   setCoursesView(v){ state.coursesView=v; viewCoursesClient(); },
   radarFilter(k){ if(state.cache.radar){ state.cache.radar.filter=k; renderRadar(); } },
   radarSearch(v){ if(state.cache.radar){ state.cache.radar.q=v; renderRadarGrid(); } },
+  async generateBrief(){
+    const btn=$("#briefGen"); if(btn){ btn.disabled=true; btn.textContent="Generando… (~15s)"; }
+    try{
+      const { data:{ session } }=await sb.auth.getSession();
+      const r=await fetch("/api/generate-brief",{ method:"POST", headers:{ Authorization:"Bearer "+session.access_token } });
+      const ct=r.headers.get("content-type")||"";
+      if(!ct.includes("application/json")) throw new Error("La función /api/generate-brief no está desplegada.");
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.message||"No se pudo generar el brief.");
+      state.cache.brief=d.brief; renderBrief(); ui.toast("Brief generado","ok");
+    }catch(e){ ui.toast(e.message,"err"); if(btn){ btn.disabled=false; btn.textContent="Generar brief ahora ✦"; } }
+  },
   editSubmission(courseId){ const b=$("#taskBody"); if(b) b.innerHTML=subFormHtml(state.cache.currentSub,courseId); },
   async gradeSubmission(subId,courseId){
     const g=$("#grade_"+subId)?.value.trim();
@@ -3190,6 +3244,7 @@ function icon(n){
     tune:'<circle cx="7" cy="8" r="2.2"/><circle cx="16" cy="16" r="2.2"/><path d="M9 8h11M4 8h1M15 16h5M4 16h9"/>',
     net:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="17" r="2"/><path d="M8 7l8 0M7 8l0 8M8 17l7-1M8 7l8 9"/>',
     radar:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/><path d="M12 12l6-4"/>',
+    brief:'<path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h4"/>',
   }[n]||"";
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 }
