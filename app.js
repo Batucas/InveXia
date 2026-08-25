@@ -151,6 +151,11 @@ const auth = {
     }catch(e){ box.textContent=translateErr(e.message); box.classList.add("err"); }
     finally{ btn.disabled=false; btn.textContent=prev; }
   },
+  async google(){
+    const box=$("#authMsg"); if(box){ box.className="msg-line ok"; box.textContent="Redirigiendo a Google…"; }
+    const { error } = await sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: location.origin + "/app.html" } });
+    if(error && box){ box.className="msg-line err"; box.textContent=translateErr(error.message); }
+  },
   async logout(){
     // cubrir la pantalla al instante para que no asome el login (el "puente")
     const s=document.createElement("div");
@@ -230,6 +235,7 @@ const NAV_CLIENT=[
   ["operar","Operar",icon("trade")],
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
+  ["radar","Radar",icon("radar")],
   ["simulador","Simulador",icon("chart")],
   ["asistente","Asistente IA",icon("bot")],
   ["mercado","Mercado e ideas",icon("news")],
@@ -334,6 +340,7 @@ async function render(){
       if(state.view==="operar")     return void await viewTrade();
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
       if(state.view==="quantnet")   return void await viewQuantNet();
+      if(state.view==="radar")      return void await viewRadar();
       if(state.view==="simulador")  return void await viewSimulator();
       if(state.view==="mercado")    return void await viewFeed();
       if(state.view==="cursos"&&state.param) return void await viewCourseDetail(state.param);
@@ -1722,6 +1729,94 @@ function renderCurriculum(cd){
 
 function refreshCurriculum(){ const box=document.getElementById("courseCurriculum"); if(box&&state.cache.cd) box.innerHTML=renderCurriculum(state.cache.cd); }
 
+/* ===================== Radar · escáner de señales ===================== */
+const RSIG = {
+  MOMENTUM_ACELERANDO:{l:"Momentum acelerando",c:"#3DD6A0"},
+  RUPTURA_ALCISTA:{l:"Ruptura alcista",c:"#3DD6A0"},
+  TENDENCIA_FUERTE:{l:"Tendencia fuerte",c:"#4FA3FF"},
+  VOLATILIDAD_EXTREMA:{l:"Volatilidad extrema",c:"#E0894F"},
+  VOLATILIDAD_COMPRIMIDA:{l:"Volatilidad comprimida",c:"#F5C451"},
+  FLUJO_INUSUAL:{l:"Flujo inusual",c:"#9d7bc0"},
+  PRECIO_SOBREEXTENDIDO:{l:"Precio sobre-extendido",c:"#c96a6a"},
+  PRECIO_INFRAEXTENDIDO:{l:"Precio infra-extendido",c:"#7FB0FF"},
+  RUPTURA_BAJISTA:{l:"Ruptura bajista",c:"#c96a6a"},
+};
+function radarSig(k){ return RSIG[k]||{l:k||"Señal",c:"#94A8C7"}; }
+
+function radarDemo(){
+  const S=(tid,name,sector,price,score,tag,notes)=>({tid,name,sector,price,score,tag,notes});
+  return { generated_at:new Date().toISOString(), universe:"S&P 500 (demo)", demo:true, count:18, signals:[
+    S("NVDA","NVIDIA","Tecnología",121.4,94,"MOMENTUM_ACELERANDO",["Retorno 20d +14.2% con aceleración","A 0.8% del máximo de 52 semanas"]),
+    S("SMCI","Super Micro","Tecnología",48.7,91,"VOLATILIDAD_EXTREMA",["Volatilidad realizada en el percentil 97","Rango diario 3.1× su promedio"]),
+    S("AAPL","Apple","Tecnología",231.2,72,"TENDENCIA_FUERTE",["Precio sobre SMA50 y SMA200","Tendencia alcista sostenida 60d"]),
+    S("XOM","Exxon Mobil","Energía",112.9,68,"PRECIO_SOBREEXTENDIDO",["Z-score +2.4 vs media de 20d","Sobre-extendido al alza"]),
+    S("KO","Coca-Cola","Consumo",71.3,63,"VOLATILIDAD_COMPRIMIDA",["Volatilidad en el percentil 6","Compresión suele preceder movimientos"]),
+    S("PLTR","Palantir","Tecnología",38.5,88,"FLUJO_INUSUAL",["Volumen 3.4× su promedio de 20d","Posible catalizador en curso"]),
+    S("TSLA","Tesla","Consumo",249.1,84,"VOLATILIDAD_EXTREMA",["Volatilidad realizada en el percentil 92","Rango diario 2.6× su promedio"]),
+    S("JPM","JPMorgan","Financiero",228.4,66,"RUPTURA_ALCISTA",["Nuevo máximo de 52 semanas","Ruptura con volumen creciente"]),
+    S("PFE","Pfizer","Salud",24.8,79,"PRECIO_INFRAEXTENDIDO",["Z-score −2.1 vs media de 20d","Infra-extendido, posible reversión"]),
+    S("META","Meta","Comunicación",596.2,77,"MOMENTUM_ACELERANDO",["Retorno 60d +19% con aceleración","Fuerza relativa sobre el sector"]),
+    S("BA","Boeing","Industrial",168.0,81,"RUPTURA_BAJISTA",["Nuevo mínimo de 52 semanas","Ruptura bajista con volumen"]),
+    S("AMD","AMD","Tecnología",142.6,74,"TENDENCIA_FUERTE",["Cruce alcista SMA20/SMA50","Momentum positivo 40d"]),
+    S("WMT","Walmart","Consumo",81.9,61,"VOLATILIDAD_COMPRIMIDA",["Volatilidad en el percentil 9","Rango estrecho 15d"]),
+    S("GS","Goldman Sachs","Financiero",512.3,69,"PRECIO_SOBREEXTENDIDO",["Z-score +2.2 vs media de 20d","Extensión sobre la media"]),
+    S("INTC","Intel","Tecnología",22.1,83,"FLUJO_INUSUAL",["Volumen 2.9× su promedio","Interés inusual reciente"]),
+    S("CVX","Chevron","Energía",158.7,64,"MOMENTUM_ACELERANDO",["Retorno 20d +6.1%","Aceleración vs 60d"]),
+    S("NFLX","Netflix","Comunicación",712.5,71,"TENDENCIA_FUERTE",["Sobre SMA50/200","Tendencia alcista limpia"]),
+    S("DIS","Disney","Comunicación",95.4,76,"PRECIO_INFRAEXTENDIDO",["Z-score −1.9 vs media","Zona de posible rebote"]),
+  ]};
+}
+
+async function viewRadar(){
+  const m=$("#main"); m.classList.add("wide");
+  m.innerHTML=head("Análisis","Radar","Escáner de señales de momentum, volatilidad y flujo sobre el universo.");
+  m.append(el(`<div id="radarShell"><div class="radar-loading">Escaneando el mercado…</div></div>`));
+  let data=null;
+  try{
+    const url=sb.storage.from("media").getPublicUrl("radar/radar_latest.json").data.publicUrl;
+    const r=await fetch(url,{cache:"no-store"}); if(r.ok) data=await r.json();
+  }catch(e){}
+  if(!data||!Array.isArray(data.signals)||!data.signals.length) data=radarDemo();
+  state.cache.radar={ data, filter:"__all__", q:"" };
+  renderRadar();
+}
+
+function renderRadar(){
+  const R=state.cache.radar, d=R.data, box=$("#radarShell"); if(!box) return;
+  const tags=[...new Set(d.signals.map(s=>s.tag))];
+  const when=d.generated_at?new Date(d.generated_at).toLocaleString("es"):"—";
+  const tabs=[["__all__","Todas",d.signals.length],
+    ...tags.map(t=>[t,radarSig(t).l,d.signals.filter(s=>s.tag===t).length])];
+  box.innerHTML=`
+    ${d.demo?`<div class="radar-demo-note">Mostrando datos de <b>demostración</b>. Cuando corras el pipeline (radar_pipeline.py), verás el escaneo real del mercado.</div>`:""}
+    <div class="radar-bar">
+      <div class="radar-meta"><span class="radar-count">${d.signals.length}</span> señales · ${esc(d.universe||"universo")} · <span class="radar-when">${esc(when)}</span></div>
+      <input id="radarQ" class="radar-search" placeholder="Buscar ticker o nombre…" oninput="app.radarSearch(this.value)" value="${esc(R.q||"")}">
+    </div>
+    <div class="radar-tabs">${tabs.map(([k,l,n])=>`<button class="rtab ${R.filter===k?"on":""}" onclick="app.radarFilter('${k}')">${esc(l)} <span>${n}</span></button>`).join("")}</div>
+    <div id="radarGrid" class="radar-grid"></div>`;
+  renderRadarGrid();
+}
+function renderRadarGrid(){
+  const R=state.cache.radar, grid=$("#radarGrid"); if(!grid) return;
+  const q=(R.q||"").trim().toLowerCase();
+  let list=R.data.signals.slice();
+  if(R.filter!=="__all__") list=list.filter(s=>s.tag===R.filter);
+  if(q) list=list.filter(s=>(s.tid||"").toLowerCase().includes(q)||(s.name||"").toLowerCase().includes(q));
+  list.sort((a,b)=>(b.score||0)-(a.score||0));
+  if(!list.length){ grid.innerHTML=`<div class="card empty" style="grid-column:1/-1"><p>Sin señales para ese filtro.</p></div>`; return; }
+  grid.innerHTML=list.map(s=>{ const g=radarSig(s.tag);
+    return `<div class="radar-card" style="--sig:${g.c}">
+      <div class="rc-top">
+        <div><span class="rc-tid">${esc(s.tid||"")}</span><span class="rc-price">${s.price!=null?"$"+Number(s.price).toFixed(2):""}</span></div>
+        <span class="rc-score">${s.score!=null?Math.round(s.score):"—"}</span>
+      </div>
+      <div class="rc-tag">${esc(g.l)}</div>
+      ${(Array.isArray(s.notes)?s.notes:[]).slice(0,3).map(n=>`<div class="rc-note">${esc(n)}</div>`).join("")}
+      ${s.sector?`<div class="rc-sector">${esc(s.sector)}</div>`:""}
+    </div>`; }).join("");
+}
+
 async function viewCoursesClient(){
   const cs=await sb.from("courses").select("*").eq("published",true).order("created_at",{ascending:false}).then(r=>r.data||[]);
   const prog=await sb.from("course_progress").select("course_id,completed").eq("user_id",state.profile.id).then(r=>r.data||[]);
@@ -2374,6 +2469,8 @@ const app = {
   },
   openCourse(id){ location.hash="#/cursos/"+id; },
   setCoursesView(v){ state.coursesView=v; viewCoursesClient(); },
+  radarFilter(k){ if(state.cache.radar){ state.cache.radar.filter=k; renderRadar(); } },
+  radarSearch(v){ if(state.cache.radar){ state.cache.radar.q=v; renderRadarGrid(); } },
   editSubmission(courseId){ const b=$("#taskBody"); if(b) b.innerHTML=subFormHtml(state.cache.currentSub,courseId); },
   async gradeSubmission(subId,courseId){
     const g=$("#grade_"+subId)?.value.trim();
@@ -3092,6 +3189,7 @@ function icon(n){
     trade:'<path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v5h-5"/>',
     tune:'<circle cx="7" cy="8" r="2.2"/><circle cx="16" cy="16" r="2.2"/><path d="M9 8h11M4 8h1M15 16h5M4 16h9"/>',
     net:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="17" r="2"/><path d="M8 7l8 0M7 8l0 8M8 17l7-1M8 7l8 9"/>',
+    radar:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/><path d="M12 12l6-4"/>',
   }[n]||"";
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 }

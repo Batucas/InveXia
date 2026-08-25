@@ -1,0 +1,40 @@
+# ============================================================
+#  InveXia · Radar — escáner automático de señales
+#  ------------------------------------------------------------
+#  Corre radar_pipeline.py y sube radar_latest.json a Supabase
+#  Storage (bucket 'media', ruta radar/). La app lo lee solo.
+#
+#  Usa los MISMOS secrets que QuantNet:
+#     SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#  Ubicación obligatoria: .github/workflows/radar.yml
+# ============================================================
+
+name: Radar diario
+
+on:
+  # Días hábiles a las 22:30 UTC (~18:30 en Bolivia, tras el cierre de EE.UU.)
+  schedule:
+    - cron: "30 22 * * 1-5"
+  # Botón para correrlo manualmente (pestaña Actions)
+  workflow_dispatch:
+
+jobs:
+  run-radar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install yfinance numpy pandas requests lxml
+
+      - name: Ejecutar el pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python radar_pipeline.py
