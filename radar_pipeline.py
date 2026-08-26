@@ -213,13 +213,75 @@ def upload(name, obj):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-upload", action="store_true")
+    ap.add_argument("--momo-test", action="store_true")
     args = ap.parse_args()
+    if args.momo_test:
+        _momo_self_test(); return
     snap = fetch_and_scan()
     with open("radar_latest.json", "w", encoding="utf-8") as f:
         json.dump(snap, f, ensure_ascii=False, allow_nan=False)
     print("  radar_latest.json escrito.")
     if not args.no_upload:
         upload(OUT_NAME, snap)
+    # --- Momentum Mercado (scatter 3D) ---
+    try:
+        momo = build_momentum()
+        if momo:
+            with open("momentum_latest.json", "w", encoding="utf-8") as f:
+                json.dump(momo, f, ensure_ascii=False, allow_nan=False)
+            print(f"  momentum_latest.json: {len(momo['assets'])} activos.")
+            if not args.no_upload:
+                upload("radar/momentum_latest.json", momo)
+    except Exception as e:
+        print(f"  (momentum omitido: {e})")
+
+
+# ETFs sectoriales + activos macro para el scatter de momentum
+MOMO_UNIVERSE = {
+    "SPY":"S&P 500","QQQ":"Nasdaq 100","DIA":"Dow","IWM":"Small caps",
+    "TLT":"Bonos 20+","GLD":"Oro","SLV":"Plata","USO":"Petróleo","UNG":"Gas",
+    "XLF":"Financiero","XLE":"Energía","XLK":"Tecnología","XLV":"Salud",
+    "XLI":"Industrial","XLP":"Consumo básico","XLY":"Consumo disc.","XLU":"Utilities",
+    "XLB":"Materiales","XLC":"Comunicación","XLRE":"Inmobiliario","SMH":"Semis","EEM":"Emergentes",
+}
+
+def _momentum_metrics(close):
+    close = close[~np.isnan(close)]
+    if len(close) < 70: return None
+    price = float(close[-1])
+    rets = np.diff(close) / close[:-1]
+    ret20 = (price / close[-21] - 1) * 100 if len(close) > 21 else 0.0
+    win = rets[-60:]
+    sharpe = float(np.mean(win) / (np.std(win) + 1e-9) * np.sqrt(252))
+    sma20 = float(np.mean(close[-20:])); sd20 = float(np.std(close[-20:])) or 1e-9
+    z = (price - sma20) / sd20
+    return {"price": round(price, 2), "ret": round(ret20, 2),
+            "sharpe": round(sharpe, 2), "z": round(z, 2)}
+
+def build_momentum():
+    import yfinance as yf
+    tickers = list(MOMO_UNIVERSE.keys())
+    start = (dt.date.today() - dt.timedelta(days=180)).isoformat()
+    data = yf.download(tickers, start=start, interval="1d", auto_adjust=True, progress=False, group_by="column")
+    close = data["Close"].ffill()
+    assets = []
+    for t in tickers:
+        if t not in close.columns: continue
+        m = _momentum_metrics(close[t].values.astype(float))
+        if not m: continue
+        # score compuesto (signo = dirección; magnitud = fuerza), acotado a [-3,3]
+        score = max(-3.0, min(3.0, 0.5 * (m["ret"] / 6.0) + 0.9 * m["sharpe"] / 1.5 + 0.6 * m["z"]))
+        assets.append({"tid": t, "name": MOMO_UNIVERSE[t], **m, "score": round(score, 2)})
+    return {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "window": "ret 20d · sharpe 60d · z-score 20d", "count": len(assets), "assets": assets}
+
+def _momo_self_test():
+    import numpy as _np
+    up = 100 * _np.cumprod(1 + _np.random.normal(0.004, 0.008, 120))
+    down = 100 * _np.cumprod(1 + _np.random.normal(-0.004, 0.008, 120))
+    for nm, px in [("ALCISTA", up), ("BAJISTA", down)]:
+        m = _momentum_metrics(px)
+        print(f"  {nm}: ret={m['ret']}% sharpe={m['sharpe']} z={m['z']}")
 
 
 if __name__ == "__main__":

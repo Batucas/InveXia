@@ -1850,6 +1850,19 @@ function termLineSVG(term){
     <text x="6" y="${H-26}" fill="#65799A" font-size="9" font-family="JetBrains Mono">${vmin.toFixed(0)}%</text>
   </svg>`;
 }
+function ensurePlotly(onready, onfail){
+  if(window.Plotly) return onready();
+  const cdns=["https://cdn.plot.ly/plotly-2.32.0.min.js","https://cdn.jsdelivr.net/npm/plotly.js@2.32.0/dist/plotly.min.js"];
+  let i=0;
+  const tryLoad=()=>{
+    if(i>=cdns.length){ onfail&&onfail(); return; }
+    const s=document.createElement("script"); s.src=cdns[i++];
+    s.onload=()=>{ if(window.Plotly) onready(); else tryLoad(); };
+    s.onerror=tryLoad;
+    document.head.appendChild(s);
+  };
+  tryLoad();
+}
 function ivSurfacePlotly(host, surf){
   const draw=()=>{ if(!window.Plotly) return false;
     const z=surf.iv.map(row=>row.map(v=>v==null?null:v*100));
@@ -1861,20 +1874,7 @@ function ivSurfacePlotly(host, surf){
               zaxis:{title:"IV %",color:"#94A8C7",gridcolor:"#1e2a44"},
               bgcolor:"rgba(0,0,0,0)"}},
       {displayModeBar:false,responsive:true}); return true; };
-  if(draw()) return;
-  const cdns=[
-    "https://cdn.plot.ly/plotly-2.32.0.min.js",
-    "https://cdn.jsdelivr.net/npm/plotly.js@2.32.0/dist/plotly.min.js"
-  ];
-  let i=0;
-  const tryLoad=()=>{
-    if(i>=cdns.length){ host.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D. Revisa tu conexión o el bloqueador del navegador.</div>'; return; }
-    const s=document.createElement("script"); s.src=cdns[i++];
-    s.onload=()=>{ if(!draw()) tryLoad(); };
-    s.onerror=tryLoad;
-    document.head.appendChild(s);
-  };
-  tryLoad();
+  ensurePlotly(draw, ()=>{ host.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D. Revisa tu conexión o el bloqueador del navegador.</div>'; });
 }
 
 async function renderTerminalPanels(snap){
@@ -1902,16 +1902,70 @@ async function renderTerminalPanels(snap){
 
 async function viewRadar(){
   const m=$("#main"); m.classList.add("wide");
-  m.innerHTML=head("Análisis","Radar","Escáner de señales de momentum, volatilidad y flujo sobre el universo.");
-  m.append(el(`<div id="radarShell"><div class="radar-loading">Escaneando el mercado…</div></div>`));
-  let data=null;
+  m.innerHTML=head("Análisis","Radar","Escáner de señales y mapa de momentum del mercado.");
+  m.append(el(`<div class="courses-toggle" id="radarModeTabs"></div><div id="radarShell"><div class="radar-loading">Escaneando el mercado…</div></div>`));
+  let data=null, momo=null;
   try{
     const url=sb.storage.from("media").getPublicUrl("radar/radar_latest.json").data.publicUrl;
     const r=await fetch(url,{cache:"no-store"}); if(r.ok) data=await r.json();
   }catch(e){}
+  try{
+    const url=sb.storage.from("media").getPublicUrl("radar/momentum_latest.json").data.publicUrl;
+    const r=await fetch(url,{cache:"no-store"}); if(r.ok) momo=await r.json();
+  }catch(e){}
   if(!data||!Array.isArray(data.signals)||!data.signals.length) data=radarDemo();
+  if(!momo||!Array.isArray(momo.assets)||!momo.assets.length){ momo=momentumDemo(); }
   state.cache.radar={ data, filter:"__all__", q:"" };
-  renderRadar();
+  state.cache.momo=momo;
+  if(!state.cache.radarMode) state.cache.radarMode="cards";
+  renderRadarMode();
+}
+function renderRadarMode(){
+  const mode=state.cache.radarMode||"cards";
+  const tabs=$("#radarModeTabs");
+  if(tabs) tabs.innerHTML=`<button class="ct-btn ${mode==="cards"?"on":""}" onclick="app.radarMode('cards')">Señales</button>
+    <button class="ct-btn ${mode==="momo"?"on":""}" onclick="app.radarMode('momo')">Momentum 3D</button>`;
+  if(mode==="momo") renderMomentum(); else renderRadar();
+}
+
+function momentumDemo(){
+  const A=(tid,name,ret,sharpe,z)=>({tid,name,ret,sharpe,z,score:Math.max(-3,Math.min(3,ret/6+sharpe/1.5+z*0.6))});
+  return { demo:true, generated_at:new Date().toISOString(), window:"ret 20d · sharpe 60d · z-score 20d",
+    assets:[A("QQQ","Nasdaq 100",6.2,1.8,1.4),A("XLK","Tecnología",7.1,2.1,1.7),A("SMH","Semis",9.4,2.4,2.0),
+      A("SPY","S&P 500",3.1,1.2,0.8),A("XLF","Financiero",4.2,1.5,1.1),A("XLC","Comunicación",5.0,1.3,0.9),
+      A("XLE","Energía",-2.1,-0.4,-0.7),A("XLU","Utilities",-1.2,0.2,-0.3),A("GLD","Oro",2.4,1.0,0.6),
+      A("TLT","Bonos 20+",-3.4,-0.9,-1.2),A("USO","Petróleo",-4.8,-1.1,-1.6),A("XLV","Salud",0.8,0.3,0.1),
+      A("XLI","Industrial",2.9,1.1,0.7),A("XLP","Consumo básico",-0.6,-0.1,-0.2),A("IWM","Small caps",1.5,0.6,0.3),
+      A("EEM","Emergentes",-1.8,-0.5,-0.6),A("XLY","Consumo disc.",3.6,1.2,0.9),A("XLB","Materiales",-0.9,-0.2,-0.4)] };
+}
+
+function renderMomentum(){
+  const host=$("#radarShell"); if(!host) return;
+  const d=state.cache.momo;
+  const when=d.generated_at?new Date(d.generated_at).toLocaleString("es"):"—";
+  host.innerHTML=`${d.demo?`<div class="radar-demo-note">Momentum de <b>demostración</b>. Al correr el Radar verás el mapa real.</div>`:""}
+    <div class="radar-meta" style="margin-bottom:.6rem"><span class="radar-count">${d.assets.length}</span> activos · ${esc(d.window||"")} · <span class="radar-when">${esc(when)}</span></div>
+    <div id="momo3d" class="momo-3d card"></div>
+    <p class="term-sub" style="margin-top:.7rem">Cada punto es un activo. <b style="color:#3DD6A0">Verde</b> = momentum positivo, <b style="color:#c96a6a">rojo</b> = negativo. Arrastra para rotar.</p>`;
+  const g=document.getElementById("momo3d");
+  ensurePlotly(()=>{
+    const a=d.assets;
+    window.Plotly.newPlot(g,[{
+      type:"scatter3d", mode:"markers+text",
+      x:a.map(x=>x.ret), y:a.map(x=>x.sharpe), z:a.map(x=>x.z),
+      text:a.map(x=>x.tid), textposition:"top center", textfont:{size:9,color:"#94A8C7"},
+      hovertext:a.map(x=>`${x.tid} · ${x.name||""}<br>Ret ${x.ret}% · Sharpe ${x.sharpe} · Z ${x.z}`), hoverinfo:"text",
+      marker:{ size:7, color:a.map(x=>x.score),
+        colorscale:[[0,"#c96a6a"],[0.5,"#65799A"],[1,"#3DD6A0"]], cmin:-3, cmax:3,
+        opacity:.92, line:{width:.5,color:"#0A1120"} }
+    }],{
+      margin:{l:0,r:0,t:0,b:0}, paper_bgcolor:"rgba(0,0,0,0)",
+      scene:{ xaxis:{title:"Ret % (20d)",color:"#94A8C7",gridcolor:"#1e2a44"},
+              yaxis:{title:"Sharpe",color:"#94A8C7",gridcolor:"#1e2a44"},
+              zaxis:{title:"Z-score",color:"#94A8C7",gridcolor:"#1e2a44"},
+              bgcolor:"rgba(0,0,0,0)" }
+    },{displayModeBar:false,responsive:true});
+  },()=>{ if(g) g.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D. Revisa el bloqueador del navegador.</div>'; });
 }
 
 function renderRadar(){
@@ -2641,6 +2695,7 @@ const app = {
   openCourse(id){ location.hash="#/cursos/"+id; },
   setCoursesView(v){ state.coursesView=v; viewCoursesClient(); },
   radarFilter(k){ if(state.cache.radar){ state.cache.radar.filter=k; renderRadar(); } },
+  radarMode(m){ state.cache.radarMode=m; renderRadarMode(); },
   radarSearch(v){ if(state.cache.radar){ state.cache.radar.q=v; renderRadarGrid(); } },
   async terminalSelect(t){
     document.querySelectorAll(".term-tabs .rtab").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
