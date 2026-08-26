@@ -1903,7 +1903,7 @@ async function renderTerminalPanels(snap){
 async function viewRadar(){
   const m=$("#main"); m.classList.add("wide");
   m.innerHTML=head("Análisis","Radar","Escáner de señales y mapa de momentum del mercado.");
-  m.append(el(`<div class="courses-toggle" id="radarModeTabs"></div><div id="radarShell"><div class="radar-loading">Escaneando el mercado…</div></div>`));
+  m.append(el(`<div><div class="courses-toggle" id="radarModeTabs"></div><div id="radarShell"><div class="radar-loading">Escaneando el mercado…</div></div></div>`));
   let data=null, momo=null;
   try{
     const url=sb.storage.from("media").getPublicUrl("radar/radar_latest.json").data.publicUrl;
