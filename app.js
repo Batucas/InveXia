@@ -1862,10 +1862,19 @@ function ivSurfacePlotly(host, surf){
               bgcolor:"rgba(0,0,0,0)"}},
       {displayModeBar:false,responsive:true}); return true; };
   if(draw()) return;
-  const s=document.createElement("script");
-  s.src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js";
-  s.onload=draw; s.onerror=()=>{ host.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D.</div>'; };
-  document.head.appendChild(s);
+  const cdns=[
+    "https://cdn.plot.ly/plotly-2.32.0.min.js",
+    "https://cdn.jsdelivr.net/npm/plotly.js@2.32.0/dist/plotly.min.js"
+  ];
+  let i=0;
+  const tryLoad=()=>{
+    if(i>=cdns.length){ host.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D. Revisa tu conexión o el bloqueador del navegador.</div>'; return; }
+    const s=document.createElement("script"); s.src=cdns[i++];
+    s.onload=()=>{ if(!draw()) tryLoad(); };
+    s.onerror=tryLoad;
+    document.head.appendChild(s);
+  };
+  tryLoad();
 }
 
 async function renderTerminalPanels(snap){
