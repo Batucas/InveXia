@@ -221,6 +221,12 @@ function enterApp(){
   if(p.avatar_url){ av.innerHTML=avHtml; if(avm) avm.innerHTML=avHtml; }
   else { av.textContent=initials(p.full_name); if(avm) avm.textContent=initials(p.full_name); }
   buildNav(admin);
+  // Modo enfoque: cursos en pestaña nueva a pantalla completa
+  const focus=new URLSearchParams(location.search).get("focus");
+  if(focus==="cursos"){
+    document.body.classList.add("focus-mode");
+    location.hash="#/cursos"; route(); return;
+  }
   if(!location.hash) location.hash = admin?"#/clientes":"#/inicio";
   else route();
 }
@@ -262,7 +268,13 @@ function buildNav(admin){
     const badge = flag==="premium" ? '<span class="pill-premium">PREMIUM</span>'
                 : id==="mensajes"   ? '<span class="nav-dot hidden" id="msgDot">0</span>' : "";
     const a=el(`<a data-v="${id}">${ic}<span>${label}</span>${badge}</a>`);
-    a.onclick=()=>{ location.hash="#/"+id; $("#sidebar").classList.remove("open"); };
+    a.onclick=()=>{
+      if(id==="cursos" && !document.body.classList.contains("focus-mode")){
+        window.open(location.origin+location.pathname+"?focus=cursos","_blank");
+        $("#sidebar").classList.remove("open"); return;
+      }
+      location.hash="#/"+id; $("#sidebar").classList.remove("open");
+    };
     nav.append(a);
   });
   refreshBadges();
@@ -864,96 +876,195 @@ const TRADE_SYMBOLS = [
 ];
 async function viewTrade(){
   const m=$("#main");
-  m.innerHTML=head("Inversión","Operar","Compra activos que se ejecutan en un bróker regulado.");
-  m.append(el(`<div class="notice">⚙️ <b>Modo prueba (sandbox).</b> Las órdenes se ejecutan con dinero ficticio en el entorno de pruebas de Alpaca. Nada de esto usa dinero real todavía.</div>`));
-  const wrap=el(`<div id="tradeBody">${loading()}</div>`); m.append(wrap);
-  await loadTrade();
+  m.innerHTML=head("Inversión","Operar","Busca un activo, analiza su gráfico y adquiérelo con dinero ficticio para practicar.");
+  m.append(el(`<div id="tradeBody">${loading()}</div>`));
+  await loadSimPortfolios();
+  const pfs=state.cache.portfolios||[];
+  if(!state.cache.tradePf || !pfs.find(p=>p.id===state.cache.tradePf)) state.cache.tradePf=pfs[0]?.id||null;
+  if(!state.cache.tradeSym) state.cache.tradeSym="AAPL";
+  renderTrade();
 }
-async function loadTrade(){
+function renderTrade(){
   const body=$("#tradeBody"); if(!body) return;
-  let d;
-  try{
-    const { data:{ session } }=await sb.auth.getSession();
-    const r=await fetch("/api/alpaca-positions",{ headers:{ Authorization:"Bearer "+session.access_token } });
-    const ct=r.headers.get("content-type")||"";
-    if(!ct.includes("application/json")) throw new Error("La función /api/alpaca-positions no está desplegada.");
-    d=await r.json();
-    if(!d.ok) throw new Error(d.message||d.error||"Error");
-  }catch(e){ body.innerHTML=`<div class="card"><div class="notice warn" style="margin:0">${esc(e.message)}</div></div>`; return; }
-
-  if(!d.linked){
+  const pfs=state.cache.portfolios||[];
+  if(!pfs.length){
     body.innerHTML=`<div class="card empty">${icon("trade")}
-      <h3 style="margin-top:.4rem">Tu cuenta de inversión aún no está activa</h3>
-      <p>Tu asesor debe vincular tu cuenta para que puedas operar.</p>
-      <button class="btn btn-ghost btn-sm" style="width:auto;margin-top:.6rem" onclick="location.hash='#/mensajes'">Escribir a mi asesor</button></div>`;
+      <h3 style="margin:.4rem 0 .2rem">Primero crea un portafolio</h3>
+      <p style="color:var(--muted)">Necesitas un portafolio para adquirir activos. Cada uno arranca con ${money(10000,"USD")} ficticios.</p>
+      <button class="btn btn-primary btn-sm" style="width:auto;margin-top:.7rem" onclick="app.createPortfolio(true)">+ Crear portafolio</button></div>`;
     return;
   }
-  const a=d.account, cur=a.currency||"USD";
-  const plToday=sgn(a.pnl_today);
-  body.innerHTML="";
-  body.append(el(`<div class="grid grid-3" style="margin-bottom:1.2rem">
-    <div class="stat"><div class="k">Valor de la cuenta</div><div class="v">${money(a.equity,cur)}</div><div class="d ${plToday}">${a.pnl_today>=0?"+":""}${money(a.pnl_today,cur)} hoy</div></div>
-    <div class="stat"><div class="k">Efectivo</div><div class="v">${money(a.cash,cur)}</div><div class="d">disponible</div></div>
-    <div class="stat"><div class="k">Poder de compra</div><div class="v">${money(a.buying_power,cur)}</div><div class="d">para operar</div></div>
-  </div>`));
-
-  const grid=el(`<div class="pf-grid"></div>`);
-  // panel de compra
-  grid.append(el(`<div class="card">
-    <h3>Comprar</h3><p class="card-sub">Orden de mercado. Busca entre miles de acciones y ETFs de EE.UU., o usa una cripto (botones rápidos).</p>
-    <div class="field"><label>Buscar activo</label>
-      <div class="search-wrap">
-        <input id="buySym" class="input mono" placeholder="Escribe símbolo o nombre: Apple, NVDA, VOO…"
-          autocomplete="off" oninput="app.searchAssets(this.value)" onfocus="app.searchAssets(this.value)">
-        <div id="symResults" class="search-results hidden"></div>
-      </div>
-      <div class="flex" style="gap:.35rem;flex-wrap:wrap;margin-top:.5rem">
-        <span style="font-size:.72rem;color:var(--faint);align-self:center">Cripto:</span>
-        ${["BTC/USD","ETH/USD","SOL/USD"].map(c=>`<button class="chip" onclick="app.pickSym('${c}')">${c}</button>`).join("")}
+  const pf=pfs.find(p=>p.id===state.cache.tradePf)||pfs[0];
+  const cash=num(pf.cash)||0; const sym=state.cache.tradeSym;
+  body.innerHTML=`
+    <div class="trade-top card">
+      <div class="field" style="margin:0"><label>Portafolio</label>
+        <select id="tradePfSel" class="input" onchange="app.tradeSelectPf(this.value)">
+          ${pfs.map(p=>`<option value="${p.id}" ${p.id===pf.id?"selected":""}>${esc(p.name)} · ${money(num(p.cash)||0,"USD")} efectivo</option>`).join("")}
+        </select></div>
+      <div class="field" style="margin:0"><label>Buscar activo (acciones, ETFs, renta fija vía ETFs, cripto)</label>
+        <div class="search-wrap">
+          <input id="buySym" class="input mono" placeholder="Escribe símbolo o nombre: Apple, NVDA, TLT…" autocomplete="off"
+            value="${esc(sym)}" oninput="app.searchAssets(this.value)" onfocus="app.searchAssets(this.value)">
+          <div id="symResults" class="search-results hidden"></div>
+        </div>
+        <div class="flex" style="gap:.35rem;flex-wrap:wrap;margin-top:.5rem">
+          ${["AAPL","NVDA","SPY","QQQ","TLT","AGG","GLD","BTCUSD"].map(c=>`<button class="chip" onclick="app.pickTradeSym('${c}')">${c}</button>`).join("")}
+        </div>
       </div>
     </div>
-    <div class="field"><label>Monto a invertir (${cur})</label>
-      <input id="buyAmt" class="input mono" type="number" min="1" step="any" placeholder="100"></div>
-    <button id="buyBtn" class="btn btn-primary" style="width:auto" onclick="app.buyAsset()">Comprar</button>
-    <div id="buyMsg" class="msg-line"></div>
-  </div>`));
-
-  // posiciones reales
-  const side=el(`<div class="card"><h3>Mis posiciones</h3><p class="card-sub">${d.positions.length} posición(es) en tu cuenta.</p></div>`);
-  if(d.positions.length){
-    const tw=el(`<div class="tbl-wrap"></div>`);
-    const t=el(`<table class="tbl"><thead><tr><th>Activo</th><th style="text-align:right">Valor</th><th style="text-align:right">Rend.</th></tr></thead><tbody></tbody></table>`);
-    d.positions.forEach(p=>{
-      const cl=sgn(p.unrealized_pl);
-      $("tbody",t).append(el(`<tr>
-        <td><b>${esc(p.symbol)}</b><br><span class="mono" style="color:var(--faint);font-size:.75rem">${p.qty} u · ${money(p.avg_entry,cur)}</span></td>
-        <td style="text-align:right" class="mono">${money(p.market_value,cur)}</td>
-        <td style="text-align:right" class="mono ${cl}">${pct(p.unrealized_plpc)}<br><span style="font-size:.72rem">${p.unrealized_pl>=0?"+":""}${money(p.unrealized_pl,cur)}</span></td></tr>`));
-    });
-    tw.append(t); side.append(tw);
-  } else side.append(el(`<p class="empty" style="padding:1rem">Aún no tienes posiciones. Haz tu primera compra.</p>`));
-  grid.append(side);
-  body.append(grid);
+    <div class="trade-grid">
+      <div class="card trade-chart-card">
+        <div class="flex between"><h3 style="margin:0">${esc(sym)}</h3><span class="card-sub" style="margin:0">Gráfico con velas, línea de tendencia e indicadores</span></div>
+        <div id="tvChart" class="tv-chart"></div>
+      </div>
+      <div class="card">
+        <h3>Adquirir / Vender</h3>
+        <p class="card-sub">Orden simulada a precio de mercado en <b>${esc(pf.name)}</b>.</p>
+        <div class="field"><label>Símbolo</label><input id="ordSym" class="input mono" value="${esc(sym)}" readonly></div>
+        <div class="field"><label>Precio actual</label><div id="ordPrice" class="ord-price mono">Consultando…</div></div>
+        <div class="field"><label>Monto a invertir (USD)</label>
+          <input id="ordAmt" class="input mono" type="number" min="1" step="any" placeholder="1000" oninput="app.tradeEstimate()"></div>
+        <div id="ordEst" class="ord-est"></div>
+        <div class="flex" style="gap:.5rem;margin-top:.3rem">
+          <button class="btn btn-primary" style="width:auto" onclick="app.buyAsset()">Comprar</button>
+          <button class="btn btn-ghost" style="width:auto" onclick="app.sellAsset()">Vender</button>
+        </div>
+        <div id="ordMsg" class="msg-line"></div>
+        <div class="divide"></div>
+        <div class="nav-label" style="padding:0 0 .4rem">Efectivo disponible</div>
+        <div class="mono" style="font-size:1.1rem;color:var(--text)">${money(cash,"USD")}</div>
+      </div>
+    </div>`;
+  tvWidget(sym);
+  loadOrderPrice(sym);
+}
+function tvWidget(sym){
+  const host=document.getElementById("tvChart"); if(!host) return;
+  host.innerHTML="";
+  const mount=()=>{ if(!window.TradingView){ host.innerHTML='<div class="term-noplot">No se pudo cargar el gráfico. Revisa el bloqueador del navegador.</div>'; return; }
+    new window.TradingView.widget({ container_id:"tvChart", autosize:true, symbol:tvSymbol(sym),
+      interval:"D", timezone:"Etc/UTC", theme:"dark", style:"1", locale:"es", hide_side_toolbar:false,
+      allow_symbol_change:true, withdateranges:true, studies:[], backgroundColor:"rgba(10,17,32,1)" }); };
+  if(window.TradingView) return mount();
+  const s=document.createElement("script"); s.src="https://s3.tradingview.com/tv.js"; s.onload=mount;
+  s.onerror=()=>{ host.innerHTML='<div class="term-noplot">No se pudo cargar el gráfico (CDN de TradingView bloqueado).</div>'; };
+  document.head.appendChild(s);
+}
+function tvSymbol(sym){
+  const s=(sym||"").toUpperCase().replace("/","");
+  if(/BTC|ETH|SOL/.test(s)) return "CRYPTO:"+s;   // cripto
+  return s;                                          // acciones/ETFs resuelven directo
+}
+function classOf(sym){
+  const s=(sym||"").toUpperCase();
+  if(/BTC|ETH|SOL|DOGE|ADA/.test(s)) return "crypto";
+  if(["TLT","AGG","LQD","BND","IEF","SHY","HYG","TIP","BNDX","MUB","EMB","VCIT","VCSH"].includes(s)) return "fixed_income";
+  if(["GLD","SLV","USO","UNG","DBC","GDX"].includes(s)) return "alt";
+  return "equity";
+}
+async function loadOrderPrice(sym){
+  const el2=document.getElementById("ordPrice"); if(el2) el2.textContent="Consultando…";
+  const qr=await fetchQuotes([sym]); const q=qr.quotes?.[sym];
+  state.cache.tradePrice = (q&&Number.isFinite(q.price))?q.price:null;
+  if(el2) el2.textContent = state.cache.tradePrice!=null ? money(state.cache.tradePrice,"USD")+(q.percent!=null?` (${pct(q.percent)} hoy)`:"") : "No disponible";
+  app.tradeEstimate();
 }
 
 /* ============================================================
    CLIENTE · Mi cartera (objetivo + ejecutada con rendimiento)
    ============================================================ */
 async function viewPortfolio(){
-  const pf=await publishedPortfolio(state.profile.id);
   const m=$("#main");
-  m.innerHTML=head("Inversión","Mi cartera");
-  if(!pf){
-    const ra=await latestAssessment(state.profile.id);
-    m.append(el(`<div class="card empty">${icon("pie")}
-      <h3 style="margin-top:.4rem">${ra?"Tu cartera está en diseño":"Aún no tienes cartera"}</h3>
-      <p>${ra?"Tu asesor la publicará pronto.":"Primero completa tu perfil de riesgo."}</p>
-      <button class="btn btn-primary btn-sm" style="width:auto;margin-top:.6rem"
-        onclick="location.hash='${ra?"#/mensajes":"#/riesgo"}'">${ra?"Escribir a mi asesor":"Ir al cuestionario"}</button></div>`));
+  m.innerHTML=head("Inversión","Mi cartera","Tus portafolios simulados. Arma y sigue tus inversiones con dinero ficticio.");
+  m.append(el(`<div id="pfShell">${loading()}</div>`));
+  await loadSimPortfolios();
+  renderPortfolioList();
+}
+async function loadSimPortfolios(){
+  const { data }=await sb.from("sim_portfolios").select("*").eq("user_id",state.profile.id).order("created_at");
+  state.cache.portfolios=data||[];
+  return state.cache.portfolios;
+}
+async function renderPortfolioList(){
+  const box=$("#pfShell"); if(!box) return;
+  const pfs=state.cache.portfolios||[];
+  // valuar todos con precios de mercado
+  const allTk=[...new Set(pfs.flatMap(p=>(p.holdings||[]).filter(h=>num(h.quantity)>0).map(h=>h.ticker)))];
+  const qr=await fetchQuotes(allTk); const quotes=qr.quotes||{};
+  const canCreate=pfs.length<10;
+  box.innerHTML=`
+    <div class="flex between" style="margin-bottom:1rem;flex-wrap:wrap;gap:.6rem">
+      <div class="card-sub" style="margin:0">${pfs.length}/10 portafolios · ${money(10000,"USD")} ficticios por portafolio</div>
+      <button class="btn btn-primary btn-sm" style="width:auto" ${canCreate?"":"disabled"} onclick="app.createPortfolio()">+ Nuevo portafolio</button>
+    </div>`;
+  if(!pfs.length){
+    box.insertAdjacentHTML("beforeend",`<div class="card empty">${icon("pie")}
+      <h3 style="margin:.4rem 0 .2rem">Aún no tienes portafolios</h3>
+      <p style="color:var(--muted)">Crea tu primer portafolio simulado y empieza a comprar activos desde "Operar".</p>
+      <button class="btn btn-primary btn-sm" style="width:auto;margin-top:.7rem" onclick="app.createPortfolio()">+ Crear mi primer portafolio</button></div>`);
     return;
   }
-  const holds=await sb.from("holdings").select("*").eq("portfolio_id",pf.id).then(r=>r.data||[]);
-  await renderPortfolioBody(m,pf,holds,false);
+  const grid=el(`<div class="pf-cards"></div>`);
+  pfs.forEach(p=>{
+    const P=perfOf(p.holdings||[],quotes); const cash=num(p.cash)||0; const total=(P.value||0)+cash;
+    const cls=P.executed?sgn(P.pnl):"";
+    grid.append(el(`<div class="pf-card card" onclick="app.openPortfolio('${p.id}')">
+      <div class="flex between"><h3 style="margin:0">${esc(p.name)}</h3>
+        <button class="mp-exp" onclick="event.stopPropagation();app.deletePortfolio('${p.id}',event)" title="Eliminar">✕</button></div>
+      <div class="pf-total">${money(total,"USD")}</div>
+      <div class="pf-sub">Efectivo ${money(cash,"USD")} · ${(p.holdings||[]).length} activo(s)</div>
+      ${P.executed?`<div class="pf-pnl ${cls}">${pct(P.pnlPct)} · ${P.pnl>=0?"+":""}${money(P.pnl,"USD")}</div>`:`<div class="pf-pnl" style="color:var(--faint)">Sin posiciones aún</div>`}
+    </div>`));
+  });
+  box.append(grid);
+}
+async function renderPortfolioDetail(id){
+  const box=$("#pfShell"); if(!box) return;
+  const p=(state.cache.portfolios||[]).find(x=>x.id===id); if(!p){ renderPortfolioList(); return; }
+  const holds=p.holdings||[];
+  const tickers=[...new Set(holds.filter(h=>num(h.quantity)>0).map(h=>h.ticker))];
+  const qr=await fetchQuotes(tickers); const quotes=qr.quotes||{};
+  const P=perfOf(holds,quotes); const cash=num(p.cash)||0; const total=(P.value||0)+cash;
+  const cls=P.executed?sgn(P.pnl):"";
+  box.innerHTML=`
+    <div class="flex between" style="margin-bottom:1rem;flex-wrap:wrap;gap:.6rem">
+      <button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.backToPortfolios()">← Mis portafolios</button>
+      <div class="flex" style="gap:.4rem">
+        <button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.renamePortfolio('${p.id}')">Renombrar</button>
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="app.tradeInPortfolio('${p.id}')">Operar en este →</button>
+      </div>
+    </div>
+    <div class="grid grid-3" style="margin-bottom:1.2rem">
+      <div class="stat"><div class="k">Valor total</div><div class="v">${money(total,"USD")}</div><div class="d">efectivo + posiciones</div></div>
+      <div class="stat"><div class="k">Efectivo</div><div class="v">${money(cash,"USD")}</div><div class="d">disponible para operar</div></div>
+      <div class="stat"><div class="k">Rendimiento</div><div class="v ${cls}">${P.executed?pct(P.pnlPct):"—"}</div><div class="d ${cls}">${P.executed?(P.pnl>=0?"+":"")+money(P.pnl,"USD"):"sin posiciones"}</div></div>
+    </div>`;
+  const wrap=el(`<div class="pf-grid"></div>`);
+  const actual=P.executed?actualWeights(P.rows,P.value):null;
+  wrap.append(el(`<div class="card">
+    <div class="flex between"><h3>${esc(p.name)}</h3><span class="pill pill-blue mono">USD</span></div>
+    <p class="card-sub">${P.executed?"Distribución por clase de activo.":"Aún sin posiciones."}</p>
+    ${P.executed?`<div class="flex" style="gap:1.6rem;align-items:center;flex-wrap:wrap">
+      <div style="width:170px">${donut(actual)}</div>
+      <div style="flex:1;min-width:220px">${allocBars(actual)}</div></div>`:
+      `<p class="empty" style="padding:1rem">Compra tu primer activo desde "Operar" para ver la distribución.</p>`}
+  </div>`));
+  const side=el(`<div class="card"><h3>Posiciones</h3><p class="card-sub">${holds.length} instrumento(s).</p></div>`);
+  if(holds.length){
+    const tw=el(`<div class="tbl-wrap"></div>`);
+    const t=el(`<table class="tbl"><thead><tr><th>Instrumento</th><th style="text-align:right">Precio</th><th style="text-align:right">Valor</th><th style="text-align:right">P&L</th></tr></thead><tbody></tbody></table>`);
+    P.rows.forEach(h=>{
+      const c=CLASSES[h.asset_class]||{label:h.asset_class||"—",color:"#888"};
+      $("tbody",t).append(el(`<tr>
+        <td><b>${esc(h.name||h.ticker)}</b> <span class="mono" style="color:var(--faint)">${esc(h.ticker)}</span><br><span class="pill mono" style="font-size:.66rem;background:${c.color}22;color:${c.color}">${esc(c.label)}</span></td>
+        <td style="text-align:right" class="mono">${h.price!=null?money(h.price,"USD"):"—"}<br><span style="font-size:.68rem;color:var(--faint)">${num(h.quantity)} u</span></td>
+        <td style="text-align:right" class="mono">${h.value!=null?money(h.value,"USD"):"—"}</td>
+        <td style="text-align:right" class="mono ${h.pnl!=null?sgn(h.pnl):""}">${h.pnlPct!=null?pct(h.pnlPct):"—"}<br><span style="font-size:.68rem">${h.pnl!=null?(h.pnl>=0?"+":"")+money(h.pnl,"USD"):""}</span></td></tr>`));
+    });
+    tw.append(t); side.append(tw);
+  } else side.append(el(`<p class="empty" style="padding:1rem">Sin posiciones. Ve a "Operar" para comprar.</p>`));
+  wrap.append(side); box.append(wrap);
 }
 
 async function renderPortfolioBody(m,pf,holds,isAdmin){
@@ -2917,32 +3028,86 @@ const app = {
       }catch(e){ box.classList.add("hidden"); }
     }, 250);
   },
-  pickSym(sym){
-    const inp=$("#buySym"); if(inp) inp.value=sym;
+  pickSym(sym){ app.pickTradeSym(sym); },
+  pickTradeSym(sym){
+    state.cache.tradeSym=(sym||"").toUpperCase();
+    const inp=$("#buySym"); if(inp) inp.value=state.cache.tradeSym;
+    const ord=$("#ordSym"); if(ord) ord.value=state.cache.tradeSym;
     const box=$("#symResults"); if(box){ box.classList.add("hidden"); box.innerHTML=""; }
-    $("#buyAmt")?.focus();
+    const h=document.querySelector(".trade-chart-card h3"); if(h) h.textContent=state.cache.tradeSym;
+    tvWidget(state.cache.tradeSym); loadOrderPrice(state.cache.tradeSym);
+  },
+  tradeSelectPf(id){ state.cache.tradePf=id; renderTrade(); },
+  tradeEstimate(){
+    const price=state.cache.tradePrice, amt=parseFloat($("#ordAmt")?.value), est=$("#ordEst");
+    if(!est) return;
+    if(price==null||!amt||amt<=0){ est.textContent=""; return; }
+    est.innerHTML=`≈ <b>${(amt/price).toFixed(4)}</b> unidades a ${money(price,"USD")}`;
   },
   async buyAsset(){
-    const sym=($("#buySym").value||"").trim().toUpperCase(), amt=parseFloat($("#buyAmt").value);
-    const box=$("#buyMsg"); box.className="msg-line";
-    if(!sym){ box.textContent="Escribe un símbolo (ej. SPY o BTC/USD)."; box.classList.add("err"); return; }
+    const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf);
+    const box=$("#ordMsg"); if(box) box.className="msg-line";
+    if(!pf){ if(box){box.textContent="Selecciona un portafolio.";box.classList.add("err");} return; }
+    const sym=state.cache.tradeSym, price=state.cache.tradePrice, amt=parseFloat($("#ordAmt")?.value);
+    if(price==null){ box.textContent="No hay precio disponible para este activo."; box.classList.add("err"); return; }
     if(!amt||amt<=0){ box.textContent="Indica un monto válido."; box.classList.add("err"); return; }
-    const btn=$("#buyBtn"); btn.disabled=true; const prev=btn.textContent; btn.innerHTML='<span class="spinner"></span>';
-    try{
-      const { data:{ session } }=await sb.auth.getSession();
-      const r=await fetch("/api/alpaca-order",{ method:"POST",
-        headers:{ "Content-Type":"application/json", Authorization:"Bearer "+session.access_token },
-        body:JSON.stringify({ symbol:sym, notional:amt, side:"buy" }) });
-      const ct=r.headers.get("content-type")||"";
-      if(!ct.includes("application/json")) throw new Error("La función /api/alpaca-order no está desplegada.");
-      const d=await r.json();
-      if(!d.ok) throw new Error(d.message||"No se pudo comprar");
-      ui.toast(`Orden enviada: ${d.order.symbol} · ${d.order.status}`,"ok");
-      $("#buyAmt").value="";
-      setTimeout(loadTrade,1200);   // dar tiempo a que la orden se ejecute
-    }catch(e){ box.textContent=e.message; box.classList.add("err"); }
-    finally{ btn.disabled=false; btn.textContent=prev; }
+    if(amt>num(pf.cash)+1e-6){ box.textContent="Efectivo insuficiente en este portafolio."; box.classList.add("err"); return; }
+    const qty=amt/price, holds=(pf.holdings||[]).slice(), i=holds.findIndex(h=>h.ticker===sym);
+    if(i>=0){ const oQ=num(holds[i].quantity)||0,oC=num(holds[i].avg_cost)||0,nQ=oQ+qty;
+      holds[i]={...holds[i],quantity:nQ,avg_cost:(oQ*oC+qty*price)/nQ}; }
+    else holds.push({ticker:sym,name:sym,asset_class:classOf(sym),quantity:qty,avg_cost:price});
+    const newCash=num(pf.cash)-amt;
+    const {error}=await sb.from("sim_portfolios").update({cash:newCash,holdings:holds}).eq("id",pf.id);
+    if(error){ box.textContent=/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v19.sql":error.message; box.classList.add("err"); return; }
+    pf.cash=newCash; pf.holdings=holds;
+    ui.toast(`Compraste ${qty.toFixed(4)} de ${sym}`,"ok"); $("#ordAmt").value=""; renderTrade();
   },
+  async sellAsset(){
+    const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf);
+    const box=$("#ordMsg"); if(box) box.className="msg-line";
+    if(!pf) return;
+    const sym=state.cache.tradeSym, price=state.cache.tradePrice, amt=parseFloat($("#ordAmt")?.value);
+    const holds=(pf.holdings||[]).slice(), i=holds.findIndex(h=>h.ticker===sym);
+    if(i<0){ box.textContent="No tienes ese activo en este portafolio."; box.classList.add("err"); return; }
+    if(price==null){ box.textContent="No hay precio disponible."; box.classList.add("err"); return; }
+    if(!amt||amt<=0){ box.textContent="Indica el monto a vender."; box.classList.add("err"); return; }
+    const have=num(holds[i].quantity)||0; let sellQty=amt/price; if(sellQty>have) sellQty=have;
+    const proceeds=sellQty*price, remain=have-sellQty;
+    if(remain<=1e-9) holds.splice(i,1); else holds[i]={...holds[i],quantity:remain};
+    const newCash=num(pf.cash)+proceeds;
+    const {error}=await sb.from("sim_portfolios").update({cash:newCash,holdings:holds}).eq("id",pf.id);
+    if(error){ box.textContent=error.message; box.classList.add("err"); return; }
+    pf.cash=newCash; pf.holdings=holds;
+    ui.toast(`Vendiste ${sellQty.toFixed(4)} de ${sym}`,"ok"); $("#ordAmt").value=""; renderTrade();
+  },
+  async createPortfolio(goTrade){
+    const pfs=state.cache.portfolios||[];
+    if(pfs.length>=10) return ui.toast("Llegaste al límite de 10 portafolios","err");
+    const name=(prompt("Nombre del portafolio (ej. Portafolio prueba 1):","Portafolio prueba "+(pfs.length+1))||"").trim();
+    if(!name) return;
+    const {data,error}=await sb.from("sim_portfolios").insert({user_id:state.profile.id,name,cash:10000,holdings:[]}).select().single();
+    if(error) return ui.toast(/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v19.sql":(/límite|limit/i.test(error.message)?"Límite de 10 portafolios":error.message),"err");
+    await loadSimPortfolios();
+    ui.toast("Portafolio creado 🎉","ok");
+    if(goTrade){ state.cache.tradePf=data.id; renderTrade(); } else renderPortfolioList();
+  },
+  openPortfolio(id){ renderPortfolioDetail(id); window.scrollTo({top:0,behavior:"smooth"}); },
+  backToPortfolios(){ renderPortfolioList(); },
+  async deletePortfolio(id,ev){ if(ev) ev.stopPropagation();
+    const pf=(state.cache.portfolios||[]).find(p=>p.id===id);
+    if(!confirm(`¿Eliminar "${pf?.name||"este portafolio"}"? No se puede deshacer.`)) return;
+    const {error}=await sb.from("sim_portfolios").delete().eq("id",id);
+    if(error) return ui.toast(error.message,"err");
+    await loadSimPortfolios(); ui.toast("Portafolio eliminado","ok"); renderPortfolioList();
+  },
+  async renamePortfolio(id){
+    const pf=(state.cache.portfolios||[]).find(p=>p.id===id); if(!pf) return;
+    const name=(prompt("Nuevo nombre:",pf.name)||"").trim(); if(!name||name===pf.name) return;
+    const {error}=await sb.from("sim_portfolios").update({name}).eq("id",id);
+    if(error) return ui.toast(error.message,"err");
+    pf.name=name; ui.toast("Renombrado","ok"); renderPortfolioDetail(id);
+  },
+  tradeInPortfolio(id){ state.cache.tradePf=id; location.hash="#/operar"; },
 
   // admin: vincular cuenta Alpaca del cliente
   async saveAlpacaId(uid){
