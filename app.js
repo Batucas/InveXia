@@ -236,6 +236,7 @@ const NAV_CLIENT=[
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
   ["radar","Radar",icon("radar")],
+  ["terminal","Terminal de opciones",icon("term")],
   ["brief","Brief macro",icon("brief")],
   ["simulador","Simulador",icon("chart")],
   ["asistente","Asistente IA",icon("bot")],
@@ -344,6 +345,7 @@ async function render(){
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
       if(state.view==="quantnet")   return void await viewQuantNet();
       if(state.view==="radar")      return void await viewRadar();
+      if(state.view==="terminal")   return void await viewTerminal();
       if(state.view==="brief")      return void await viewBrief();
       if(state.view==="simulador")  return void await viewSimulator();
       if(state.view==="mercado")    return void await viewFeed();
@@ -1771,6 +1773,124 @@ function radarDemo(){
   ]};
 }
 
+/* ===================== Terminal de opciones ===================== */
+function terminalDemo(){
+  const spot=452.3, strikes=[], gex=[];
+  for(let k=430;k<=475;k+=2.5){ strikes.push(k);
+    const g=Math.exp(-(((k-460)/9)**2))*2.6 - Math.exp(-(((k-444)/8)**2))*2.0 + (Math.random()-0.5)*0.15;
+    gex.push({strike:k,gex:+g.toFixed(3)}); }
+  const expiries=[7,14,30,60,90,180], sstr=[440,445,450,455,460,465];
+  const iv=expiries.map(d=>sstr.map(k=>+(0.15+0.9*Math.max(0,(spot-k)/spot)*0.3+1.4*((k-spot)/spot)**2+0.10/Math.sqrt(d/30)).toFixed(4)));
+  const term=expiries.map(d=>({days:d,atm_iv:+(0.16+0.11/Math.sqrt(d/30)).toFixed(4)}));
+  return { ticker:"SPY", demo:true, generated_at:new Date().toISOString(), spot,
+    net_gex:+gex.reduce((a,b)=>a+b.gex,0).toFixed(3), gamma_flip:451.2, call_wall:460, put_wall:444,
+    gex_by_strike:gex, surface:{strikes:sstr,expiries,iv}, term,
+    dealer_convention:"dealers largos gamma en calls, cortos en puts (SqueezeMetrics)" };
+}
+
+async function viewTerminal(){
+  const m=$("#main"); m.classList.add("wide");
+  m.innerHTML=head("Análisis","Terminal de opciones","GEX, superficie de IV y estructura de plazos — calculados por nuestro motor.");
+  m.append(el(`<div id="termShell"><div class="radar-loading">Cargando el terminal…</div></div>`));
+  let idx=null;
+  try{
+    const u=sb.storage.from("media").getPublicUrl("terminal/index.json").data.publicUrl;
+    const r=await fetch(u,{cache:"no-store"}); if(r.ok) idx=await r.json();
+  }catch(e){}
+  const tickers=(idx&&idx.tickers&&idx.tickers.length)?idx.tickers.map(x=>x.ticker):["SPY (demo)"];
+  state.cache.term={ tickers, current:null };
+  const box=$("#termShell");
+  box.innerHTML=`<div class="term-tabs">${tickers.map((t,i)=>`<button class="rtab ${i===0?"on":""}" data-t="${esc(t)}" onclick="app.terminalSelect('${esc(t)}')">${esc(t)}</button>`).join("")}</div>
+    <div id="termPanels"></div>`;
+  app.terminalSelect(tickers[0]);
+}
+
+async function loadTerminalSnap(ticker){
+  if(/demo/i.test(ticker)) return terminalDemo();
+  try{
+    const u=sb.storage.from("media").getPublicUrl("terminal/"+ticker+".json").data.publicUrl;
+    const r=await fetch(u,{cache:"no-store"}); if(r.ok) return await r.json();
+  }catch(e){}
+  return terminalDemo();
+}
+
+function gexBarsSVG(gex, spot, callWall, putWall){
+  const W=560,H=260,pad=34; const xs=gex.map(g=>g.strike); const vs=gex.map(g=>g.gex);
+  const kmin=Math.min(...xs),kmax=Math.max(...xs); const vmax=Math.max(0.001,...vs.map(Math.abs));
+  const x=k=>pad+(k-kmin)/(kmax-kmin||1)*(W-pad*1.4);
+  const y=v=>H/2-(v/vmax)*(H/2-20);
+  const bw=Math.max(2,(W-pad*1.4)/gex.length-2);
+  let bars=gex.map(g=>{ const c=g.gex>=0?"#3DD6A0":"#c96a6a"; const yy=y(g.gex),y0=y(0);
+    return `<rect x="${(x(g.strike)-bw/2).toFixed(1)}" y="${Math.min(yy,y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(yy-y0).toFixed(1)}" fill="${c}" opacity=".9"/>`; }).join("");
+  const sx=x(spot);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+    <line x1="${pad}" y1="${y(0)}" x2="${W-pad*0.4}" y2="${y(0)}" stroke="#33405e" stroke-width="1"/>
+    ${bars}
+    <line x1="${sx}" y1="14" x2="${sx}" y2="${H-14}" stroke="#F5C451" stroke-dasharray="4 3" stroke-width="1.2"/>
+    <text x="${sx+4}" y="24" fill="#F5C451" font-size="10" font-family="JetBrains Mono">spot ${spot}</text>
+    ${callWall?`<text x="${x(callWall)}" y="${H-2}" fill="#3DD6A0" font-size="9" text-anchor="middle" font-family="JetBrains Mono">call wall</text>`:""}
+    ${putWall?`<text x="${x(putWall)}" y="12" fill="#c96a6a" font-size="9" text-anchor="middle" font-family="JetBrains Mono">put wall</text>`:""}
+    <text x="${pad}" y="${H-2}" fill="#65799A" font-size="9" font-family="JetBrains Mono">${kmin}</text>
+    <text x="${W-pad}" y="${H-2}" fill="#65799A" font-size="9" text-anchor="end" font-family="JetBrains Mono">${kmax}</text>
+  </svg>`;
+}
+function termLineSVG(term){
+  const W=560,H=230,pad=40; if(!term.length) return "";
+  const ds=term.map(t=>t.days),vs=term.map(t=>t.atm_iv*100);
+  const dmin=Math.min(...ds),dmax=Math.max(...ds),vmin=Math.min(...vs)*0.95,vmax=Math.max(...vs)*1.05;
+  const x=d=>pad+(d-dmin)/(dmax-dmin||1)*(W-pad*1.4);
+  const y=v=>H-24-(v-vmin)/(vmax-vmin||1)*(H-48);
+  const pts=term.map(t=>`${x(t.days).toFixed(1)},${y(t.atm_iv*100).toFixed(1)}`).join(" ");
+  const dots=term.map(t=>`<circle cx="${x(t.days).toFixed(1)}" cy="${y(t.atm_iv*100).toFixed(1)}" r="3.2" fill="#3DD6A0"/>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+    <polyline points="${pts}" fill="none" stroke="#3DD6A0" stroke-width="2"/>${dots}
+    <text x="${pad}" y="${H-6}" fill="#65799A" font-size="9" font-family="JetBrains Mono">${dmin}d</text>
+    <text x="${W-pad}" y="${H-6}" fill="#65799A" font-size="9" text-anchor="end" font-family="JetBrains Mono">${dmax}d</text>
+    <text x="6" y="20" fill="#65799A" font-size="9" font-family="JetBrains Mono">${vmax.toFixed(0)}%</text>
+    <text x="6" y="${H-26}" fill="#65799A" font-size="9" font-family="JetBrains Mono">${vmin.toFixed(0)}%</text>
+  </svg>`;
+}
+function ivSurfacePlotly(host, surf){
+  const draw=()=>{ if(!window.Plotly) return false;
+    const z=surf.iv.map(row=>row.map(v=>v==null?null:v*100));
+    window.Plotly.newPlot(host, [{type:"surface",x:surf.strikes,y:surf.expiries,z,
+      colorscale:"Viridis",showscale:false,contours:{z:{show:true,usecolormap:true,project:{z:true}}}}],
+      {margin:{l:0,r:0,t:0,b:0},paper_bgcolor:"rgba(0,0,0,0)",
+       scene:{xaxis:{title:"Strike",color:"#94A8C7",gridcolor:"#1e2a44"},
+              yaxis:{title:"Días",color:"#94A8C7",gridcolor:"#1e2a44"},
+              zaxis:{title:"IV %",color:"#94A8C7",gridcolor:"#1e2a44"},
+              bgcolor:"rgba(0,0,0,0)"}},
+      {displayModeBar:false,responsive:true}); return true; };
+  if(draw()) return;
+  const s=document.createElement("script");
+  s.src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js";
+  s.onload=draw; s.onerror=()=>{ host.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D.</div>'; };
+  document.head.appendChild(s);
+}
+
+async function renderTerminalPanels(snap){
+  const box=$("#termPanels"); if(!box) return;
+  const fmt=v=>v==null?"—":(v>=0?"+":"")+v+" $bn";
+  box.innerHTML=`
+    ${snap.demo?`<div class="radar-demo-note">Datos de <b>demostración</b>. Al correr terminal_pipeline.py con tu llave de Polygon verás datos reales.</div>`:""}
+    <div class="term-metrics">
+      <div class="tm"><span>Spot</span><b>$${snap.spot}</b></div>
+      <div class="tm"><span>GEX neto</span><b style="color:${(snap.net_gex||0)>=0?'#3DD6A0':'#c96a6a'}">${fmt(snap.net_gex)}</b></div>
+      <div class="tm"><span>Gamma flip</span><b>${snap.gamma_flip??"—"}</b></div>
+      <div class="tm"><span>Call wall</span><b style="color:#3DD6A0">${snap.call_wall??"—"}</b></div>
+      <div class="tm"><span>Put wall</span><b style="color:#c96a6a">${snap.put_wall??"—"}</b></div>
+    </div>
+    <div class="term-grid">
+      <div class="card term-panel"><h3>GEX por strike</h3><p class="term-sub">Verde = dealers largos gamma · rojo = cortos. Línea dorada = spot.</p>${gexBarsSVG(snap.gex_by_strike||[],snap.spot,snap.call_wall,snap.put_wall)}</div>
+      <div class="card term-panel"><h3>Superficie de IV</h3><p class="term-sub">Strike × vencimiento × IV. Arrastra para rotar.</p><div id="ivSurface" class="iv-surface"></div></div>
+      <div class="card term-panel"><h3>Estructura de plazos (IV ATM)</h3><p class="term-sub">Volatilidad implícita at-the-money por vencimiento.</p>${termLineSVG(snap.term||[])}</div>
+    </div>
+    <p class="brief-disc">Convención de dealers: ${esc(snap.dealer_convention||"—")}. Cálculo propio a partir de datos de Polygon.io. No es asesoría financiera.</p>`;
+  const host=document.getElementById("ivSurface");
+  if(host && snap.surface && snap.surface.iv && snap.surface.iv.length) ivSurfacePlotly(host, snap.surface);
+  else if(host) host.innerHTML='<div class="term-noplot">Sin datos de superficie para este ticker.</div>';
+}
+
 async function viewRadar(){
   const m=$("#main"); m.classList.add("wide");
   m.innerHTML=head("Análisis","Radar","Escáner de señales de momentum, volatilidad y flujo sobre el universo.");
@@ -2513,6 +2633,11 @@ const app = {
   setCoursesView(v){ state.coursesView=v; viewCoursesClient(); },
   radarFilter(k){ if(state.cache.radar){ state.cache.radar.filter=k; renderRadar(); } },
   radarSearch(v){ if(state.cache.radar){ state.cache.radar.q=v; renderRadarGrid(); } },
+  async terminalSelect(t){
+    document.querySelectorAll(".term-tabs .rtab").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
+    const pan=$("#termPanels"); if(pan) pan.innerHTML=`<div class="radar-loading">Calculando ${esc(t)}…</div>`;
+    const snap=await loadTerminalSnap(t); state.cache.term.current=snap; renderTerminalPanels(snap);
+  },
   async generateBrief(){
     const btn=$("#briefGen"); if(btn){ btn.disabled=true; btn.textContent="Generando… (~15s)"; }
     try{
@@ -3245,6 +3370,7 @@ function icon(n){
     net:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="17" r="2"/><path d="M8 7l8 0M7 8l0 8M8 17l7-1M8 7l8 9"/>',
     radar:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/><path d="M12 12l6-4"/>',
     brief:'<path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h4"/>',
+    term:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l2.5 3L7 15M13 15h4"/>',
   }[n]||"";
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 }

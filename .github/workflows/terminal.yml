@@ -1,0 +1,42 @@
+# ============================================================
+#  InveXia · Terminal de opciones — cálculo diario (EOD)
+#  ------------------------------------------------------------
+#  Corre terminal_pipeline.py: baja las cadenas de opciones de
+#  Polygon.io, calcula IV/griegas/GEX con nuestro motor y sube
+#  un snapshot por ticker a Supabase Storage (media/terminal/).
+#
+#  Secrets necesarios (Settings → Secrets → Actions):
+#     POLYGON_API_KEY   (nuevo — de tu cuenta Polygon.io)
+#     SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (ya los tienes)
+#  Ubicación obligatoria: .github/workflows/terminal.yml
+# ============================================================
+
+name: Terminal de opciones (diario)
+
+on:
+  # Días hábiles a las 21:30 UTC (~17:30 en Bolivia, tras el cierre)
+  schedule:
+    - cron: "30 21 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  run-terminal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install requests
+
+      - name: Ejecutar el motor
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python terminal_pipeline.py
