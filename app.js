@@ -1945,7 +1945,7 @@ function renderMomentum(){
   const when=d.generated_at?new Date(d.generated_at).toLocaleString("es"):"—";
   host.innerHTML=`${d.demo?`<div class="radar-demo-note">Momentum de <b>demostración</b>. Al correr el Radar verás el mapa real.</div>`:""}
     <div class="radar-meta" style="margin-bottom:.6rem"><span class="radar-count">${d.assets.length}</span> activos · ${esc(d.window||"")} · <span class="radar-when">${esc(when)}</span></div>
-    <div id="momo3d" class="momo-3d card"></div>
+    <div class="card" style="padding:.4rem"><div id="momo3d" style="width:100%;height:520px"></div></div>
     <p class="term-sub" style="margin-top:.7rem">Cada punto es un activo. <b style="color:#3DD6A0">Verde</b> = momentum positivo, <b style="color:#c96a6a">rojo</b> = negativo. Arrastra para rotar.</p>`;
   const g=document.getElementById("momo3d");
   ensurePlotly(()=>{
@@ -1959,12 +1959,14 @@ function renderMomentum(){
         colorscale:[[0,"#c96a6a"],[0.5,"#65799A"],[1,"#3DD6A0"]], cmin:-3, cmax:3,
         opacity:.92, line:{width:.5,color:"#0A1120"} }
     }],{
-      margin:{l:0,r:0,t:0,b:0}, paper_bgcolor:"rgba(0,0,0,0)",
-      scene:{ xaxis:{title:"Ret % (20d)",color:"#94A8C7",gridcolor:"#1e2a44"},
-              yaxis:{title:"Sharpe",color:"#94A8C7",gridcolor:"#1e2a44"},
-              zaxis:{title:"Z-score",color:"#94A8C7",gridcolor:"#1e2a44"},
-              bgcolor:"rgba(0,0,0,0)" }
+      autosize:true, margin:{l:0,r:0,t:0,b:0}, paper_bgcolor:"rgba(0,0,0,0)",
+      scene:{ xaxis:{title:"Ret % (20d)",color:"#94A8C7",gridcolor:"#1e2a44",zerolinecolor:"#33405e"},
+              yaxis:{title:"Sharpe",color:"#94A8C7",gridcolor:"#1e2a44",zerolinecolor:"#33405e"},
+              zaxis:{title:"Z-score",color:"#94A8C7",gridcolor:"#1e2a44",zerolinecolor:"#33405e"},
+              bgcolor:"rgba(0,0,0,0)", aspectmode:"cube",
+              camera:{eye:{x:1.6,y:1.6,z:1.1}} }
     },{displayModeBar:false,responsive:true});
+    setTimeout(()=>{ try{ window.Plotly.Plots.resize(g); }catch(e){} }, 80);
   },()=>{ if(g) g.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D. Revisa el bloqueador del navegador.</div>'; });
 }
 

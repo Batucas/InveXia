@@ -253,6 +253,7 @@ def _momentum_metrics(close):
     ret20 = (price / close[-21] - 1) * 100 if len(close) > 21 else 0.0
     win = rets[-60:]
     sharpe = float(np.mean(win) / (np.std(win) + 1e-9) * np.sqrt(252))
+    sharpe = max(-5.0, min(5.0, sharpe))     # acotar: >±5 casi siempre es artefacto de baja varianza
     sma20 = float(np.mean(close[-20:])); sd20 = float(np.std(close[-20:])) or 1e-9
     z = (price - sma20) / sd20
     return {"price": round(price, 2), "ret": round(ret20, 2),
