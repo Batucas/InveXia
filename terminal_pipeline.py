@@ -130,6 +130,14 @@ def build_analytics(spot, contracts, today):
     call_wall = max(by_strike.items(), key=lambda kv: kv[1])[0] if by_strike else None
     put_wall  = min(by_strike.items(), key=lambda kv: kv[1])[0] if by_strike else None
 
+    # --- ratios call/put (gamma·OI y OI) ---
+    call_go = sum(r_["gamma"] * r_["oi"] for r_ in rows if r_["kind"] == "call")
+    put_go  = sum(r_["gamma"] * r_["oi"] for r_ in rows if r_["kind"] == "put")
+    call_oi = sum(r_["oi"] for r_ in rows if r_["kind"] == "call")
+    put_oi  = sum(r_["oi"] for r_ in rows if r_["kind"] == "put")
+    gex_cp = round(call_go / put_go, 2) if put_go > 0 else None
+    oi_cp  = round(call_oi / put_oi, 2) if put_oi > 0 else None
+
     # --- gamma flip: nivel de spot donde el GEX total cruza cero ---
     def total_gex_at(S_hyp):
         tot = 0.0
@@ -164,6 +172,7 @@ def build_analytics(spot, contracts, today):
 
     return {"spot": round(spot, 2), "net_gex": net_gex, "gamma_flip": flip,
             "call_wall": call_wall, "put_wall": put_wall,
+            "gex_cp": gex_cp, "oi_cp": oi_cp,
             "gex_by_strike": gex_by_strike,
             "surface": {"strikes": strikes, "expiries": expiries, "iv": surf},
             "term": term}
@@ -278,7 +287,9 @@ def run():
                     "dealer_convention": "dealers largos gamma en calls, cortos en puts (SqueezeMetrics)",
                     **a}
             upload(f"terminal/{t}.json", snap)
-            idx["tickers"].append({"ticker": t, "spot": a["spot"], "net_gex": a["net_gex"]})
+            idx["tickers"].append({"ticker": t, "spot": a["spot"], "net_gex": a["net_gex"],
+                                   "gex_cp": a.get("gex_cp"), "oi_cp": a.get("oi_cp"),
+                                   "call_wall": a.get("call_wall"), "put_wall": a.get("put_wall")})
         except Exception as e:
             print(f"   error: {e}")
     upload("terminal/index.json", idx)

@@ -1790,19 +1790,87 @@ function terminalDemo(){
 
 async function viewTerminal(){
   const m=$("#main"); m.classList.add("wide");
-  m.innerHTML=head("Análisis","Terminal de opciones","GEX, superficie de IV y estructura de plazos — calculados por nuestro motor.");
+  m.innerHTML=head("Análisis","Terminal de opciones","GEX, superficie de IV y estructura de plazos — motor propio.");
   m.append(el(`<div id="termShell"><div class="radar-loading">Cargando el terminal…</div></div>`));
   let idx=null;
   try{
     const u=sb.storage.from("media").getPublicUrl("terminal/index.json").data.publicUrl;
     const r=await fetch(u,{cache:"no-store"}); if(r.ok) idx=await r.json();
   }catch(e){}
-  const tickers=(idx&&idx.tickers&&idx.tickers.length)?idx.tickers.map(x=>x.ticker):["SPY (demo)"];
-  state.cache.term={ tickers, current:null };
-  const box=$("#termShell");
-  box.innerHTML=`<div class="term-tabs">${tickers.map((t,i)=>`<button class="rtab ${i===0?"on":""}" data-t="${esc(t)}" onclick="app.terminalSelect('${esc(t)}')">${esc(t)}</button>`).join("")}</div>
-    <div id="termPanels"></div>`;
-  app.terminalSelect(tickers[0]);
+  let snaps={}, order=[];
+  if(idx&&Array.isArray(idx.tickers)&&idx.tickers.length){
+    order=idx.tickers.map(x=>x.ticker);
+    await Promise.all(order.map(async t=>{ snaps[t]=await loadTerminalSnap(t); }));
+  } else {
+    terminalDemoMulti().forEach(s=>{ snaps[s.ticker]=s; order.push(s.ticker); });
+  }
+  state.cache.term={ snaps, order, mode:"mosaico", current:null };
+  renderTerminalMode();
+}
+function renderTerminalMode(){
+  const T=state.cache.term;
+  if(T.mode==="individual" && T.current) renderTerminalIndividual(T.current);
+  else renderTerminalMosaico();
+}
+function renderTerminalMosaico(){
+  const T=state.cache.term, box=$("#termShell"); if(!box) return;
+  const demo=Object.values(T.snaps)[0]?.demo;
+  box.innerHTML=`${demo?`<div class="radar-demo-note">Datos de <b>demostración</b>. Con tu plan de Polygon y el pipeline corriendo verás el mosaico real. Toca cualquier activo para ampliarlo.</div>`:`<p class="term-sub" style="margin-bottom:.8rem">Toca cualquier activo para ampliarlo al terminal completo.</p>`}
+    <div class="term-mosaic">${T.order.map(t=>miniPanel(t,T.snaps[t])).join("")}</div>`;
+}
+function miniPanel(t,s){
+  if(!s) return "";
+  const pos=(s.net_gex||0)>=0, reg=pos?{l:"Gamma positiva",c:"#3DD6A0"}:{l:"Gamma negativa",c:"#c96a6a"};
+  return `<div class="mini-panel card" onclick="app.terminalOpen('${t}')">
+    <div class="mp-head"><div><b class="mp-tid">${esc(t)}</b><span class="mp-spot">$${s.spot}</span></div>
+      <button class="mp-exp" onclick="event.stopPropagation();app.terminalOpen('${t}')" title="Ampliar">⤢</button></div>
+    <div class="mp-reg" style="color:${reg.c}">◆ ${reg.l}</div>
+    <div class="mp-metrics"><span>GEX C/P <b>${s.gex_cp??"—"}</b></span><span>OI C/P <b>${s.oi_cp??"—"}</b></span><span>Δ <b style="color:${reg.c}">${s.net_gex}b</b></span></div>
+    <div class="mp-rs"><span style="color:#3DD6A0">R ${s.call_wall??"—"}</span><span style="color:#c96a6a">S ${s.put_wall??"—"}</span></div>
+    ${gexMiniSVG(s.gex_by_strike||[],s.spot)}
+  </div>`;
+}
+function gexMiniSVG(gex, spot){
+  const W=260,H=70; if(!gex.length) return "";
+  const xs=gex.map(g=>g.strike),vs=gex.map(g=>g.gex);
+  const kmin=Math.min(...xs),kmax=Math.max(...xs),vmax=Math.max(0.001,...vs.map(Math.abs));
+  const x=k=>(k-kmin)/(kmax-kmin||1)*W, y=v=>H/2-(v/vmax)*(H/2-4);
+  const bw=Math.max(1.4,W/gex.length-1);
+  const bars=gex.map(g=>{ const c=g.gex>=0?"#3DD6A0":"#c96a6a",yy=y(g.gex),y0=y(0);
+    return `<rect x="${(x(g.strike)-bw/2).toFixed(1)}" y="${Math.min(yy,y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(yy-y0).toFixed(1)}" fill="${c}" opacity=".85"/>`; }).join("");
+  return `<svg class="mp-chart" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none">
+    <line x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="#33405e" stroke-width=".7"/>${bars}
+    <line x1="${x(spot).toFixed(1)}" y1="2" x2="${x(spot).toFixed(1)}" y2="${H-2}" stroke="#F5C451" stroke-dasharray="3 2" stroke-width="1"/></svg>`;
+}
+function renderTerminalIndividual(t){
+  const T=state.cache.term, s=T.snaps[t], box=$("#termShell"); if(!box) return;
+  box.innerHTML=`<div class="term-indiv-top">
+      <button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.terminalBackToMosaico()">← Mosaico</button>
+      <div class="term-tabs">${T.order.map(x=>`<button class="rtab ${x===t?"on":""}" onclick="app.terminalOpen('${x}')">${esc(x)}</button>`).join("")}</div>
+    </div><div id="termPanels"></div>`;
+  renderTerminalPanels(s);
+}
+function terminalDemoMulti(){
+  const mk=(tid,spot,cw,pw,flip,net,gcp,ocp)=>{
+    const gex=[]; for(let i=0;i<22;i++){ const k=+(spot*(0.9+i*0.01)).toFixed(1);
+      const g=Math.exp(-(((k-cw)/(spot*0.03))**2))*Math.abs(net)*1.4 - Math.exp(-(((k-pw)/(spot*0.03))**2))*Math.abs(net)*1.1 + (Math.random()-0.5)*Math.abs(net)*0.1;
+      gex.push({strike:k,gex:+g.toFixed(3)}); }
+    const exp=[7,14,30,60,90,180],ss=[spot*0.97,spot*0.99,spot,spot*1.01,spot*1.03].map(v=>+v.toFixed(1));
+    const iv=exp.map(d=>ss.map(k=>+(0.15+1.3*((k-spot)/spot)**2+0.10/Math.sqrt(d/30)).toFixed(4)));
+    const term=exp.map(d=>({days:d,atm_iv:+(0.16+0.11/Math.sqrt(d/30)).toFixed(4)}));
+    return { ticker:tid, demo:true, generated_at:new Date().toISOString(), spot,
+      net_gex:net, gamma_flip:flip, call_wall:cw, put_wall:pw, gex_cp:gcp, oi_cp:ocp,
+      gex_by_strike:gex, surface:{strikes:ss,expiries:exp,iv}, term,
+      dealer_convention:"dealers largos gamma en calls, cortos en puts (SqueezeMetrics)" };
+  };
+  return [
+    mk("SPY",452.3,460,444,451.2,3.02,1.97,1.08),
+    mk("QQQ",388.1,395,378,386.0,1.35,1.28,0.98),
+    mk("TLT",92.4,95,90,92.9,-0.84,0.72,1.20),
+    mk("GLD",196.5,200,192,196.9,0.41,1.10,0.90),
+    mk("AAPL",231.2,240,222,229.5,0.66,1.42,1.05),
+    mk("NVDA",121.4,130,112,118.9,-1.20,0.88,1.15),
+  ];
 }
 
 async function loadTerminalSnap(ticker){
@@ -1890,9 +1958,9 @@ async function renderTerminalPanels(snap){
       <div class="tm"><span>Put wall</span><b style="color:#c96a6a">${snap.put_wall??"—"}</b></div>
     </div>
     <div class="term-grid">
-      <div class="card term-panel"><h3>GEX por strike</h3><p class="term-sub">Verde = dealers largos gamma · rojo = cortos. Línea dorada = spot.</p>${gexBarsSVG(snap.gex_by_strike||[],snap.spot,snap.call_wall,snap.put_wall)}</div>
-      <div class="card term-panel"><h3>Superficie de IV</h3><p class="term-sub">Strike × vencimiento × IV. Arrastra para rotar.</p><div id="ivSurface" class="iv-surface"></div></div>
-      <div class="card term-panel"><h3>Estructura de plazos (IV ATM)</h3><p class="term-sub">Volatilidad implícita at-the-money por vencimiento.</p>${termLineSVG(snap.term||[])}</div>
+      <div class="card term-panel"><div class="tp-head"><h3>GEX por strike</h3><button class="tp-max" onclick="app.maxPanel(this)" title="Ampliar">⤢</button></div><p class="term-sub">Verde = dealers largos gamma · rojo = cortos. Línea dorada = spot.</p>${gexBarsSVG(snap.gex_by_strike||[],snap.spot,snap.call_wall,snap.put_wall)}</div>
+      <div class="card term-panel"><div class="tp-head"><h3>Superficie de IV</h3><button class="tp-max" onclick="app.maxPanel(this)" title="Ampliar">⤢</button></div><p class="term-sub">Strike × vencimiento × IV. Arrastra para rotar.</p><div id="ivSurface" class="iv-surface"></div></div>
+      <div class="card term-panel"><div class="tp-head"><h3>Estructura de plazos (IV ATM)</h3><button class="tp-max" onclick="app.maxPanel(this)" title="Ampliar">⤢</button></div><p class="term-sub">Volatilidad implícita at-the-money por vencimiento.</p>${termLineSVG(snap.term||[])}</div>
     </div>
     <p class="brief-disc">Convención de dealers: ${esc(snap.dealer_convention||"—")}. Cálculo propio a partir de datos de Polygon.io. No es asesoría financiera.</p>`;
   const host=document.getElementById("ivSurface");
@@ -2699,10 +2767,14 @@ const app = {
   radarFilter(k){ if(state.cache.radar){ state.cache.radar.filter=k; renderRadar(); } },
   radarMode(m){ state.cache.radarMode=m; renderRadarMode(); },
   radarSearch(v){ if(state.cache.radar){ state.cache.radar.q=v; renderRadarGrid(); } },
-  async terminalSelect(t){
-    document.querySelectorAll(".term-tabs .rtab").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
-    const pan=$("#termPanels"); if(pan) pan.innerHTML=`<div class="radar-loading">Calculando ${esc(t)}…</div>`;
-    const snap=await loadTerminalSnap(t); state.cache.term.current=snap; renderTerminalPanels(snap);
+  async terminalSelect(t){ app.terminalOpen(t); },
+  terminalOpen(t){ const T=state.cache.term; if(!T) return; T.mode="individual"; T.current=t; renderTerminalMode(); window.scrollTo({top:0,behavior:"smooth"}); },
+  terminalBackToMosaico(){ const T=state.cache.term; if(!T) return; T.mode="mosaico"; T.current=null; renderTerminalMode(); },
+  maxPanel(btn){ const p=btn.closest(".term-panel"); if(!p) return;
+    const on=p.classList.toggle("maximized"); btn.textContent=on?"⤡":"⤢";
+    document.body.classList.toggle("panel-maxed",on);
+    const host=p.querySelector("#ivSurface");
+    if(host&&window.Plotly){ setTimeout(()=>{ try{ window.Plotly.Plots.resize(host); }catch(e){} },60); }
   },
   async generateBrief(){
     const btn=$("#briefGen"); if(btn){ btn.disabled=true; btn.textContent="Generando… (~15s)"; }
