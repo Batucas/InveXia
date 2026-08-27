@@ -1161,3 +1161,28 @@ body.onboarding-mode #app{grid-template-columns:1fr!important}
 .cc-item{display:flex;align-items:center;gap:.6rem;width:100%;background:none;border:none;color:var(--text);padding:.5rem .6rem;border-radius:7px;cursor:pointer;font-size:.88rem;text-align:left}
 .cc-item:hover{background:rgba(46,125,246,.12)}.cc-name{flex:1}.cc-dial{color:var(--faint)}
 .cc-empty{color:var(--faint);padding:.6rem;font-size:.85rem;text-align:center}
+
+/* ============================================================
+   v4.9 · Acordeón de ideas + drawer móvil reabrible
+   ============================================================ */
+.idea-list{display:flex;flex-direction:column;gap:.7rem}
+.idea-acc{padding:0;overflow:hidden}
+.idea-head{display:flex;align-items:center;gap:.8rem;padding:1rem 1.2rem;cursor:pointer;transition:background .15s}
+.idea-head:hover{background:rgba(46,125,246,.05)}
+.idea-head-main{flex:1;min-width:0}
+.idea-head h3{font-size:1rem;line-height:1.3}
+.idea-chevron{color:var(--faint);transition:transform .2s;flex:none}
+.idea-acc:not(.idea-collapsed) .idea-chevron{transform:rotate(180deg)}
+.idea-detail{display:none;padding:0 1.2rem 1.2rem}
+.idea-acc:not(.idea-collapsed) .idea-detail{display:block;animation:ideaOpen .2s ease}
+@keyframes ideaOpen{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* fondo para cerrar el menú tocando afuera (móvil) */
+.nav-backdrop{position:fixed;inset:0;background:rgba(4,8,16,.55);z-index:35;opacity:0;pointer-events:none;transition:opacity .2s}
+.nav-backdrop.show{opacity:1;pointer-events:auto}
+@media(min-width:901px){ .nav-backdrop{display:none} }
+/* asegurar que el botón ☰ móvil siempre se vea y sea grande */
+@media(max-width:900px){
+  .topbar-mob{z-index:36}
+  .burger{font-size:1.25rem;padding:.45rem .7rem;line-height:1}
+}

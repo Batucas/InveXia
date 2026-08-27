@@ -118,7 +118,17 @@ const ui = {
     $("#inPass").autocomplete   = login?"current-password":"new-password";
     auth.mode=m; $("#authMsg").textContent="";
   },
-  toggleSidebar(){ $("#sidebar").classList.toggle("open"); },
+  toggleSidebar(){
+    const side=$("#sidebar"); if(!side) return;
+    const open=side.classList.toggle("open");
+    let bd=$("#navBackdrop");
+    if(open){
+      if(!bd){ bd=document.createElement("div"); bd.id="navBackdrop"; bd.className="nav-backdrop";
+        bd.onclick=()=>ui.closeSidebar(); document.getElementById("app").appendChild(bd); }
+      requestAnimationFrame(()=>bd.classList.add("show"));
+    } else if(bd){ bd.classList.remove("show"); }
+  },
+  closeSidebar(){ $("#sidebar")?.classList.remove("open"); $("#navBackdrop")?.classList.remove("show"); },
   toggleSide(){ $("#app").classList.toggle("collapsed"); },
   toast(msg,kind=""){ const t=$("#toast"); t.textContent=msg; t.className="toast show "+kind;
     setTimeout(()=>t.className="toast",2800); },
@@ -333,9 +343,9 @@ function buildNav(admin){
     a.onclick=()=>{
       if(id==="cursos" && !document.body.classList.contains("focus-mode")){
         window.open(location.origin+location.pathname+"?focus=cursos","_blank");
-        $("#sidebar").classList.remove("open"); return;
+        ui.closeSidebar(); return;
       }
-      location.hash="#/"+id; $("#sidebar").classList.remove("open");
+      location.hash="#/"+id; ui.closeSidebar();
     };
     nav.append(a);
   });
@@ -1537,7 +1547,8 @@ async function viewFeed(){
   const ideas=posts.filter(p=>p.kind==="idea"), news=posts.filter(p=>p.kind==="noticia");
   if(ideas.length){
     m.append(el(`<div class="nav-label" style="padding-left:0">Ideas de inversión</div>`));
-    const g=el(`<div class="grid grid-2" style="margin-bottom:1.8rem"></div>`);
+    m.append(el(`<p class="card-sub" style="margin:-.2rem 0 .7rem">Toca una idea para ver el detalle.</p>`));
+    const g=el(`<div class="idea-list" style="margin-bottom:1.8rem"></div>`);
     ideas.forEach(p=>g.append(ideaCard(p))); m.append(g);
   }
   if(news.length){
@@ -1602,18 +1613,21 @@ function cover(url,alt,fallbackText,accent="var(--blue-500)"){
 }
 function ideaCard(p){
   const dirColor={compra:"var(--ok)",venta:"var(--bad)",mantener:"var(--warn)"}[p.direction]||"var(--muted)";
-  return el(`<div class="card idea media-card">
-    ${cover(p.image_url,p.title,p.ticker||"IDEA",dirColor)}
-    <div class="media-body">
-      <div class="flex between">
-        <div class="flex" style="gap:.5rem">
+  return el(`<div class="card idea idea-acc idea-collapsed">
+    <div class="idea-head" onclick="app.toggleIdea(this)">
+      <div class="idea-head-main">
+        <div class="flex" style="gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem">
           <span class="mono ticker">${esc(p.ticker||"—")}</span>
           <span class="pill" style="color:${dirColor};text-transform:capitalize">${esc(p.direction||"idea")}</span>
+          <span class="pill ${p.status==="abierta"?"pill-ok":""} dot" style="${p.status!=="abierta"?"color:var(--faint)":""}">${esc(p.status||"abierta")}</span>
         </div>
-        <span class="pill ${p.status==="abierta"?"pill-ok":""} dot" style="${p.status!=="abierta"?"color:var(--faint)":""}">${esc(p.status||"abierta")}</span>
+        <h3 style="margin:0">${esc(p.title)}</h3>
       </div>
-      <h3 style="margin:.7rem 0 .3rem">${esc(p.title)}</h3>
-      <p class="card-sub" style="margin-bottom:.8rem">${esc(p.body||"")}</p>
+      <span class="idea-chevron">▾</span>
+    </div>
+    <div class="idea-detail">
+      ${cover(p.image_url,p.title,p.ticker||"IDEA",dirColor)}
+      <p class="card-sub" style="margin:.8rem 0">${esc(p.body||"")}</p>
       <div class="flex" style="gap:1.4rem;font-size:.82rem;flex-wrap:wrap">
         ${p.target_price?`<div><div class="k-mini">Precio objetivo</div><b class="mono">${money(p.target_price,"USD")}</b></div>`:""}
         ${p.horizon?`<div><div class="k-mini">Horizonte</div><b>${esc(p.horizon)}</b></div>`:""}
@@ -3333,6 +3347,7 @@ const app = {
     pf.name=name; ui.toast("Renombrado","ok"); renderPortfolioDetail(id);
   },
   tradeInPortfolio(id){ state.cache.tradePf=id; location.hash="#/operar"; },
+  toggleIdea(head){ head.closest(".idea-acc")?.classList.toggle("idea-collapsed"); },
   onbToggleCC(ev){ if(ev) ev.stopPropagation(); const l=$("#ccList"); if(l){ l.classList.toggle("hidden"); const s=$("#ccSearch"); if(s&&!l.classList.contains("hidden")) s.focus(); } },
   onbSearchCC(q){ renderCCItems(q); },
   onbPickCC(iso){ state.cache.onbCC=iso; const c=ccOf(iso);
