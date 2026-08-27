@@ -1553,7 +1553,8 @@ async function viewFeed(){
   }
   if(news.length){
     m.append(el(`<div class="nav-label" style="padding-left:0">Noticias del mercado</div>`));
-    const g=el(`<div class="grid grid-2"></div>`);
+    m.append(el(`<p class="card-sub" style="margin:-.2rem 0 .7rem">Toca una noticia para leerla.</p>`));
+    const g=el(`<div class="idea-list"></div>`);
     news.forEach(p=>g.append(newsCard(p))); m.append(g);
   }
 }
@@ -1611,10 +1612,16 @@ function cover(url,alt,fallbackText,accent="var(--blue-500)"){
     onerror="this.parentNode.classList.add('ph');this.remove()"></div>`;
   return `<div class="cover ph" style="--accent:${accent}"><span>${esc(fallbackText||"")}</span></div>`;
 }
+function coverThumb(url,alt,fb,accent="var(--blue-500)"){
+  return `<div class="acc-thumb ${url?"":"ph"}" style="--accent:${accent}">
+    ${url?`<img src="${esc(url)}" alt="${esc(alt)}" loading="lazy" onerror="this.parentNode.classList.add('ph');this.remove()">`:""}
+    <span>${esc(fb||"")}</span></div>`;
+}
 function ideaCard(p){
   const dirColor={compra:"var(--ok)",venta:"var(--bad)",mantener:"var(--warn)"}[p.direction]||"var(--muted)";
   return el(`<div class="card idea idea-acc idea-collapsed">
     <div class="idea-head" onclick="app.toggleIdea(this)">
+      ${coverThumb(p.image_url,p.title,p.ticker||"IDEA",dirColor)}
       <div class="idea-head-main">
         <div class="flex" style="gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem">
           <span class="mono ticker">${esc(p.ticker||"—")}</span>
@@ -1626,8 +1633,7 @@ function ideaCard(p){
       <span class="idea-chevron">▾</span>
     </div>
     <div class="idea-detail">
-      ${cover(p.image_url,p.title,p.ticker||"IDEA",dirColor)}
-      <p class="card-sub" style="margin:.8rem 0">${esc(p.body||"")}</p>
+      <p class="card-sub" style="margin:0 0 .8rem">${esc(p.body||"")}</p>
       <div class="flex" style="gap:1.4rem;font-size:.82rem;flex-wrap:wrap">
         ${p.target_price?`<div><div class="k-mini">Precio objetivo</div><b class="mono">${money(p.target_price,"USD")}</b></div>`:""}
         ${p.horizon?`<div><div class="k-mini">Horizonte</div><b>${esc(p.horizon)}</b></div>`:""}
@@ -1638,11 +1644,16 @@ function ideaCard(p){
     </div></div>`);
 }
 function newsCard(p){
-  return el(`<div class="card media-card">
-    ${cover(p.image_url,p.title,"NOTICIA","var(--blue-400)")}
-    <div class="media-body">
-      <div class="k-mini">${fmtDate(p.created_at)}</div>
-      <h3 style="margin:.35rem 0 .4rem;font-size:1rem">${esc(p.title)}</h3>
+  return el(`<div class="card idea-acc idea-collapsed">
+    <div class="idea-head" onclick="app.toggleIdea(this)">
+      ${coverThumb(p.image_url,p.title,"NOTICIA","var(--blue-400)")}
+      <div class="idea-head-main">
+        <div class="k-mini" style="margin-bottom:.3rem">${fmtDate(p.created_at)}</div>
+        <h3 style="margin:0;font-size:1rem">${esc(p.title)}</h3>
+      </div>
+      <span class="idea-chevron">▾</span>
+    </div>
+    <div class="idea-detail">
       <p class="card-sub" style="margin:0">${esc(p.body||"")}</p>
       ${p.source_url?`<a class="mt" style="display:inline-block;font-size:.82rem" href="${esc(p.source_url)}" target="_blank" rel="noopener">Leer fuente →</a>`:""}
     </div></div>`);

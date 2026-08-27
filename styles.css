@@ -1186,3 +1186,12 @@ body.onboarding-mode #app{grid-template-columns:1fr!important}
   .topbar-mob{z-index:36}
   .burger{font-size:1.25rem;padding:.45rem .7rem;line-height:1}
 }
+
+/* v4.9b · Miniatura en el acordeón (imagen + título visibles) */
+.acc-thumb{width:60px;height:60px;border-radius:9px;overflow:hidden;flex:none;position:relative;background:var(--navy-950)}
+.acc-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.acc-thumb span{display:none}
+.acc-thumb.ph{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 30%,var(--navy-850)),var(--navy-950))}
+.acc-thumb.ph span{display:grid;place-items:center;position:absolute;inset:0;font-family:'JetBrains Mono';font-size:.6rem;letter-spacing:.06em;color:var(--accent);text-align:center;padding:2px}
+.idea-head h3{overflow-wrap:anywhere}
+@media(max-width:520px){ .acc-thumb{width:52px;height:52px} .idea-head{padding:.7rem .8rem;gap:.6rem} }
