@@ -221,6 +221,8 @@ function enterApp(){
   if(p.avatar_url){ av.innerHTML=avHtml; if(avm) avm.innerHTML=avHtml; }
   else { av.textContent=initials(p.full_name); if(avm) avm.textContent=initials(p.full_name); }
   buildNav(admin);
+  // Onboarding: cuentas nuevas de cliente deben completar su perfil
+  if(!admin && !state.profile.onboarded){ renderOnboarding(); return; }
   // Modo enfoque: cursos en pestaña nueva a pantalla completa
   const focus=new URLSearchParams(location.search).get("focus");
   if(focus==="cursos"){
@@ -229,6 +231,66 @@ function enterApp(){
   }
   if(!location.hash) location.hash = admin?"#/clientes":"#/inicio";
   else route();
+}
+
+/* ===================== Onboarding · completar perfil ===================== */
+const COUNTRIES=[
+  ["BO","Bolivia","591"],["AR","Argentina","54"],["BR","Brasil","55"],["CL","Chile","56"],
+  ["CO","Colombia","57"],["CR","Costa Rica","506"],["CU","Cuba","53"],["DO","Rep. Dominicana","1"],
+  ["EC","Ecuador","593"],["SV","El Salvador","503"],["GT","Guatemala","502"],["HN","Honduras","504"],
+  ["MX","México","52"],["NI","Nicaragua","505"],["PA","Panamá","507"],["PY","Paraguay","595"],
+  ["PE","Perú","51"],["PR","Puerto Rico","1"],["UY","Uruguay","598"],["VE","Venezuela","58"],
+  ["US","Estados Unidos","1"],["CA","Canadá","1"],["ES","España","34"],["PT","Portugal","351"],
+  ["FR","Francia","33"],["IT","Italia","39"],["DE","Alemania","49"],["GB","Reino Unido","44"],
+  ["NL","Países Bajos","31"],["BE","Bélgica","32"],["CH","Suiza","41"],["SE","Suecia","46"],
+  ["NO","Noruega","47"],["PL","Polonia","48"],["RU","Rusia","7"],["TR","Turquía","90"],
+  ["CN","China","86"],["JP","Japón","81"],["KR","Corea del Sur","82"],["IN","India","91"],
+  ["ID","Indonesia","62"],["PH","Filipinas","63"],["AU","Australia","61"],["NZ","Nueva Zelanda","64"],
+  ["ZA","Sudáfrica","27"],["NG","Nigeria","234"],["EG","Egipto","20"],["MA","Marruecos","212"],
+  ["AE","Emiratos Árabes","971"],["SA","Arabia Saudita","966"],["IL","Israel","972"],
+];
+function flagEmoji(iso){ return (iso||"").toUpperCase().replace(/./g,c=>String.fromCodePoint(0x1F1E6+c.charCodeAt(0)-65)); }
+function ccOf(iso){ return COUNTRIES.find(c=>c[0]===iso)||COUNTRIES[0]; }
+
+function renderOnboarding(){
+  document.body.classList.add("onboarding-mode");
+  if(!state.cache.onbCC) state.cache.onbCC="BO";
+  const m=$("#main"); const cc=ccOf(state.cache.onbCC);
+  m.innerHTML=`
+    <div class="onb-wrap"><div class="onb-card">
+      <div class="onb-brand">Inve<span>X</span>ia</div>
+      <h2 class="onb-title">Completa tu perfil</h2>
+      <p class="onb-sub">Un paso rápido para personalizar tu experiencia y que tu asesor pueda acompañarte.</p>
+      <div class="onb-photo">
+        <div class="onb-avatar" id="onbAvPrev"><span>${initials(state.profile.full_name)}</span></div>
+        <label class="btn btn-ghost btn-sm" style="width:auto;cursor:pointer">Foto (opcional)
+          <input type="file" accept="image/*" style="display:none" onchange="app.onbPhoto(this)"></label>
+      </div>
+      <div class="field"><label>Celular <span class="req">*</span></label>
+        <div class="phone-field">
+          <button type="button" class="cc-btn" onclick="app.onbToggleCC(event)">
+            <span id="ccFlag">${flagEmoji(cc[0])}</span> <span id="ccDial" class="mono">+${cc[2]}</span> <span class="cc-caret">▾</span></button>
+          <input id="onbPhone" class="input mono" type="tel" placeholder="7 123 4567" autocomplete="tel">
+        </div>
+        <div id="ccList" class="cc-list hidden">
+          <input id="ccSearch" class="input" placeholder="Buscar país…" oninput="app.onbSearchCC(this.value)">
+          <div id="ccItems"></div>
+        </div>
+      </div>
+      <div class="field"><label>Fecha de nacimiento <span class="req">*</span></label>
+        <input id="onbDob" class="input" type="date" max="${new Date().toISOString().slice(0,10)}"></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:.4rem" onclick="app.completeOnboarding()">Completar y continuar</button>
+      <div id="onbMsg" class="msg-line"></div>
+    </div></div>`;
+  renderCCItems("");
+}
+function renderCCItems(q){
+  const box=$("#ccItems"); if(!box) return;
+  q=(q||"").toLowerCase();
+  const list=COUNTRIES.filter(c=>c[1].toLowerCase().includes(q)||("+"+c[2]).includes(q));
+  box.innerHTML=list.map(c=>`<button type="button" class="cc-item" onclick="app.onbPickCC('${c[0]}')">
+    <span>${flagEmoji(c[0])}</span> <span class="cc-name">${esc(c[1])}</span> <span class="mono cc-dial">+${c[2]}</span></button>`).join("")
+    || `<div class="cc-empty">Sin resultados</div>`;
 }
 
 /* ============================================================
@@ -3271,6 +3333,38 @@ const app = {
     pf.name=name; ui.toast("Renombrado","ok"); renderPortfolioDetail(id);
   },
   tradeInPortfolio(id){ state.cache.tradePf=id; location.hash="#/operar"; },
+  onbToggleCC(ev){ if(ev) ev.stopPropagation(); const l=$("#ccList"); if(l){ l.classList.toggle("hidden"); const s=$("#ccSearch"); if(s&&!l.classList.contains("hidden")) s.focus(); } },
+  onbSearchCC(q){ renderCCItems(q); },
+  onbPickCC(iso){ state.cache.onbCC=iso; const c=ccOf(iso);
+    const f=$("#ccFlag"), d=$("#ccDial"); if(f) f.textContent=flagEmoji(c[0]); if(d) d.textContent="+"+c[2];
+    $("#ccList")?.classList.add("hidden"); },
+  async onbPhoto(input){
+    const file=input.files?.[0]; if(!file) return;
+    const prev=$("#onbAvPrev");
+    try{ if(prev) prev.innerHTML='<span class="spinner"></span>';
+      const url=await uploadImage(file,"avatars"); state.cache.onbAvatar=url;
+      if(prev) prev.innerHTML=`<img src="${esc(url)}" alt="">`;
+    }catch(e){ ui.toast(e.message,"err"); if(prev) prev.innerHTML=`<span>${initials(state.profile.full_name)}</span>`; }
+  },
+  async completeOnboarding(){
+    const box=$("#onbMsg"); if(box) box.className="msg-line";
+    const num=($("#onbPhone")?.value||"").trim(), dob=$("#onbDob")?.value||"";
+    const cc=ccOf(state.cache.onbCC||"BO");
+    const err=(t)=>{ if(box){ box.textContent=t; box.classList.add("err"); } };
+    if(num.replace(/\D/g,"").length<6) return err("Ingresa un número de celular válido.");
+    if(!dob) return err("Ingresa tu fecha de nacimiento.");
+    if(new Date(dob)>=new Date()) return err("La fecha de nacimiento no es válida.");
+    const phone=`+${cc[2]} ${num}`;
+    const patch={ phone, birth_date:dob, onboarded:true };
+    if(state.cache.onbAvatar) patch.avatar_url=state.cache.onbAvatar;
+    const { error }=await sb.from("profiles").update(patch).eq("id",state.profile.id);
+    if(error) return err(/column|onboarded|birth_date/i.test(error.message)?"Falta ejecutar migration_v21.sql":error.message);
+    Object.assign(state.profile, patch);
+    state.cache.onbAvatar=null;
+    document.body.classList.remove("onboarding-mode");
+    ui.toast("¡Perfil completo! Bienvenido 🎉","ok");
+    enterApp();
+  },
 
   // admin: vincular cuenta Alpaca del cliente
   async saveAlpacaId(uid){

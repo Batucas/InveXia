@@ -1137,3 +1137,27 @@ body.focus-mode #main{padding:1rem 1.4rem}
 .trade-chart-card.chart-full .tv-chart{height:calc(95vh - 70px)}
 body.chart-maxed{overflow:hidden}
 body.chart-maxed::after{content:"";position:fixed;inset:0;background:rgba(4,8,16,.7);z-index:8999}
+
+/* ============================================================
+   v4.8 · Onboarding (completar perfil) + selector de país
+   ============================================================ */
+body.onboarding-mode #sidebar,body.onboarding-mode .topbar-mob,body.onboarding-mode #sideToggle,body.onboarding-mode #bellBtn{display:none!important}
+body.onboarding-mode #app{grid-template-columns:1fr!important}
+.onb-wrap{min-height:calc(100vh - 40px);display:grid;place-items:center;padding:1.5rem}
+.onb-card{width:100%;max-width:420px;background:var(--navy-900);border:1px solid var(--line);border-radius:18px;padding:2rem 1.8rem}
+.onb-brand{font-family:'Sora';font-weight:700;font-size:1.3rem;color:var(--text);text-align:center}.onb-brand span{color:var(--blue-500)}
+.onb-title{font-family:'Sora';font-size:1.4rem;color:var(--text);margin:.8rem 0 .2rem;text-align:center}
+.onb-sub{color:var(--muted);font-size:.86rem;text-align:center;margin:0 0 1.3rem;line-height:1.5}
+.onb-photo{display:flex;flex-direction:column;align-items:center;gap:.6rem;margin-bottom:1.2rem}
+.onb-avatar{width:84px;height:84px;border-radius:50%;background:var(--navy-950);border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;color:var(--muted);font-family:'Sora';font-weight:700;font-size:1.6rem}
+.onb-avatar img{width:100%;height:100%;object-fit:cover}
+.req{color:#c96a6a}
+.phone-field{display:flex;gap:.5rem}
+.cc-btn{display:flex;align-items:center;gap:.4rem;background:var(--navy-950);border:1px solid var(--line);border-radius:8px;padding:.5rem .7rem;color:var(--text);cursor:pointer;font-size:.95rem;white-space:nowrap}
+.cc-btn:hover{border-color:var(--blue-400)}.cc-caret{color:var(--faint);font-size:.7rem}
+.phone-field .input{flex:1}
+.cc-list{margin-top:.5rem;border:1px solid var(--line);border-radius:10px;background:var(--navy-950);padding:.5rem;max-height:260px;overflow:auto}
+.cc-list .input{width:100%;box-sizing:border-box;margin-bottom:.4rem}
+.cc-item{display:flex;align-items:center;gap:.6rem;width:100%;background:none;border:none;color:var(--text);padding:.5rem .6rem;border-radius:7px;cursor:pointer;font-size:.88rem;text-align:left}
+.cc-item:hover{background:rgba(46,125,246,.12)}.cc-name{flex:1}.cc-dial{color:var(--faint)}
+.cc-empty{color:var(--faint);padding:.6rem;font-size:.85rem;text-align:center}
