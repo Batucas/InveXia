@@ -80,6 +80,13 @@
   .af.reg-only{display:none}
   .auth-modal.register .af.reg-only{display:block}
   .auth-msg{min-height:1.2rem;font-size:.83rem;margin:.9rem 0 .3rem;text-align:center}
+  .auth-or{display:flex;align-items:center;gap:.7rem;margin:.9rem 0;color:var(--faint,#65799A);font-size:.78rem}
+  .auth-or::before,.auth-or::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.12)}
+  .btn-google{display:flex;align-items:center;justify-content:center;gap:.7rem;width:100%;padding:.7rem 1rem;
+    border-radius:11px;border:1px solid rgba(255,255,255,.18);background:#fff;color:#1f2430;font-weight:600;
+    font-size:.92rem;cursor:pointer;transition:filter .15s ease,transform .15s ease}
+  .btn-google:hover{filter:brightness(.97);transform:translateY(-1px)}
+  .btn-google svg{flex:none}
   .auth-msg.err{color:#F79389}.auth-msg.ok{color:var(--good)}
   .auth-spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:aspin .7s linear infinite}
   @keyframes aspin{to{transform:rotate(360deg)}}
@@ -362,6 +369,11 @@
     </div>
     <div id="authMsg" class="auth-msg"></div>
     <button id="authSubmit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.4rem">Iniciar sesión</button>
+    <div class="auth-or"><span>o</span></div>
+    <button id="googleBtn" class="btn-google" type="button">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.5-2.1 14.3-5.5l-6.6-5.6C29.7 34.6 27 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.6l6.6 5.6C41.4 36.3 44 30.7 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
+      Continuar con Google
+    </button>
   </div>
 </div>
 
@@ -520,6 +532,13 @@ async function doAuth(){
 }
 submit.addEventListener("click",doAuth);
 document.getElementById("aPass").addEventListener("keydown",e=>{ if(e.key==="Enter") doAuth(); });
+
+async function loginGoogle(){
+  msg.textContent="Redirigiendo a Google…"; msg.className="auth-msg ok";
+  const { error } = await sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: location.origin + "/app.html" } });
+  if(error){ msg.textContent=translateErr(error.message); msg.className="auth-msg err"; }
+}
+document.getElementById("googleBtn").addEventListener("click", loginGoogle);
 
 /* Si ya hay sesión, ofrecer ir directo al panel */
 (async ()=>{
