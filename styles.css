@@ -1110,3 +1110,8 @@ body.focus-mode #app{grid-template-columns:1fr!important}
 body.focus-mode #main{max-width:100%!important;padding:1.4rem 2rem}
 body.focus-mode .page-head{position:relative}
 body.focus-mode .page-head::after{content:"Modo pantalla completa";position:absolute;top:0;right:0;font-family:'JetBrains Mono';font-size:.66rem;color:var(--faint);letter-spacing:.08em}
+
+/* v4.6c · Cursos modo enfoque — malla panorámica */
+body.focus-mode #bellBtn{display:none!important}
+body.focus-mode #main{padding:1rem 1.4rem}
+.courses-canvas.focus{height:calc(100vh - 60px);min-height:560px}

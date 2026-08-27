@@ -1468,7 +1468,7 @@ function buildMalla(host, cs, done){
   host.innerHTML=`
     <div class="malla-title"><h1>Malla del inversor</h1><p>De <b>Básico</b> a <span class="mgoal">Quant Financiero</span> · cada curso abre el siguiente.</p></div>
     <div class="malla-controls"><button data-z="in" title="Acercar">+</button><button data-z="out" title="Alejar">−</button><button data-z="fit" title="Reencuadrar">⤢</button></div>
-    <div class="malla-legend"><div class="mlh"><span>Áreas</span><button class="mleg-btn" title="Minimizar">–</button></div><div class="mlrows"></div></div>
+    <div class="malla-legend min"><div class="mlh"><span>Áreas</span><button class="mleg-btn" title="Mostrar áreas">+</button></div><div class="mlrows"></div></div>
     <div class="malla-hint">Arrastra para mover · rueda o pellizca para zoom · toca un curso</div>
     <svg class="malla-svg"><defs>
       <marker id="mArrow" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="rgba(203,162,74,.7)"/></marker>
@@ -2228,16 +2228,12 @@ async function viewCoursesClient(){
   const prog=await sb.from("course_progress").select("course_id,completed").eq("user_id",state.profile.id).then(r=>r.data||[]);
   const done=new Set((prog||[]).filter(p=>p.completed).map(p=>p.course_id));
   const m=$("#main"); m.classList.add("wide");
-  m.innerHTML=head("Formación","Cursos","Tu ruta de aprendizaje, de Básico a Quant Financiero.");
+  const focus=document.body.classList.contains("focus-mode");
+  m.innerHTML = focus ? "" : head("Formación","Cursos","Tu ruta de aprendizaje, de Básico a Quant Financiero.");
   if(!cs.length){ m.append(el(`<div class="card empty">${icon("book")}<p style="margin-top:.4rem">Aún no hay cursos publicados.</p></div>`)); return; }
-  const view=state.coursesView||"malla";
-  m.append(el(`<div class="courses-toggle">
-    <button class="ct-btn ${view==="malla"?"on":""}" onclick="app.setCoursesView('malla')">Malla curricular</button>
-    <button class="ct-btn ${view==="neural"?"on":""}" onclick="app.setCoursesView('neural')">Red neuronal</button></div>`));
-  const host=el(`<div class="courses-canvas ${view}"></div>`); m.append(host);
+  const host=el(`<div class="courses-canvas malla${focus?" focus":""}"></div>`); m.append(host);
   state.cache.cmapCourses=cs;
-  if(view==="malla") buildMalla(host, cs, done);
-  else renderNeural(host, cs, done);
+  buildMalla(host, cs, done);
 }
 function renderNeural(host, cs, done){
   const {svg,flat}=coursesNeuralMap(cs, done);
