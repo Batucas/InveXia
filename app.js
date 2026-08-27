@@ -233,11 +233,11 @@ function enterApp(){
   buildNav(admin);
   // Onboarding: cuentas nuevas de cliente deben completar su perfil
   if(!admin && !state.profile.onboarded){ renderOnboarding(); return; }
-  // Modo enfoque: cursos en pestaña nueva a pantalla completa
+  // Modo enfoque: cursos y red de mercado en pestaña nueva a pantalla completa
   const focus=new URLSearchParams(location.search).get("focus");
-  if(focus==="cursos"){
+  if(focus==="cursos"||focus==="quantnet"){
     document.body.classList.add("focus-mode");
-    location.hash="#/cursos"; route(); return;
+    location.hash="#/"+focus; route(); return;
   }
   if(!location.hash) location.hash = admin?"#/clientes":"#/inicio";
   else route();
@@ -341,8 +341,8 @@ function buildNav(admin){
                 : id==="mensajes"   ? '<span class="nav-dot hidden" id="msgDot">0</span>' : "";
     const a=el(`<a data-v="${id}">${ic}<span>${label}</span>${badge}</a>`);
     a.onclick=()=>{
-      if(id==="cursos" && !document.body.classList.contains("focus-mode")){
-        window.open(location.origin+location.pathname+"?focus=cursos","_blank");
+      if((id==="cursos"||id==="quantnet") && !document.body.classList.contains("focus-mode")){
+        window.open(location.origin+location.pathname+"?focus="+id,"_blank");
         ui.closeSidebar(); return;
       }
       location.hash="#/"+id; ui.closeSidebar();
@@ -750,7 +750,8 @@ function perfOf(holds,quotes){
 async function viewQuantNet(){
   const m=$("#main");
   m.classList.add("wide");   // esta vista aprovecha todo el ancho
-  m.innerHTML=head("Premium","Red de mercado","Estructura de correlaciones del mercado como una red viva.");
+  const focus=document.body.classList.contains("focus-mode");
+  m.innerHTML = focus ? "" : head("Premium","Red de mercado","Estructura de correlaciones del mercado como una red viva.");
   const admin=state.profile.role==="admin";
   if(!admin && !state.profile.premium_quantnet){
     m.append(el(`<div class="card empty">${icon("net")}<h3 style="margin-top:.5rem">Servicio no habilitado</h3>
@@ -1081,9 +1082,7 @@ function renderTrade(){
             value="${esc(sym)}" oninput="app.searchAssets(this.value)" onfocus="app.searchAssets(this.value)">
           <div id="symResults" class="search-results hidden"></div>
         </div>
-        <div class="flex" style="gap:.35rem;flex-wrap:wrap;margin-top:.5rem">
-          ${["AAPL","NVDA","SPY","QQQ","TLT","AGG","GLD","BTCUSD"].map(c=>`<button class="chip" onclick="app.pickTradeSym('${c}')">${c}</button>`).join("")}
-        </div>
+        <div id="assetPicker"></div>
       </div>
     </div>
     <div class="trade-grid">
@@ -1095,8 +1094,21 @@ function renderTrade(){
       <div id="ordWrap"></div>
     </div>`;
   tvWidget(sym);
+  renderAssetPicker();
   renderOrderCard();
   loadOrderPrice(sym);
+}
+const ASSET_CATS={
+  rv:{label:"Renta variable",syms:["AAPL","MSFT","NVDA","AMZN","META","GOOGL","TSLA","SPY","QQQ","DIA","IWM"]},
+  rf:{label:"Renta fija",syms:["TLT","AGG","LQD","BND","IEF","SHY","HYG","TIP","EMB"]},
+  alt:{label:"Alternativos",syms:["GLD","SLV","USO","UNG","DBC","GDX","VNQ"]},
+  cripto:{label:"Cripto",syms:["BTCUSD","ETHUSD","SOLUSD"]},
+};
+function renderAssetPicker(){
+  const box=$("#assetPicker"); if(!box) return;
+  const cat=state.cache.tradeCat||"rv";
+  box.innerHTML=`<div class="asset-cats">${Object.entries(ASSET_CATS).map(([k,v])=>`<button class="acat ${cat===k?"on":""}" onclick="app.tradeCat('${k}')">${v.label}</button>`).join("")}</div>
+    <div class="flex" style="gap:.35rem;flex-wrap:wrap;margin-top:.5rem">${ASSET_CATS[cat].syms.map(s=>`<button class="chip" onclick="app.pickTradeSym('${s}')">${s}</button>`).join("")}</div>`;
 }
 function renderOrderCard(){
   const wrap=$("#ordWrap"); if(!wrap) return;
@@ -2152,7 +2164,7 @@ function renderTerminalMode(){
 function renderTerminalMosaico(){
   const T=state.cache.term, box=$("#termShell"); if(!box) return;
   const demo=Object.values(T.snaps)[0]?.demo;
-  box.innerHTML=`${demo?`<div class="radar-demo-note">Datos de <b>demostración</b>. Con tu plan de Polygon y el pipeline corriendo verás el mosaico real. Toca cualquier activo para ampliarlo.</div>`:`<p class="term-sub" style="margin-bottom:.8rem">Toca cualquier activo para ampliarlo al terminal completo.</p>`}
+  box.innerHTML=`<p class="term-sub" style="margin-bottom:.8rem">Toca cualquier activo para ampliarlo al terminal completo.</p>
     <div class="term-mosaic">${T.order.map(t=>miniPanel(t,T.snaps[t])).join("")}</div>`;
 }
 function miniPanel(t,s){
@@ -2286,7 +2298,7 @@ async function renderTerminalPanels(snap){
   const box=$("#termPanels"); if(!box) return;
   const fmt=v=>v==null?"—":(v>=0?"+":"")+v+" $bn";
   box.innerHTML=`
-    ${snap.demo?`<div class="radar-demo-note">Datos de <b>demostración</b>. Al correr terminal_pipeline.py con tu llave de Polygon verás datos reales.</div>`:""}
+    ${""}
     <div class="term-metrics">
       <div class="tm"><span>Spot</span><b>$${snap.spot}</b></div>
       <div class="tm"><span>GEX neto</span><b style="color:${(snap.net_gex||0)>=0?'#3DD6A0':'#c96a6a'}">${fmt(snap.net_gex)}</b></div>
@@ -2455,11 +2467,47 @@ async function viewCoursesClient(){
   const done=new Set((prog||[]).filter(p=>p.completed).map(p=>p.course_id));
   const m=$("#main"); m.classList.add("wide");
   const focus=document.body.classList.contains("focus-mode");
+  const view=state.coursesView||"malla";
   m.innerHTML = focus ? "" : head("Formación","Cursos","Tu ruta de aprendizaje, de Básico a Quant Financiero.");
   if(!cs.length){ m.append(el(`<div class="card empty">${icon("book")}<p style="margin-top:.4rem">Aún no hay cursos publicados.</p></div>`)); return; }
-  const host=el(`<div class="courses-canvas malla${focus?" focus":""}"></div>`); m.append(host);
+  m.append(el(`<div class="courses-toggle"${focus?' style="margin:.4rem 0 .8rem"':""}>
+    <button class="ct-btn ${view==="malla"?"on":""}" onclick="app.setCoursesView('malla')">Malla curricular</button>
+    <button class="ct-btn ${view==="bloques"?"on":""}" onclick="app.setCoursesView('bloques')">Bloques <span class="ct-hint">más ligero</span></button></div>`));
   state.cache.cmapCourses=cs;
-  buildMalla(host, cs, done);
+  if(view==="bloques"){
+    const wrap=el(`<div class="courses-blocks"></div>`); m.append(wrap);
+    renderBlocks(wrap, cs, done);
+  } else {
+    const host=el(`<div class="courses-canvas malla${focus?" focus":""}"></div>`); m.append(host);
+    buildMalla(host, cs, done);
+  }
+}
+const CB_LEVELS=["Básico","Intermedio","Avanzado"];
+function courseBlock(c, done){
+  const isDone=done.has(c.id), locked=c.premium && !state.profile.premium_courses && state.profile.role!=="admin";
+  const accent={"Básico":"#4FA3FF","Intermedio":"#F5C451","Avanzado":"#3DD6A0"}[c.level]||"var(--blue-500)";
+  return el(`<div class="cb-card card" onclick="app.openCourse('${c.id}')">
+    ${cover(c.image_url,c.title,"CURSO",accent)}
+    <div class="media-body">
+      <div class="flex between" style="gap:.5rem">
+        <span class="pill pill-blue">${esc(c.level||"Curso")}</span>
+        ${isDone?`<span class="pill pill-ok dot">Completado</span>`:locked?`<span class="pill" style="color:var(--gold)">🔒 Premium</span>`:""}
+      </div>
+      <h3 style="margin:.6rem 0 .3rem;font-size:1rem">${esc(c.title)}</h3>
+      <p class="card-sub">${esc(c.description||"")}</p>
+    </div></div>`);
+}
+function renderBlocks(host, cs, done){
+  host.innerHTML="";
+  CB_LEVELS.forEach(lv=>{
+    const items=cs.filter(c=>(c.level||"")===lv); if(!items.length) return;
+    host.append(el(`<div class="cb-level-h">${lv}</div>`));
+    const g=el(`<div class="cb-grid"></div>`);
+    items.forEach(c=>g.append(courseBlock(c,done))); host.append(g);
+  });
+  const rest=cs.filter(c=>!CB_LEVELS.includes(c.level||""));
+  if(rest.length){ host.append(el(`<div class="cb-level-h">Otros</div>`));
+    const g=el(`<div class="cb-grid"></div>`); rest.forEach(c=>g.append(courseBlock(c,done))); host.append(g); }
 }
 function renderNeural(host, cs, done){
   const {svg,flat}=coursesNeuralMap(cs, done);
@@ -3259,6 +3307,7 @@ const app = {
     tvWidget(state.cache.tradeSym); renderOrderCard(); loadOrderPrice(state.cache.tradeSym);
   },
   async tradeSelectPf(id){ state.cache.tradePf=id; await loadTradeQuotes(); renderOrderCard(); },
+  tradeCat(k){ state.cache.tradeCat=k; renderAssetPicker(); },
   setLeverage(v){ const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf); if(!pf) return;
     pf.leverage=+v; sb.from("sim_portfolios").update({leverage:+v}).eq("id",pf.id); renderOrderCard(); },
   tradeEstimate(){

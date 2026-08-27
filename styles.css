@@ -1195,3 +1195,21 @@ body.onboarding-mode #app{grid-template-columns:1fr!important}
 .acc-thumb.ph span{display:grid;place-items:center;position:absolute;inset:0;font-family:'JetBrains Mono';font-size:.6rem;letter-spacing:.06em;color:var(--accent);text-align:center;padding:2px}
 .idea-head h3{overflow-wrap:anywhere}
 @media(max-width:520px){ .acc-thumb{width:52px;height:52px} .idea-head{padding:.7rem .8rem;gap:.6rem} }
+
+/* v5.0 · Red de mercado (QuantNet) a pantalla completa en modo enfoque */
+body.focus-mode .quantnet-frame{height:calc(100vh - 40px)!important;min-height:0}
+body.focus-mode .main.wide{padding:.6rem}
+
+/* v5.0b · Cursos vista Bloques (ligera) */
+.courses-blocks{padding-bottom:2rem}
+.cb-level-h{font-family:'JetBrains Mono';font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:1.2rem 0 .7rem}
+.cb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem}
+.cb-card{cursor:pointer;transition:.15s var(--tin);overflow:hidden;padding:0}
+.cb-card:hover{border-color:var(--blue-400);transform:translateY(-3px)}
+.ct-hint{font-size:.62rem;opacity:.7;margin-left:.3rem}
+
+/* v5.0c · Filtro por tipo de activo en Operar */
+.asset-cats{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.6rem}
+.acat{background:var(--navy-950);border:1px solid var(--line);border-radius:20px;padding:.32rem .7rem;color:var(--muted);font-size:.74rem;font-weight:600;cursor:pointer;transition:.12s var(--tin)}
+.acat:hover{color:var(--text);border-color:var(--line-strong)}
+.acat.on{background:rgba(46,125,246,.15);border-color:rgba(46,125,246,.45);color:var(--text)}
