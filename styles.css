@@ -1115,3 +1115,25 @@ body.focus-mode .page-head::after{content:"Modo pantalla completa";position:abso
 body.focus-mode #bellBtn{display:none!important}
 body.focus-mode #main{padding:1rem 1.4rem}
 .courses-canvas.focus{height:calc(100vh - 60px);min-height:560px}
+
+/* ============================================================
+   v4.7 · Operar avanzado (órdenes, apalancamiento, mercado)
+   ============================================================ */
+.seg{display:flex;gap:.3rem;background:var(--navy-950);border:1px solid var(--line);border-radius:9px;padding:.25rem}
+.seg-btn{flex:1;padding:.4rem;border:none;background:transparent;color:var(--muted);font-weight:600;font-size:.8rem;border-radius:6px;cursor:pointer;transition:.12s var(--tin)}
+.seg-btn.on{background:rgba(46,125,246,.18);color:var(--text)}
+.seg-btn.on.buy{background:rgba(61,214,160,.18);color:#3DD6A0}
+.seg-btn.on.sell{background:rgba(201,106,106,.18);color:#e88}
+.mkt-badge{font-family:'JetBrains Mono';font-size:.68rem;color:var(--faint);border:1px solid var(--line);border-radius:20px;padding:.2rem .55rem}
+.mkt-badge.on{color:#3DD6A0;border-color:rgba(61,214,160,.4)}
+.ord-adv{margin:.2rem 0 .6rem;border:1px solid var(--line);border-radius:8px;padding:.4rem .6rem}
+.ord-adv summary{cursor:pointer;font-size:.8rem;color:var(--muted)}
+.bp-row{display:flex;justify-content:space-between;font-size:.82rem;color:var(--muted);padding:.15rem 0}
+.bp-row b{color:var(--text)}
+.pend-row{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem 0;border-bottom:1px solid var(--line)}
+.pend-row:last-child{border-bottom:none}
+/* gráfico expandible */
+.trade-chart-card.chart-full{position:fixed;inset:2.5vh 2.5vw;z-index:9000;margin:0;background:var(--navy-900);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.trade-chart-card.chart-full .tv-chart{height:calc(95vh - 70px)}
+body.chart-maxed{overflow:hidden}
+body.chart-maxed::after{content:"";position:fixed;inset:0;background:rgba(4,8,16,.7);z-index:8999}

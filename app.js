@@ -874,15 +874,116 @@ const TRADE_SYMBOLS = [
   ["GLD","Oro (GLD)"],["TLT","Bonos largos EE.UU. (TLT)"],
   ["BTC/USD","Bitcoin"],["ETH/USD","Ethereum"],["SOL/USD","Solana"],
 ];
+/* ===== Realismo del simulador: mercado, poder de compra, pendientes ===== */
+// Feriados NYSE (bolsa cerrada) 2026-2027
+const MKT_HOLIDAYS = new Set([
+  "2026-01-01","2026-01-19","2026-02-16","2026-04-03","2026-05-25","2026-06-19",
+  "2026-07-03","2026-09-07","2026-11-26","2026-12-25",
+  "2027-01-01","2027-01-18","2027-02-15","2027-03-26","2027-05-31","2027-06-18",
+  "2027-07-05","2027-09-06","2027-11-25","2027-12-24"]);
+function etParts(date=new Date()){
+  const f=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"short",
+    year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  const p={}; f.formatToParts(date).forEach(x=>p[x.type]=x.value);
+  return { wd:p.weekday, ymd:`${p.year}-${p.month}-${p.day}`, min:(+p.hour)*60+(+p.minute) };
+}
+function isCrypto(sym){ return /BTC|ETH|SOL|DOGE|ADA/i.test(sym||""); }
+function marketStatus(sym){
+  if(isCrypto(sym)) return { open:true, label:"Cripto · 24/7", crypto:true };
+  const e=etParts();
+  const weekend = e.wd==="Sat"||e.wd==="Sun";
+  const holiday = MKT_HOLIDAYS.has(e.ymd);
+  const inHours = e.min>=570 && e.min<960;   // 9:30–16:00 ET
+  const open = !weekend && !holiday && inHours;
+  let label="Mercado abierto";
+  if(weekend) label="Fin de semana · cerrado";
+  else if(holiday) label="Feriado · cerrado";
+  else if(!inHours) label = e.min<570 ? "Pre-apertura · cerrado" : "Post-cierre · cerrado";
+  return { open, label };
+}
+// Poder de compra estilo margen simple: equity × leverage − valor de posiciones
+function buyingPowerOf(pf, quotes){
+  const P=perfOf(pf.holdings||[], quotes);
+  const cash=num(pf.cash)||0, lev=num(pf.leverage)||1;
+  const posVal=P.value||0, equity=cash+posVal;
+  const bp = equity*lev - posVal;              // lo que puedes comprar de NUEVO
+  return { cash, lev, posVal, equity, buyingPower:Math.max(0,bp), marginUsed:Math.max(0,-cash) };
+}
+// Ejecuta una orden ya validada sobre el portafolio (muta pf.cash/pf.holdings)
+function execOrder(pf, o, price){
+  const holds=(pf.holdings||[]).slice(), i=holds.findIndex(h=>h.ticker===o.symbol);
+  const qty = o.mode==="shares" ? num(o.qty) : o.mode==="all" ? Infinity : (num(o.amount)/price);
+  if(o.side==="buy"){
+    if(i>=0){ const oQ=num(holds[i].quantity)||0,oC=num(holds[i].avg_cost)||0,nQ=oQ+qty;
+      holds[i]={...holds[i],quantity:nQ,avg_cost:(oQ*oC+qty*price)/nQ}; }
+    else holds.push({ticker:o.symbol,name:o.name||o.symbol,asset_class:o.asset_class||classOf(o.symbol),quantity:qty,avg_cost:price});
+    pf.cash=(num(pf.cash)||0)-qty*price;
+  } else {
+    if(i<0) return false;
+    const have=num(holds[i].quantity)||0; const sq=Math.min(qty,have); if(sq<=0) return false;
+    const remain=have-sq; if(remain<=1e-9) holds.splice(i,1); else holds[i]={...holds[i],quantity:remain};
+    pf.cash=(num(pf.cash)||0)+sq*price;
+  }
+  pf.holdings=holds; return true;
+}
+// Adjunta stop loss / take profit como órdenes condicionales de venta (toda la posición)
+function attachBrackets(pf, base, stop, tp){
+  if(base.side!=="buy" || (!stop && !tp)) return;
+  const oid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const mk=(type,px)=>({id:oid(),side:"sell",type,symbol:base.symbol,name:base.name,asset_class:base.asset_class,mode:"all",amount:null,qty:null,limit_price:px});
+  const add=[]; if(stop) add.push(mk("stop",stop)); if(tp) add.push(mk("take_profit",tp));
+  const pend=(pf.pending_orders||[]).concat(add); pf.pending_orders=pend;
+  sb.from("sim_portfolios").update({pending_orders:pend}).eq("id",pf.id);
+}
+// Revisa órdenes pendientes; ejecuta las que cumplen (mercado abierto + condición de precio)
+async function processPending(pf, quotes){
+  const pend=(pf.pending_orders||[]); if(!pend.length) return 0;
+  const keep=[]; let filled=0; const fills=[];
+  for(const o of pend){
+    const st=marketStatus(o.symbol); const q=quotes?.[o.symbol]; const price=q&&Number.isFinite(q.price)?q.price:null;
+    if(!st.open || price==null){ keep.push(o); continue; }
+    let go=false;
+    if(o.type==="market") go=true;
+    else if(o.type==="limit") go = o.side==="buy" ? price<=o.limit_price : price>=o.limit_price;
+    else if(o.type==="stop") go = price<=o.limit_price;         // stop loss (venta)
+    else if(o.type==="take_profit") go = price>=o.limit_price;  // take profit (venta)
+    if(go){ const ok=execOrder(pf,o,price);
+      if(ok){ filled++; fills.push(`${o.side==="buy"?"Compra":"Venta"} de ${o.symbol} ejecutada a ${money(price,"USD")}`); }
+      else keep.push(o); }
+    else keep.push(o);
+  }
+  if(filled){
+    pf.pending_orders=keep;
+    await sb.from("sim_portfolios").update({cash:pf.cash,holdings:pf.holdings,pending_orders:keep}).eq("id",pf.id);
+    fills.forEach(f=>ui.toast(f,"ok"));
+  }
+  return filled;
+}
+async function processAllPending(){
+  const pfs=state.cache.portfolios||[]; if(!pfs.length) return;
+  const tks=[...new Set(pfs.flatMap(p=>(p.pending_orders||[]).map(o=>o.symbol)))];
+  if(!tks.length) return;
+  const qr=await fetchQuotes(tks); const quotes=qr.quotes||{};
+  for(const pf of pfs) await processPending(pf, quotes);
+}
+
 async function viewTrade(){
   const m=$("#main");
-  m.innerHTML=head("Inversión","Operar","Busca un activo, analiza su gráfico y adquiérelo con dinero ficticio para practicar.");
+  m.innerHTML=head("Inversión","Operar","Busca un activo, analiza su gráfico y opera con dinero ficticio para practicar.");
   m.append(el(`<div id="tradeBody">${loading()}</div>`));
   await loadSimPortfolios();
+  await processAllPending();
   const pfs=state.cache.portfolios||[];
   if(!state.cache.tradePf || !pfs.find(p=>p.id===state.cache.tradePf)) state.cache.tradePf=pfs[0]?.id||null;
   if(!state.cache.tradeSym) state.cache.tradeSym="AAPL";
+  if(!state.cache.order) state.cache.order={type:"market",side:"buy",mode:"amount"};
+  await loadTradeQuotes();
   renderTrade();
+}
+async function loadTradeQuotes(){
+  const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf);
+  const tks=[...new Set((pf?.holdings||[]).filter(h=>num(h.quantity)>0).map(h=>h.ticker))];
+  const qr=await fetchQuotes(tks); state.cache.tradeQuotes=qr.quotes||{};
 }
 function renderTrade(){
   const body=$("#tradeBody"); if(!body) return;
@@ -895,7 +996,7 @@ function renderTrade(){
     return;
   }
   const pf=pfs.find(p=>p.id===state.cache.tradePf)||pfs[0];
-  const cash=num(pf.cash)||0; const sym=state.cache.tradeSym;
+  const sym=state.cache.tradeSym;
   body.innerHTML=`
     <div class="trade-top card">
       <div class="field" style="margin:0"><label>Portafolio</label>
@@ -914,30 +1015,67 @@ function renderTrade(){
       </div>
     </div>
     <div class="trade-grid">
-      <div class="card trade-chart-card">
-        <div class="flex between"><h3 style="margin:0">${esc(sym)}</h3><span class="card-sub" style="margin:0">Gráfico con velas, línea de tendencia e indicadores</span></div>
+      <div class="card trade-chart-card" id="chartCard">
+        <div class="flex between"><h3 style="margin:0">${esc(sym)}</h3>
+          <button class="tp-max" onclick="app.maxChart(this)" title="Ampliar gráfico">⤢</button></div>
         <div id="tvChart" class="tv-chart"></div>
       </div>
-      <div class="card">
-        <h3>Adquirir / Vender</h3>
-        <p class="card-sub">Orden simulada a precio de mercado en <b>${esc(pf.name)}</b>.</p>
-        <div class="field"><label>Símbolo</label><input id="ordSym" class="input mono" value="${esc(sym)}" readonly></div>
-        <div class="field"><label>Precio actual</label><div id="ordPrice" class="ord-price mono">Consultando…</div></div>
-        <div class="field"><label>Monto a invertir (USD)</label>
-          <input id="ordAmt" class="input mono" type="number" min="1" step="any" placeholder="1000" oninput="app.tradeEstimate()"></div>
-        <div id="ordEst" class="ord-est"></div>
-        <div class="flex" style="gap:.5rem;margin-top:.3rem">
-          <button class="btn btn-primary" style="width:auto" onclick="app.buyAsset()">Comprar</button>
-          <button class="btn btn-ghost" style="width:auto" onclick="app.sellAsset()">Vender</button>
-        </div>
-        <div id="ordMsg" class="msg-line"></div>
-        <div class="divide"></div>
-        <div class="nav-label" style="padding:0 0 .4rem">Efectivo disponible</div>
-        <div class="mono" style="font-size:1.1rem;color:var(--text)">${money(cash,"USD")}</div>
-      </div>
+      <div id="ordWrap"></div>
     </div>`;
   tvWidget(sym);
+  renderOrderCard();
   loadOrderPrice(sym);
+}
+function renderOrderCard(){
+  const wrap=$("#ordWrap"); if(!wrap) return;
+  const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf); if(!pf) return;
+  const O=state.cache.order||{type:"market",side:"buy",mode:"amount"};
+  const sym=state.cache.tradeSym, price=state.cache.tradePrice;
+  const st=marketStatus(sym); const BP=buyingPowerOf(pf, state.cache.tradeQuotes||{});
+  const lev=num(pf.leverage)||1;
+  const seg=(cur,opts)=>`<div class="seg">${opts.map(([v,l,cl])=>`<button class="seg-btn ${cur===v?"on "+(cl||""):""}" data-v="${v}">${l}</button>`).join("")}</div>`;
+  const pend=pf.pending_orders||[];
+  wrap.innerHTML=`
+    <div class="card ord-card">
+      <div class="flex between"><h3 style="margin:0">Operar</h3>
+        <span class="mkt-badge ${st.open?"on":""}">${st.open?"●":"○"} ${esc(st.label)}</span></div>
+      <p class="card-sub">Orden simulada en <b>${esc(pf.name)}</b>.</p>
+      ${seg(O.type,[["market","Mercado"],["limit","Límite"]]).replace('class="seg"','class="seg" data-grp="type"')}
+      ${seg(O.side,[["buy","Comprar","buy"],["sell","Vender","sell"]]).replace('class="seg"','class="seg" data-grp="side" style="margin-top:.4rem"')}
+      <div class="field" style="margin-top:.6rem"><label>Símbolo</label><input class="input mono" value="${esc(sym)}" readonly></div>
+      <div class="field"><label>Precio actual</label><div id="ordPrice" class="ord-price mono">${price!=null?money(price,"USD"):"Consultando…"}</div></div>
+      ${O.type==="limit"?`<div class="field"><label>Precio límite</label><input id="ordLimit" class="input mono" type="number" step="any" placeholder="${price!=null?price:"0.00"}"></div>`:""}
+      <div class="field"><label>Cantidad por</label>
+        ${seg(O.mode,[["amount","Monto ($)"],["shares","Unidades"]]).replace('class="seg"','class="seg" data-grp="mode"')}</div>
+      <div class="field"><input id="ordAmt" class="input mono" type="number" min="0" step="any" placeholder="${O.mode==="amount"?"1000":"10"}" oninput="app.tradeEstimate()"></div>
+      <div class="field"><label>Apalancamiento</label>
+        <select id="ordLev" class="input" onchange="app.setLeverage(this.value)">
+          ${[1,2,4].map(l=>`<option value="${l}" ${lev===l?"selected":""}>${l}× ${l>1?"(margen)":""}</option>`).join("")}</select></div>
+      <details class="ord-adv"><summary>Stop loss / Take profit (opcional)</summary>
+        <div class="field" style="margin-top:.5rem"><label>Stop loss — vende si baja a</label><input id="ordStop" class="input mono" type="number" step="any" placeholder="—"></div>
+        <div class="field"><label>Take profit — vende si sube a</label><input id="ordTp" class="input mono" type="number" step="any" placeholder="—"></div>
+      </details>
+      <div id="ordEst" class="ord-est"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="app.placeOrder()">Enviar orden</button>
+      <div id="ordMsg" class="msg-line"></div>
+      <div class="divide"></div>
+      <div class="bp-row"><span>Poder de compra</span><b class="mono">${money(BP.buyingPower,"USD")}</b></div>
+      <div class="bp-row"><span>Efectivo</span><b class="mono ${BP.cash<0?"neg":""}">${money(BP.cash,"USD")}</b></div>
+      ${BP.marginUsed>0?`<div class="bp-row"><span>Margen usado (${lev}×)</span><b class="mono neg">${money(BP.marginUsed,"USD")}</b></div>`:""}
+    </div>
+    ${pend.length?`<div class="card"><h3 style="margin:0 0 .3rem">Órdenes pendientes</h3>
+      <p class="card-sub">Se ejecutan al abrir la app con el mercado abierto y la condición cumplida.</p>
+      ${pend.map(o=>`<div class="pend-row">
+        <div><b class="mono ${o.side==="buy"?"":"neg"}">${o.side==="buy"?"Compra":"Venta"} ${esc(o.symbol)}</b>
+          <span class="mono" style="color:var(--faint);font-size:.72rem"> · ${o.type==="market"?"mercado":o.type==="limit"?"límite "+money(o.limit_price,"USD"):o.type==="stop"?"stop "+money(o.limit_price,"USD"):"TP "+money(o.limit_price,"USD")}
+          · ${o.mode==="shares"?num(o.qty)+" u":money(num(o.amount),"USD")}</span></div>
+        <button class="mp-exp" onclick="app.cancelPending('${o.id}')" title="Cancelar">✕</button></div>`).join("")}
+    </div>`:""}`;
+  // segmentos (type/side/mode)
+  wrap.querySelectorAll('.seg[data-grp] .seg-btn').forEach(b=>{
+    b.onclick=()=>{ const grp=b.closest(".seg").dataset.grp, v=b.dataset.v;
+      state.cache.order[grp]=v; renderOrderCard(); };
+  });
 }
 function tvWidget(sym){
   const host=document.getElementById("tvChart"); if(!host) return;
@@ -979,6 +1117,7 @@ async function viewPortfolio(){
   m.innerHTML=head("Inversión","Mi cartera","Tus portafolios simulados. Arma y sigue tus inversiones con dinero ficticio.");
   m.append(el(`<div id="pfShell">${loading()}</div>`));
   await loadSimPortfolios();
+  await processAllPending();
   renderPortfolioList();
 }
 async function loadSimPortfolios(){
@@ -3028,53 +3167,81 @@ const app = {
   pickTradeSym(sym){
     state.cache.tradeSym=(sym||"").toUpperCase();
     const inp=$("#buySym"); if(inp) inp.value=state.cache.tradeSym;
-    const ord=$("#ordSym"); if(ord) ord.value=state.cache.tradeSym;
     const box=$("#symResults"); if(box){ box.classList.add("hidden"); box.innerHTML=""; }
     const h=document.querySelector(".trade-chart-card h3"); if(h) h.textContent=state.cache.tradeSym;
-    tvWidget(state.cache.tradeSym); loadOrderPrice(state.cache.tradeSym);
+    tvWidget(state.cache.tradeSym); renderOrderCard(); loadOrderPrice(state.cache.tradeSym);
   },
-  tradeSelectPf(id){ state.cache.tradePf=id; renderTrade(); },
+  async tradeSelectPf(id){ state.cache.tradePf=id; await loadTradeQuotes(); renderOrderCard(); },
+  setLeverage(v){ const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf); if(!pf) return;
+    pf.leverage=+v; sb.from("sim_portfolios").update({leverage:+v}).eq("id",pf.id); renderOrderCard(); },
   tradeEstimate(){
-    const price=state.cache.tradePrice, amt=parseFloat($("#ordAmt")?.value), est=$("#ordEst");
+    const O=state.cache.order||{}, price=state.cache.tradePrice, val=parseFloat($("#ordAmt")?.value), est=$("#ordEst");
     if(!est) return;
-    if(price==null||!amt||amt<=0){ est.textContent=""; return; }
-    est.innerHTML=`≈ <b>${(amt/price).toFixed(4)}</b> unidades a ${money(price,"USD")}`;
+    if(price==null||!val||val<=0){ est.textContent=""; return; }
+    est.innerHTML = O.mode==="shares"
+      ? `≈ ${money(val*price,"USD")} por <b>${val}</b> unidades`
+      : `≈ <b>${(val/price).toFixed(4)}</b> unidades a ${money(price,"USD")}`;
   },
-  async buyAsset(){
+  async placeOrder(){
     const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf);
     const box=$("#ordMsg"); if(box) box.className="msg-line";
     if(!pf){ if(box){box.textContent="Selecciona un portafolio.";box.classList.add("err");} return; }
-    const sym=state.cache.tradeSym, price=state.cache.tradePrice, amt=parseFloat($("#ordAmt")?.value);
-    if(price==null){ box.textContent="No hay precio disponible para este activo."; box.classList.add("err"); return; }
-    if(!amt||amt<=0){ box.textContent="Indica un monto válido."; box.classList.add("err"); return; }
-    if(amt>num(pf.cash)+1e-6){ box.textContent="Efectivo insuficiente en este portafolio."; box.classList.add("err"); return; }
-    const qty=amt/price, holds=(pf.holdings||[]).slice(), i=holds.findIndex(h=>h.ticker===sym);
-    if(i>=0){ const oQ=num(holds[i].quantity)||0,oC=num(holds[i].avg_cost)||0,nQ=oQ+qty;
-      holds[i]={...holds[i],quantity:nQ,avg_cost:(oQ*oC+qty*price)/nQ}; }
-    else holds.push({ticker:sym,name:sym,asset_class:classOf(sym),quantity:qty,avg_cost:price});
-    const newCash=num(pf.cash)-amt;
-    const {error}=await sb.from("sim_portfolios").update({cash:newCash,holdings:holds}).eq("id",pf.id);
-    if(error){ box.textContent=/relation|does not exist/i.test(error.message)?"Falta ejecutar migration_v19.sql":error.message; box.classList.add("err"); return; }
-    pf.cash=newCash; pf.holdings=holds;
-    ui.toast(`Compraste ${qty.toFixed(4)} de ${sym}`,"ok"); $("#ordAmt").value=""; renderTrade();
+    const O=state.cache.order||{type:"market",side:"buy",mode:"amount"};
+    const sym=state.cache.tradeSym, price=state.cache.tradePrice;
+    const val=parseFloat($("#ordAmt")?.value);
+    const errMsg=(t)=>{ box.textContent=t; box.classList.add("err"); };
+    if(!val||val<=0) return errMsg(O.mode==="shares"?"Indica la cantidad de unidades.":"Indica un monto válido.");
+    const limitPx = O.type==="limit" ? parseFloat($("#ordLimit")?.value) : null;
+    if(O.type==="limit" && (!limitPx||limitPx<=0)) return errMsg("Indica un precio límite válido.");
+    const stop = parseFloat($("#ordStop")?.value)||null, tp=parseFloat($("#ordTp")?.value)||null;
+    const st=marketStatus(sym);
+    const oid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    const base={ id:oid(), side:O.side, symbol:sym, name:sym, asset_class:classOf(sym),
+      mode:O.mode, amount:O.mode==="amount"?val:null, qty:O.mode==="shares"?val:null };
+
+    // notional estimado para validar poder de compra (compra)
+    const refPx = O.type==="limit" ? limitPx : price;
+    if(refPx==null) return errMsg("No hay precio disponible para este activo.");
+    const notional = O.mode==="amount"? val : val*refPx;
+
+    const queue=(o,msg)=>{ const pend=(pf.pending_orders||[]).concat([o]);
+      sb.from("sim_portfolios").update({pending_orders:pend}).eq("id",pf.id).then(({error})=>{
+        if(error){ errMsg(/pending_orders|column/i.test(error.message)?"Falta ejecutar migration_v20.sql":error.message); return; }
+        pf.pending_orders=pend; ui.toast(msg,"ok"); $("#ordAmt").value=""; renderOrderCard(); });
+    };
+
+    // --- órdenes condicionales / límite / mercado cerrado → pendientes ---
+    if(O.type==="limit"){ queue({...base,type:"limit",limit_price:limitPx}, `Orden límite creada para ${sym}`); attachBrackets(pf,base,stop,tp); return; }
+    if(O.side==="buy" && !st.open){ queue({...base,type:"market"}, `Mercado cerrado — compra de ${sym} quedó pendiente`); attachBrackets(pf,base,stop,tp); return; }
+    if(O.side==="sell" && !st.open){ queue({...base,type:"market"}, `Mercado cerrado — venta de ${sym} quedó pendiente`); return; }
+
+    // --- ejecución inmediata (mercado abierto) ---
+    if(O.side==="buy"){
+      const BP=buyingPowerOf(pf, state.cache.tradeQuotes||{});
+      if(notional>BP.buyingPower+1e-6) return errMsg(`Excede tu poder de compra (${money(BP.buyingPower,"USD")}). Sube el apalancamiento o reduce el monto.`);
+      execOrder(pf,{...base,type:"market"},price);
+      await sb.from("sim_portfolios").update({cash:pf.cash,holdings:pf.holdings}).eq("id",pf.id);
+      ui.toast(`Compra ejecutada: ${sym}`,"ok"); attachBrackets(pf,base,stop,tp);
+    } else {
+      const i=(pf.holdings||[]).findIndex(h=>h.ticker===sym);
+      if(i<0) return errMsg("No tienes ese activo en este portafolio.");
+      execOrder(pf,{...base,type:"market"},price);
+      await sb.from("sim_portfolios").update({cash:pf.cash,holdings:pf.holdings}).eq("id",pf.id);
+      ui.toast(`Venta ejecutada: ${sym}`,"ok");
+    }
+    $("#ordAmt").value=""; await loadTradeQuotes(); renderOrderCard();
   },
-  async sellAsset(){
-    const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf);
-    const box=$("#ordMsg"); if(box) box.className="msg-line";
-    if(!pf) return;
-    const sym=state.cache.tradeSym, price=state.cache.tradePrice, amt=parseFloat($("#ordAmt")?.value);
-    const holds=(pf.holdings||[]).slice(), i=holds.findIndex(h=>h.ticker===sym);
-    if(i<0){ box.textContent="No tienes ese activo en este portafolio."; box.classList.add("err"); return; }
-    if(price==null){ box.textContent="No hay precio disponible."; box.classList.add("err"); return; }
-    if(!amt||amt<=0){ box.textContent="Indica el monto a vender."; box.classList.add("err"); return; }
-    const have=num(holds[i].quantity)||0; let sellQty=amt/price; if(sellQty>have) sellQty=have;
-    const proceeds=sellQty*price, remain=have-sellQty;
-    if(remain<=1e-9) holds.splice(i,1); else holds[i]={...holds[i],quantity:remain};
-    const newCash=num(pf.cash)+proceeds;
-    const {error}=await sb.from("sim_portfolios").update({cash:newCash,holdings:holds}).eq("id",pf.id);
-    if(error){ box.textContent=error.message; box.classList.add("err"); return; }
-    pf.cash=newCash; pf.holdings=holds;
-    ui.toast(`Vendiste ${sellQty.toFixed(4)} de ${sym}`,"ok"); $("#ordAmt").value=""; renderTrade();
+  async cancelPending(id){
+    const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf); if(!pf) return;
+    const pend=(pf.pending_orders||[]).filter(o=>o.id!==id);
+    const {error}=await sb.from("sim_portfolios").update({pending_orders:pend}).eq("id",pf.id);
+    if(error) return ui.toast(error.message,"err");
+    pf.pending_orders=pend; ui.toast("Orden cancelada","ok"); renderOrderCard();
+  },
+  maxChart(btn){ const c=btn.closest(".trade-chart-card"); if(!c) return;
+    const on=c.classList.toggle("chart-full"); btn.textContent=on?"⤡":"⤢";
+    document.body.classList.toggle("chart-maxed",on);
+    setTimeout(()=>tvWidget(state.cache.tradeSym), 60);
   },
   async createPortfolio(goTrade){
     const pfs=state.cache.portfolios||[];
