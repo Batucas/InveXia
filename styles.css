@@ -1252,3 +1252,6 @@ body.focus-mode .main.wide{padding:.6rem}
 .sugg-tip{font-size:.74rem;text-align:right}
 @media(max-width:720px){ .cs-cols{grid-template-columns:1fr} }
 @media(max-width:600px){ .sugg-row{grid-template-columns:1fr;gap:.3rem} .sugg-tip{text-align:left} }
+
+/* v5.3 · Terminal · pestañas de tickers en fila (llenan el ancho) */
+.term-tabs{display:flex;flex-wrap:wrap;gap:.4rem;flex:1}

@@ -311,7 +311,7 @@ const NAV_CLIENT=[
   ["riesgo","Perfil de riesgo",icon("gauge")],
   ["cartera","Mi cartera",icon("pie")],
   ["operar","Operar",icon("trade")],
-  ["dinero-real","Invertir con dinero real",icon("trade"),"soon"],
+  ["dinero-real","Invertir real",icon("money"),"soon"],
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
   ["radar","Radar",icon("radar")],
@@ -339,7 +339,7 @@ function buildNav(admin){
   nav.append(el(`<div class="nav-label">${admin?"Administración":"Mi cuenta"}</div>`));
   (admin?NAV_ADMIN:NAV_CLIENT).forEach(([id,label,ic,flag])=>{
     const badge = flag==="premium" ? '<span class="pill-premium">PREMIUM</span>'
-                : flag==="soon"    ? '<span class="pill-soon">PRÓXIMAMENTE</span>'
+                : flag==="soon"    ? '<span class="pill-soon">PRONTO</span>'
                 : id==="mensajes"   ? '<span class="nav-dot hidden" id="msgDot">0</span>' : "";
     const a=el(`<a data-v="${id}">${ic}<span>${label}</span>${badge}</a>`);
     a.onclick=()=>{
@@ -4102,6 +4102,7 @@ async function anyPortfolio(uid){
    ============================================================ */
 function icon(n){
   const p={
+    money:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M14.5 9.3c-.5-.7-1.4-1.1-2.5-1.1-1.5 0-2.6.8-2.6 1.9 0 2.6 5.2 1.3 5.2 3.9 0 1.1-1.1 1.9-2.6 1.9-1.1 0-2-.4-2.5-1.1"/>',
     home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
     gauge:'<path d="M12 13l4-4"/><path d="M4 18a8 8 0 1 1 16 0"/>',
     pie:'<path d="M12 3v9l7 4"/><circle cx="12" cy="12" r="9"/>',
