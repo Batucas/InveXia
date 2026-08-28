@@ -311,6 +311,7 @@ const NAV_CLIENT=[
   ["riesgo","Perfil de riesgo",icon("gauge")],
   ["cartera","Mi cartera",icon("pie")],
   ["operar","Operar",icon("trade")],
+  ["dinero-real","Invertir con dinero real",icon("trade"),"soon"],
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
   ["radar","Radar",icon("radar")],
@@ -338,6 +339,7 @@ function buildNav(admin){
   nav.append(el(`<div class="nav-label">${admin?"Administración":"Mi cuenta"}</div>`));
   (admin?NAV_ADMIN:NAV_CLIENT).forEach(([id,label,ic,flag])=>{
     const badge = flag==="premium" ? '<span class="pill-premium">PREMIUM</span>'
+                : flag==="soon"    ? '<span class="pill-soon">PRÓXIMAMENTE</span>'
                 : id==="mensajes"   ? '<span class="nav-dot hidden" id="msgDot">0</span>' : "";
     const a=el(`<a data-v="${id}">${ic}<span>${label}</span>${badge}</a>`);
     a.onclick=()=>{
@@ -426,6 +428,7 @@ async function render(){
       if(state.view==="riesgo")     return void await viewRisk();
       if(state.view==="cartera")    return void await viewPortfolio();
       if(state.view==="operar")     return void await viewTrade();
+      if(state.view==="dinero-real") return void await viewDineroReal();
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
       if(state.view==="quantnet")   return void await viewQuantNet();
       if(state.view==="radar")      return void await viewRadar();
@@ -1040,6 +1043,21 @@ async function processAllPending(){
   for(const pf of pfs) await processPending(pf, quotes);
 }
 
+async function viewDineroReal(){
+  const m=$("#main");
+  m.innerHTML=head("Inversión","Invertir con dinero real");
+  m.append(el(`<div class="soon-wrap">
+    <div class="soon-card card">
+      <span class="pill-soon" style="align-self:flex-start">EN CONSTRUCCIÓN</span>
+      <div class="soon-ic">${icon("trade")}</div>
+      <h2>Invertir con dinero real llega pronto</h2>
+      <p>Estamos trabajando para convertir a InveXia en tu bróker: pronto podrás invertir con capital real en los mercados de Estados Unidos, con la misma potencia cuantitativa que ya conoces.</p>
+      <p class="soon-hint">Mientras tanto, practica sin riesgo en <b>Operar</b> con tus portafolios simulados y precios reales del mercado.</p>
+      <button class="btn btn-primary" style="width:auto" onclick="location.hash='#/operar'">Ir al simulador →</button>
+    </div>
+  </div>`));
+}
+
 async function viewTrade(){
   const m=$("#main");
   m.innerHTML=head("Inversión","Operar","Busca un activo, analiza su gráfico y opera con dinero ficticio para practicar.");
@@ -1108,7 +1126,7 @@ function renderAssetPicker(){
   const box=$("#assetPicker"); if(!box) return;
   const cat=state.cache.tradeCat||"rv";
   box.innerHTML=`<div class="asset-cats">${Object.entries(ASSET_CATS).map(([k,v])=>`<button class="acat ${cat===k?"on":""}" onclick="app.tradeCat('${k}')">${v.label}</button>`).join("")}</div>
-    <div class="flex" style="gap:.35rem;flex-wrap:wrap;margin-top:.5rem">${ASSET_CATS[cat].syms.map(s=>`<button class="chip" onclick="app.pickTradeSym('${s}')">${s}</button>`).join("")}</div>`;
+    <div class="flex" style="gap:.35rem;flex-wrap:wrap;margin-top:.5rem;align-items:center"><span class="ej-label">Ejemplo:</span>${ASSET_CATS[cat].syms.map(s=>`<button class="chip" onclick="app.pickTradeSym('${s}')">${s}</button>`).join("")}</div>`;
 }
 function renderOrderCard(){
   const wrap=$("#ordWrap"); if(!wrap) return;
@@ -1288,6 +1306,31 @@ async function renderPortfolioDetail(id){
     tw.append(t); side.append(tw);
   } else side.append(el(`<p class="empty" style="padding:1rem">Sin posiciones. Ve a "Operar" para comprar.</p>`));
   wrap.append(side); box.append(wrap);
+  // Cartera sugerida por el asesor (objetivo vs. actual)
+  if(p.suggested_alloc && Object.keys(p.suggested_alloc).length){
+    const actual=csActualWeights(P.rows, cash, total);
+    const sug=normalizeSugg(p.suggested_alloc);
+    const sc=el(`<div class="card mt2 sugg-card">
+      <div class="flex between"><h3 style="margin:0">Cartera sugerida por tu asesor</h3><span class="pill pill-blue">Objetivo</span></div>
+      <p class="card-sub">Compara tu composición actual con la que te recomienda tu asesor.</p>
+      ${p.suggested_note?`<div class="sugg-note">${esc(p.suggested_note)}</div>`:""}
+      <div class="sugg-rows"></div>
+    </div>`);
+    const rows=sc.querySelector(".sugg-rows");
+    ["cash","fixed_income","equity","crypto","alt"].forEach(k=>{
+      const c=CLASSES[k], tgt=+sug[k]||0, act=+actual[k]||0, diff=+(act-tgt).toFixed(1);
+      const tip = Math.abs(diff)<2 ? {t:"En objetivo",col:"#3DD6A0"} : diff>0 ? {t:`Reducir ${Math.abs(diff)}%`,col:"#F5C451"} : {t:`Aumentar ${Math.abs(diff)}%`,col:"#4FA3FF"};
+      rows.append(el(`<div class="sugg-row">
+        <div class="sugg-name" style="color:${c.color}">${c.label}</div>
+        <div class="sugg-bars">
+          <div class="sugg-bar"><span style="width:${Math.min(100,act)}%;background:${c.color}"></span><i>Actual ${act}%</i></div>
+          <div class="sugg-bar tgt"><span style="width:${Math.min(100,tgt)}%;background:${c.color}"></span><i>Objetivo ${tgt}%</i></div>
+        </div>
+        <div class="sugg-tip mono" style="color:${tip.col}">${tip.t}</div>
+      </div>`));
+    });
+    box.append(sc);
+  }
 }
 
 async function renderPortfolioBody(m,pf,holds,isAdmin){
@@ -1977,9 +2020,24 @@ async function viewCourseDetail(id){
   if(!c){ m.innerHTML=head("Formación","Curso","No encontrado"); m.append(el(`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>`)); return; }
   state.cache.currentCourse=c;
   const locked = c.premium && !(state.profile.role==="admin" || state.profile.premium_courses);
-  if(locked){ m.innerHTML=head("Formación",esc(c.title),"Premium");
-    m.append(el(`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
-      <div class="card empty" style="margin-top:1rem"><div class="lock-note" style="margin:0">🔒 Este es un curso premium. Pídele acceso a tu asesor para desbloquearlo.</div></div>`)); return; }
+  if(locked){
+    const mods=Array.isArray(c.modules)?c.modules:[];
+    m.innerHTML=head("Formación",esc(c.title),esc(c.level||"Premium"));
+    m.append(el(`<div class="course-overview">
+      <button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cursos'">← Volver al mapa</button>
+      <div class="card" style="margin-top:1rem;overflow:hidden;padding:0">
+        ${cover(c.image_url,c.title,"CURSO","var(--gold)")}
+        <div style="padding:1.3rem">
+          <div class="flex" style="gap:.4rem;margin-bottom:.6rem"><span class="pill pill-blue">${esc(c.level||"Curso")}</span><span class="pill" style="color:var(--gold)">🔒 Premium</span></div>
+          <h2 style="margin:.1rem 0 .7rem;font-size:1.4rem">${esc(c.title)}</h2>
+          <p class="card-sub" style="font-size:.95rem;margin:0">${esc(c.description||"Sin descripción.")}</p>
+          ${mods.length?`<div class="ov-sec">Contenido del curso</div><ul class="ov-mods">${mods.map((mo,i)=>`<li>🔒 ${esc(mo.title||("Módulo "+(i+1)))}</li>`).join("")}</ul>`:""}
+          <div class="lock-note" style="margin-top:1.1rem">Este es un curso premium. Pídele acceso a tu asesor para desbloquear los videos y materiales.</div>
+          <button class="btn btn-primary btn-sm" style="width:auto;margin-top:.9rem" onclick="location.hash='#/mensajes'">Solicitar acceso a mi asesor</button>
+        </div>
+      </div></div>`));
+    return;
+  }
   const pr = await sb.from("course_progress").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data);
   const sub = c.assignment ? await sb.from("course_submissions").select("*").eq("user_id",state.profile.id).eq("course_id",id).maybeSingle().then(r=>r.data) : null;
   state.cache.currentSub=sub;
@@ -2204,21 +2262,33 @@ function terminalDemoMulti(){
     const gex=[]; for(let i=0;i<22;i++){ const k=+(spot*(0.9+i*0.01)).toFixed(1);
       const g=Math.exp(-(((k-cw)/(spot*0.03))**2))*Math.abs(net)*1.4 - Math.exp(-(((k-pw)/(spot*0.03))**2))*Math.abs(net)*1.1 + (Math.random()-0.5)*Math.abs(net)*0.1;
       gex.push({strike:k,gex:+g.toFixed(3)}); }
-    const exp=[7,14,30,60,90,180],ss=[spot*0.97,spot*0.99,spot,spot*1.01,spot*1.03].map(v=>+v.toFixed(1));
+    const exp=[7,14,30,60,90,180];
+    const ss=[0.94,0.96,0.98,0.99,1.0,1.01,1.02,1.04,1.06].map(f=>+(spot*f).toFixed(1));
     const iv=exp.map(d=>ss.map(k=>+(0.15+1.3*((k-spot)/spot)**2+0.10/Math.sqrt(d/30)).toFixed(4)));
+    // superficie de GEX: strike × vencimiento (positivo sobre call wall, negativo bajo put wall, decae con el plazo)
+    const gexSurf=exp.map(d=>ss.map(k=>+((Math.exp(-(((k-cw)/(spot*0.04))**2))*Math.abs(net)*1.3
+      - Math.exp(-(((k-pw)/(spot*0.04))**2))*Math.abs(net)*1.0)/Math.sqrt(d/30)).toFixed(3)));
     const term=exp.map(d=>({days:d,atm_iv:+(0.16+0.11/Math.sqrt(d/30)).toFixed(4)}));
     return { ticker:tid, demo:true, generated_at:new Date().toISOString(), spot,
       net_gex:net, gamma_flip:flip, call_wall:cw, put_wall:pw, gex_cp:gcp, oi_cp:ocp,
-      gex_by_strike:gex, surface:{strikes:ss,expiries:exp,iv}, term,
+      gex_by_strike:gex, surface:{strikes:ss,expiries:exp,iv}, gex_surface:{strikes:ss,expiries:exp,gex:gexSurf}, term,
       dealer_convention:"dealers largos gamma en calls, cortos en puts (SqueezeMetrics)" };
   };
   return [
     mk("SPY",452.3,460,444,451.2,3.02,1.97,1.08),
     mk("QQQ",388.1,395,378,386.0,1.35,1.28,0.98),
+    mk("IWM",198.6,205,192,197.4,0.52,1.14,1.02),
+    mk("DIA",382.0,390,374,381.1,0.88,1.31,1.06),
     mk("TLT",92.4,95,90,92.9,-0.84,0.72,1.20),
+    mk("HYG",78.9,80,77,78.6,-0.31,0.84,1.11),
     mk("GLD",196.5,200,192,196.9,0.41,1.10,0.90),
+    mk("USO",74.2,78,70,73.5,-0.22,0.79,1.08),
     mk("AAPL",231.2,240,222,229.5,0.66,1.42,1.05),
+    mk("MSFT",428.7,440,415,426.0,1.12,1.38,1.01),
     mk("NVDA",121.4,130,112,118.9,-1.20,0.88,1.15),
+    mk("AMZN",201.3,210,190,199.0,0.74,1.26,1.03),
+    mk("META",583.5,600,560,579.2,0.95,1.33,0.99),
+    mk("TSLA",248.9,270,225,242.0,-1.45,0.81,1.18),
   ];
 }
 
@@ -2294,6 +2364,19 @@ function ivSurfacePlotly(host, surf){
   ensurePlotly(draw, ()=>{ host.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D. Revisa tu conexión o el bloqueador del navegador.</div>'; });
 }
 
+function gexSurfacePlotly(host, surf){
+  const draw=()=>{ if(!window.Plotly) return false;
+    window.Plotly.newPlot(host, [{type:"surface",x:surf.strikes,y:surf.expiries,z:surf.gex,
+      colorscale:[[0,"#c96a6a"],[0.5,"#0D1A2E"],[1,"#3DD6A0"]],showscale:false,
+      contours:{z:{show:true,usecolormap:true,project:{z:true}}}}],
+      {margin:{l:0,r:0,t:0,b:0},paper_bgcolor:"rgba(0,0,0,0)",
+       scene:{xaxis:{title:"Strike",color:"#94A8C7",gridcolor:"#1e2a44"},
+              yaxis:{title:"Días",color:"#94A8C7",gridcolor:"#1e2a44"},
+              zaxis:{title:"GEX",color:"#94A8C7",gridcolor:"#1e2a44"},
+              bgcolor:"rgba(0,0,0,0)"}},
+      {displayModeBar:false,responsive:true}); return true; };
+  ensurePlotly(draw, ()=>{ host.innerHTML='<div class="term-noplot">No se pudo cargar el visor 3D. Revisa tu conexión o el bloqueador del navegador.</div>'; });
+}
 async function renderTerminalPanels(snap){
   const box=$("#termPanels"); if(!box) return;
   const fmt=v=>v==null?"—":(v>=0?"+":"")+v+" $bn";
@@ -2309,12 +2392,16 @@ async function renderTerminalPanels(snap){
     <div class="term-grid">
       <div class="card term-panel"><div class="tp-head"><h3>GEX por strike</h3><button class="tp-max" onclick="app.maxPanel(this)" title="Ampliar">⤢</button></div><p class="term-sub">Verde = dealers largos gamma · rojo = cortos. Línea dorada = spot.</p>${gexBarsSVG(snap.gex_by_strike||[],snap.spot,snap.call_wall,snap.put_wall)}</div>
       <div class="card term-panel"><div class="tp-head"><h3>Superficie de IV</h3><button class="tp-max" onclick="app.maxPanel(this)" title="Ampliar">⤢</button></div><p class="term-sub">Strike × vencimiento × IV. Arrastra para rotar.</p><div id="ivSurface" class="iv-surface"></div></div>
+      <div class="card term-panel"><div class="tp-head"><h3>Superficie de GEX</h3><button class="tp-max" onclick="app.maxPanel(this)" title="Ampliar">⤢</button></div><p class="term-sub">Strike × vencimiento × exposición gamma. Verde arriba, rojo abajo.</p><div id="gexSurface" class="iv-surface"></div></div>
       <div class="card term-panel"><div class="tp-head"><h3>Estructura de plazos (IV ATM)</h3><button class="tp-max" onclick="app.maxPanel(this)" title="Ampliar">⤢</button></div><p class="term-sub">Volatilidad implícita at-the-money por vencimiento.</p>${termLineSVG(snap.term||[])}</div>
     </div>
     <p class="brief-disc">Convención de dealers: ${esc(snap.dealer_convention||"—")}. Cálculo propio a partir de datos de Polygon.io. No es asesoría financiera.</p>`;
   const host=document.getElementById("ivSurface");
   if(host && snap.surface && snap.surface.iv && snap.surface.iv.length) ivSurfacePlotly(host, snap.surface);
   else if(host) host.innerHTML='<div class="term-noplot">Sin datos de superficie para este ticker.</div>';
+  const ghost=document.getElementById("gexSurface");
+  if(ghost && snap.gex_surface && snap.gex_surface.gex && snap.gex_surface.gex.length) gexSurfacePlotly(ghost, snap.gex_surface);
+  else if(ghost) ghost.innerHTML='<div class="term-noplot">Sin datos de superficie de GEX para este ticker.</div>';
 }
 
 async function viewRadar(){
@@ -2746,47 +2833,9 @@ async function viewAdminClient(uid){
     grid.append(el(`<div class="card empty">${icon("gauge")}<p style="margin-top:.4rem">Este cliente aún no completó su perfil de riesgo.</p></div>`));
   }
 
-  const sugg = ra?BANDS[ra.final_band].alloc:{cash:10,fixed_income:40,equity:45,crypto:5};
-  const a = pf?.allocation && Object.keys(pf.allocation).length ? pf.allocation : sugg;
-  grid.append(el(`<div class="card">
-    <div class="flex between"><h3>Cartera</h3>${pf?`<span class="pill dot ${pf.status==='published'?'pill-ok':'pill-warn'}">${pf.status==='published'?'Publicada':'Borrador'}</span>`:""}</div>
-    <p class="card-sub">Asignación objetivo por clase (suma 100%). Las cantidades y precios de entrada son opcionales: regístralos cuando el cliente invierta de verdad.</p>
-    <div class="field"><label>Nombre de la cartera</label><input id="pfName" class="input" value="${esc(pf?.name||'Cartera principal')}"></div>
-    <div class="field" style="max-width:160px"><label>Moneda</label>
-      <select id="pfCur" class="input"><option ${pf?.currency==='USD'?'selected':''}>USD</option><option ${pf?.currency==='USDT'?'selected':''}>USDT</option><option ${pf?.currency==='BOB'?'selected':''}>BOB</option></select></div>
-    <div id="allocEditor"></div>
-    <div id="allocSum" class="flex between" style="font-size:.85rem;color:var(--muted);margin:.4rem 0 1rem"></div>
-    <div class="field"><label>Nota para el cliente</label><textarea id="pfNotes" class="input" placeholder="Racional de la cartera…">${esc(pf?.notes||'')}</textarea></div>
-    <div class="divide"></div>
-    <div class="flex between"><div class="nav-label" style="padding:0">Posiciones</div>
-      <button class="btn btn-ghost btn-sm" onclick="app.addHolding()">+ Añadir instrumento</button></div>
-    <div id="holdList" class="mt"></div>
-    <div class="flex mt2"><button class="btn btn-ghost btn-sm" onclick="app.savePortfolio('${uid}','draft')">Guardar borrador</button>
-      <button class="btn btn-primary btn-sm" style="width:auto" onclick="app.savePortfolio('${uid}','published')">Publicar para el cliente</button></div>
-  </div>`));
   m.append(grid);
 
-  // vista previa de rendimiento (lo que verá el cliente)
-  if(pf && holds.some(h=>num(h.quantity)>0)){
-    const prev=el(`<div class="mt2"><div class="nav-label" style="padding-left:0">Vista previa del rendimiento</div></div>`);
-    m.append(prev);
-    await renderPortfolioBody(m,pf,holds,true);
-  }
-
-  // zona de peligro
-  m.append(el(`<div class="card mt2">
-    <h3>Cuenta de inversión (Alpaca · sandbox)</h3>
-    <p class="card-sub">Pega el <b>account_id</b> de la cuenta de prueba de este cliente para habilitarle la sección <b>Operar</b>. En producción, esto se creará automáticamente en el onboarding.</p>
-    <div class="flex" style="gap:.6rem;flex-wrap:wrap">
-      <input id="alpacaId" class="input mono" style="flex:1;min-width:260px" placeholder="ej. b6332229-32b3-455e-a612-bc77e3111336" value="${esc(client.alpaca_account_id||"")}">
-      <button class="btn btn-primary btn-sm" style="width:auto" onclick="app.saveAlpacaId('${uid}')">Vincular</button>
-    </div>
-    <div class="flex mt" style="gap:.6rem;align-items:center;flex-wrap:wrap">
-      <button id="setupBtn" class="btn btn-ghost btn-sm" onclick="app.createTestAccount('${uid}')">⚙️ Crear cuenta de prueba y fondear</button>
-      ${client.alpaca_account_id?`<button id="fundBtn" class="btn btn-ghost btn-sm" onclick="app.fundAccount('${esc(client.alpaca_account_id)}')">💵 Fondear cuenta vinculada</button>`:""}
-      <span id="setupMsg" class="card-sub" style="margin:0"></span>
-    </div>
-  </div>`));
+  await renderClientSuggestions(m, uid);
 
   // servicio premium
   m.append(el(`<div class="card mt2">
@@ -2820,11 +2869,65 @@ async function viewAdminClient(uid){
     </div>
   </div>`));
 
-  state.cache.edit={ uid, pf, alloc:{...a}, holds:holds.map(h=>({...h})) };
-  renderAllocEditor(); renderHoldList();
+  state.cache.edit=null;
+}
+const SUGG_CLASSES=["cash","fixed_income","equity","crypto","alt"];
+function normalizeSugg(s){
+  const base={cash:10,fixed_income:40,equity:40,crypto:5,alt:5};
+  if(!s||typeof s!=="object") return base;
+  const out={}; SUGG_CLASSES.forEach(k=>out[k]=num(s[k])!=null?num(s[k]):0); return out;
+}
+function csActualWeights(rows, cash, total){
+  const w={cash:0,fixed_income:0,equity:0,crypto:0,alt:0};
+  if(total<=0){ w.cash=100; return w; }
+  w.cash=cash/total*100;
+  (rows||[]).forEach(h=>{ const cl=h.asset_class||classOf(h.ticker); if(w[cl]==null) w[cl]=0; w[cl]+=(h.value||0)/total*100; });
+  SUGG_CLASSES.forEach(k=>w[k]=+(w[k]||0).toFixed(1)); return w;
+}
+async function renderClientSuggestions(m, uid){
+  const wrap=el(`<div class="mt2"><div class="nav-label" style="padding-left:0">Portafolios simulados del cliente</div>
+    <p class="card-sub" style="margin:-.2rem 0 .8rem">Revisa lo que arma el cliente y déjale una cartera sugerida (objetivo por clase). La verá en "Mi cartera".</p>
+    <div id="csList">${loading()}</div></div>`);
+  m.append(wrap);
+  const { data:pfs, error }=await sb.from("sim_portfolios").select("*").eq("user_id",uid).order("created_at");
+  const box=$("#csList"); if(!box) return;
+  if(error){ box.innerHTML=`<div class="card"><p class="card-sub" style="margin:0">${/policy|permission|denied/i.test(error.message)?"Falta ejecutar <b>migration_v23.sql</b> (permisos de admin).":esc(error.message)}</p></div>`; return; }
+  if(!pfs||!pfs.length){ box.innerHTML=`<div class="card empty"><p style="margin:0">Este cliente aún no ha creado portafolios simulados.</p></div>`; return; }
+  const allTk=[...new Set(pfs.flatMap(p=>(p.holdings||[]).filter(h=>num(h.quantity)>0).map(h=>h.ticker)))];
+  const qr=await fetchQuotes(allTk); const quotes=qr.quotes||{};
+  state.cache.csSugg={}; box.innerHTML="";
+  pfs.forEach(p=>{
+    const P=perfOf(p.holdings||[],quotes); const cash=num(p.cash)||0; const total=(P.value||0)+cash;
+    const actual=csActualWeights(P.rows, cash, total);
+    state.cache.csSugg[p.id]=normalizeSugg(p.suggested_alloc);
+    box.append(el(`<div class="card cs-card">
+      <div class="flex between"><h3 style="margin:0">${esc(p.name)}</h3><span class="mono" style="color:var(--muted)">${money(total,"USD")}</span></div>
+      <div class="cs-cols">
+        <div><div class="k-mini">Composición actual del cliente</div>${allocBars(actual)}</div>
+        <div><div class="k-mini">Cartera sugerida (objetivo)</div><div id="csEd-${p.id}"></div><div id="csSum-${p.id}" class="cs-sum"></div></div>
+      </div>
+      <div class="field" style="margin-top:.6rem"><label>Nota para el cliente (opcional)</label><textarea id="csNote-${p.id}" class="input" placeholder="Racional de la sugerencia…">${esc(p.suggested_note||"")}</textarea></div>
+      <button class="btn btn-primary btn-sm" style="width:auto" onclick="app.saveSuggestion('${p.id}')">Guardar cartera sugerida</button>
+      <div id="csMsg-${p.id}" class="msg-line"></div>
+    </div>`));
+    renderSuggEditor(p.id);
+  });
+}
+function renderSuggEditor(pfId){
+  const box=$("#csEd-"+pfId); if(!box) return; const s=state.cache.csSugg[pfId];
+  box.innerHTML=SUGG_CLASSES.map(k=>{ const c=CLASSES[k];
+    return `<div class="cs-row"><span class="cs-lbl" style="color:${c.color}">${c.label}</span>
+      <input type="number" min="0" max="100" step="1" class="input cs-inp" value="${s[k]??0}" data-k="${k}" oninput="app.suggInput('${pfId}',this)"><span class="cs-pct">%</span></div>`;
+  }).join(""); csSum(pfId);
+}
+function csSum(pfId){
+  const s=state.cache.csSugg[pfId]; const box=$("#csSum-"+pfId); if(!box) return;
+  const sum=SUGG_CLASSES.reduce((a,k)=>a+(+s[k]||0),0);
+  box.innerHTML=`Suma: <b style="color:${Math.round(sum)===100?'#3DD6A0':'#F5C451'}">${sum}%</b>${Math.round(sum)===100?"":" (debe ser 100%)"}`;
 }
 function renderAllocEditor(){
-  const e=state.cache.edit, box=$("#allocEditor"); if(!box) return; box.innerHTML="";
+  const e=state.cache.edit; if(!e) return;
+  const box=$("#allocEditor"); if(!box) return; box.innerHTML="";
   ["cash","fixed_income","equity","crypto","alt"].forEach(k=>{
     if(e.alloc[k]===undefined && k==="alt") return;
     const c=CLASSES[k], v=e.alloc[k]??0;
@@ -3154,8 +3257,7 @@ const app = {
   maxPanel(btn){ const p=btn.closest(".term-panel"); if(!p) return;
     const on=p.classList.toggle("maximized"); btn.textContent=on?"⤡":"⤢";
     document.body.classList.toggle("panel-maxed",on);
-    const host=p.querySelector("#ivSurface");
-    if(host&&window.Plotly){ setTimeout(()=>{ try{ window.Plotly.Plots.resize(host); }catch(e){} },60); }
+    if(window.Plotly){ setTimeout(()=>{ p.querySelectorAll(".js-plotly-plot").forEach(h=>{ try{ window.Plotly.Plots.resize(h); }catch(e){} }); },80); }
   },
   async generateBrief(){
     const btn=$("#briefGen"); if(btn){ btn.disabled=true; btn.textContent="Generando… (~15s)"; }
@@ -3408,6 +3510,18 @@ const app = {
   },
   tradeInPortfolio(id){ state.cache.tradePf=id; location.hash="#/operar"; },
   toggleIdea(head){ head.closest(".idea-acc")?.classList.toggle("idea-collapsed"); },
+  suggInput(pfId, inp){ const k=inp.dataset.k; let v=Math.max(0,Math.min(100,Math.round(+inp.value||0)));
+    if(state.cache.csSugg&&state.cache.csSugg[pfId]){ state.cache.csSugg[pfId][k]=v; csSum(pfId); } },
+  async saveSuggestion(pfId){
+    const s=state.cache.csSugg?.[pfId]; const msg=$("#csMsg-"+pfId); if(msg) msg.className="msg-line";
+    if(!s) return;
+    const sum=["cash","fixed_income","equity","crypto","alt"].reduce((a,k)=>a+(+s[k]||0),0);
+    if(Math.round(sum)!==100){ if(msg){ msg.textContent="Los porcentajes deben sumar 100% (ahora "+sum+"%)."; msg.classList.add("err"); } return; }
+    const note=$("#csNote-"+pfId)?.value||"";
+    const { error }=await sb.from("sim_portfolios").update({suggested_alloc:s, suggested_note:note}).eq("id",pfId);
+    if(error){ if(msg){ msg.textContent=/column|policy|denied/i.test(error.message)?"Falta ejecutar migration_v23.sql":error.message; msg.classList.add("err"); } return; }
+    ui.toast("Cartera sugerida guardada ✓","ok");
+  },
   onbToggleCC(ev){ if(ev) ev.stopPropagation(); const l=$("#ccList"); if(l){ l.classList.toggle("hidden"); const s=$("#ccSearch"); if(s&&!l.classList.contains("hidden")) s.focus(); } },
   onbSearchCC(q){ renderCCItems(q); },
   onbPickCC(iso){ state.cache.onbCC=iso; const c=ccOf(iso);
