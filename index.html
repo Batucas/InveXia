@@ -210,6 +210,37 @@
     .reveal{opacity:1;transform:none}
     html{scroll-behavior:auto}
   }
+  /* ===== La plataforma en acción ===== */
+  .grad{background:linear-gradient(100deg,var(--blue-300),var(--good) 45%,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .showcase{position:relative}
+  .showcase::before{content:"";position:absolute;left:50%;top:30%;width:70vw;height:60vh;transform:translateX(-50%);
+    background:radial-gradient(closest-side,rgba(46,125,246,.14),transparent 70%);pointer-events:none;filter:blur(20px)}
+  .show-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:1.4rem;margin-top:3rem;position:relative}
+  .mock{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);border-radius:16px;overflow:hidden;
+    box-shadow:0 30px 70px rgba(0,0,0,.45),0 0 0 1px rgba(46,125,246,.06);transition:.3s var(--ease)}
+  .mock:hover{transform:translateY(-4px);box-shadow:0 40px 90px rgba(0,0,0,.55),0 0 40px rgba(46,125,246,.12)}
+  .mock-head{display:flex;align-items:center;gap:.5rem;padding:.7rem 1rem;background:rgba(0,0,0,.25);border-bottom:1px solid var(--line)}
+  .md-dot{width:11px;height:11px;border-radius:50%}.md-dot.r{background:#ff5f57}.md-dot.y{background:#febc2e}.md-dot.g{background:#28c840}
+  .mock-t{font-family:'Space Grotesk';font-size:.82rem;color:var(--muted);margin-left:.5rem}
+  .mock-live{margin-left:auto;font-family:'Space Grotesk';font-size:.68rem;color:var(--good);letter-spacing:.04em}
+  .mock-live{animation:blink 2s infinite}
+  @keyframes blink{50%{opacity:.4}}
+  .mock-body{padding:1.1rem;display:flex;flex-direction:column;gap:1rem}
+  .mock-body.two{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  .mock-panel{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:.8rem}
+  .mp-t{font-family:'Space Grotesk';font-size:.72rem;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.5rem}
+  .mock-svg{width:100%;height:150px;display:block}
+  .show-chips{display:flex;flex-direction:column;gap:.45rem}
+  .sig-chip{font-family:'Space Grotesk';font-size:.74rem;font-weight:500;padding:.45rem .7rem;border-radius:9px;border:1px solid var(--line2);background:var(--bg2)}
+  .sig-chip.up{color:var(--good);border-color:rgba(52,211,153,.3)}
+  .sig-chip.dn{color:#e88;border-color:rgba(224,106,106,.3)}
+  .sig-chip.mid{color:var(--gold);border-color:rgba(245,196,81,.3)}
+  .gxb{transform-box:fill-box;transform:scaleY(0);animation:gxGrow .7s var(--ease) forwards}
+  .gxb.up{transform-origin:bottom}.gxb.dn{transform-origin:top}
+  @keyframes gxGrow{to{transform:scaleY(1)}}
+  .mdot{transform-box:fill-box;transform-origin:center;animation:mdPulse 2.6s ease-in-out infinite}
+  @keyframes mdPulse{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1.15)}}
+  @media(max-width:820px){ .show-grid{grid-template-columns:1fr} .mock-body.two{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -324,6 +355,38 @@
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M9 12h6M9 16h6M9 8h3"/></svg></div>
         <h3>Brief macro con IA</h3>
         <p>Un analista de inteligencia artificial lee las señales del mercado y redacta un informe claro: qué está pasando y qué vigilar, en lenguaje humano.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LA PLATAFORMA EN ACCIÓN -->
+<section class="band showcase" id="showcase">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">La plataforma en acción</span>
+      <h2>Datos de mercado que <span class="grad">cobran vida</span>.</h2>
+      <p>No te damos solo números: los vemos como superficies, redes y señales en tiempo real. Esto es lo que hay dentro.</p>
+    </div>
+    <div class="show-grid">
+      <div class="mock reveal">
+        <div class="mock-head"><span class="md-dot r"></span><span class="md-dot y"></span><span class="md-dot g"></span><span class="mock-t">Terminal de opciones · SPY</span><span class="mock-live">● en vivo</span></div>
+        <div class="mock-body two">
+          <div class="mock-panel"><div class="mp-t">GEX por strike</div><svg id="scGex" viewBox="0 0 320 170" preserveAspectRatio="none" class="mock-svg"></svg></div>
+          <div class="mock-panel"><div class="mp-t">Superficie de IV · 3D</div><svg id="scSurf" viewBox="0 0 320 180" class="mock-svg"></svg></div>
+        </div>
+      </div>
+      <div class="mock reveal d1">
+        <div class="mock-head"><span class="md-dot r"></span><span class="md-dot y"></span><span class="md-dot g"></span><span class="mock-t">Radar · Momentum</span><span class="mock-live">● escaneando</span></div>
+        <div class="mock-body">
+          <div class="mock-panel"><div class="mp-t">Momentum por sector · retorno × sharpe</div><svg id="scMom" viewBox="0 0 320 180" class="mock-svg"></svg></div>
+          <div class="show-chips">
+            <span class="sig-chip up">▲ RUPTURA ALCISTA · NVDA</span>
+            <span class="sig-chip up">▲ MOMENTUM · SMH</span>
+            <span class="sig-chip dn">▼ VOLATILIDAD · TLT</span>
+            <span class="sig-chip mid">◆ FLUJO INUSUAL · AAPL</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -493,6 +556,51 @@ function networkCanvas(canvas,opts){
 }
 networkCanvas(document.getElementById("net"),{count:78,link:165,goldRatio:.14,parallax:20,trackMouse:true});
 networkCanvas(document.getElementById("qnet"),{count:40,link:120,goldRatio:.28,parallax:8,speed:.22,r:2.4});
+
+// ===== Mockups de "La plataforma en acción" =====
+(function(){
+  const NS="http://www.w3.org/2000/svg";
+  // GEX por strike: barras verde (arriba) / rojo (abajo) + línea de spot
+  const gex=document.getElementById("scGex");
+  if(gex){ const W=320,H=170,n=17,base=H*0.56,step=(W-16)/n,spot=8;
+    let s=`<line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="#33405e" stroke-width="1"/>`;
+    for(let i=0;i<n;i++){
+      const v=Math.exp(-Math.pow((i-(spot+3))/2.6,2)) - Math.exp(-Math.pow((i-(spot-4))/2.8,2))*0.82 + (Math.random()-0.5)*0.08;
+      const h=Math.min(base*0.82, Math.abs(v)*base*0.9), up=v>=0, x=8+i*step+2, bw=step-4;
+      const y=up?base-h:base;
+      s+=`<rect class="gxb ${up?'up':'dn'}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${up?'#34D399':'#e06a6a'}" opacity=".9" style="animation-delay:${i*35}ms"/>`;
+    }
+    const sx=8+spot*step+step/2;
+    s+=`<line x1="${sx.toFixed(1)}" y1="6" x2="${sx.toFixed(1)}" y2="${H-6}" stroke="#F5C451" stroke-width="1.4" stroke-dasharray="4 3"/>`;
+    gex.innerHTML=s;
+  }
+  // Superficie 3D (viridis) — malla de polígonos coloreados por altura
+  const surf=document.getElementById("scSurf");
+  if(surf){ const rows=9,cols=11,ox=44,oy=140,sx=20,shear=7,sy=9,dz=52;
+    const zf=(r,c)=>{const x=(c/(cols-1)-0.5); return Math.pow(x*2.3,2)*0.62+0.16+0.09*Math.sin(r/(rows-1)*3.1);};
+    const proj=(r,c)=>[ox+c*sx+r*shear, oy-r*sy-zf(r,c)*dz];
+    const stops=[[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
+    const vir=t=>{t=Math.max(0,Math.min(1,t));const f=t*(stops.length-1),i=Math.floor(f),k=f-i,a=stops[i],b=stops[Math.min(i+1,4)];
+      return `rgb(${Math.round(a[0]+(b[0]-a[0])*k)},${Math.round(a[1]+(b[1]-a[1])*k)},${Math.round(a[2]+(b[2]-a[2])*k)})`;};
+    let s="";
+    for(let r=rows-2;r>=0;r--) for(let c=0;c<cols-1;c++){
+      const p1=proj(r,c),p2=proj(r,c+1),p3=proj(r+1,c+1),p4=proj(r+1,c);
+      const zc=(zf(r,c)+zf(r,c+1)+zf(r+1,c+1)+zf(r+1,c))/4;
+      s+=`<polygon points="${p1[0].toFixed(1)},${p1[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)} ${p3[0].toFixed(1)},${p3[1].toFixed(1)} ${p4[0].toFixed(1)},${p4[1].toFixed(1)}" fill="${vir((zc-0.14)/0.85)}" fill-opacity=".84" stroke="rgba(255,255,255,.13)" stroke-width=".5"/>`;
+    }
+    surf.innerHTML=s;
+  }
+  // Momentum scatter: puntos verde(alto)→rojo(bajo), tamaños variados, pulsando
+  const mom=document.getElementById("scMom");
+  if(mom){ const W=320,H=180; let s=`<line x1="30" y1="${H-24}" x2="${W-8}" y2="${H-24}" stroke="#33405e"/><line x1="30" y1="8" x2="30" y2="${H-24}" stroke="#33405e"/>`;
+    for(let i=0;i<28;i++){ const x=38+Math.random()*(W-58), y=14+Math.random()*(H-46);
+      const score=(H-24-y)/(H-40), col=score>0.5?`rgba(52,211,153,${(.5+score*.5).toFixed(2)})`:`rgba(224,106,106,${(.6+(0.5-score)).toFixed(2)})`;
+      const r=(2+Math.random()*4).toFixed(1);
+      s+=`<circle class="mdot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${col}" style="animation-delay:${(Math.random()*2.4).toFixed(2)}s"/>`;
+    }
+    mom.innerHTML=s;
+  }
+})();
 </script>
 
 <script type="module">
