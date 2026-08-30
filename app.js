@@ -314,6 +314,7 @@ const NAV_CLIENT=[
   ["dinero-real","Invertir real",icon("money"),"soon"],
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
+  ["acciones","Análisis de acciones",icon("search")],
   ["radar","Radar",icon("radar")],
   ["terminal","Terminal de opciones",icon("term")],
   ["brief","Brief macro",icon("brief")],
@@ -427,6 +428,8 @@ async function render(){
       if(state.view==="perfil")     return void await viewProfile();
       if(state.view==="riesgo")     return void await viewRisk();
       if(state.view==="cartera")    return void await viewPortfolio();
+      if(state.view==="acciones"&&state.param) return void await viewStockDetail(state.param);
+      if(state.view==="acciones")   return void await viewStocks();
       if(state.view==="operar")     return void await viewTrade();
       if(state.view==="dinero-real") return void await viewDineroReal();
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
@@ -1041,6 +1044,216 @@ async function processAllPending(){
   if(!tks.length) return;
   const qr=await fetchQuotes(tks); const quotes=qr.quotes||{};
   for(const pf of pfs) await processPending(pf, quotes);
+}
+
+/* ===================== Análisis de acciones (tipo Simply Wall St) ===================== */
+function stocksDemo(){
+  return {
+    NVDA:{ticker:"NVDA",name:"NVIDIA Corporation",sector:"Semiconductores",type:"stock",currency:"USD",
+      summary:"NVIDIA opera como empresa de infraestructura de computación acelerada e IA a escala global.",
+      price:121.4,prev_close:127.3,mcap:2980e9,change_1d:-4.6,change_7d:1.3,change_1y:24.9,
+      valuation:{pe:52.1,forward_pe:31.4,pb:48.2,peg:1.1},growth:{earnings_growth:0.42,revenue_growth:0.38},
+      past:{roe:0.91,profit_margin:0.55,gross_margin:0.75},health:{debt_to_equity:22,current_ratio:4.1},
+      dividend:{yield:0.0003,payout:0.01},analyst:{target:145,upside:19.4,num:56,rec:"buy"},
+      fair_value:140,fair_upside:15.3,snowflake:{value:38,future:92,past:96,health:88,dividend:6},
+      rewards:["Se prevé un crecimiento anual de beneficios de 42%","Los beneficios crecieron 88% el año pasado","Deuda muy bien cubierta por el flujo de caja"],
+      risks:["Cotiza con múltiplos elevados (P/E 52)","Precio volátil en los últimos 3 meses"],
+      spark:sparkGen(80,121,0.35)},
+    AAPL:{ticker:"AAPL",name:"Apple Inc.",sector:"Tecnología",type:"stock",currency:"USD",
+      summary:"Apple diseña y vende smartphones, computadoras, wearables y servicios a nivel mundial.",
+      price:231.2,prev_close:229.8,mcap:3510e9,change_1d:0.6,change_7d:2.1,change_1y:14.2,
+      valuation:{pe:35.4,forward_pe:29.8,pb:51.0,peg:2.9},growth:{earnings_growth:0.09,revenue_growth:0.06},
+      past:{roe:1.47,profit_margin:0.25,gross_margin:0.46},health:{debt_to_equity:140,current_ratio:0.87},
+      dividend:{yield:0.0044,payout:0.15},analyst:{target:245,upside:6.0,num:41,rec:"hold"},
+      fair_value:210,fair_upside:-9.2,snowflake:{value:32,future:58,past:82,health:60,dividend:34},
+      rewards:["Retorno sobre el capital sobresaliente","Dividendo con payout bajo y sostenible"],
+      risks:["Cotiza por encima de nuestra estimación de valor justo","Crecimiento de ingresos moderado (6%)","Liquidez corriente por debajo de 1"],
+      spark:sparkGen(200,231,0.15)},
+    MSFT:{ticker:"MSFT",name:"Microsoft Corporation",sector:"Software",type:"stock",currency:"USD",
+      summary:"Microsoft desarrolla software, servicios en la nube (Azure) y dispositivos a nivel mundial.",
+      price:428.7,prev_close:424.0,mcap:3180e9,change_1d:1.1,change_7d:0.8,change_1y:18.7,
+      valuation:{pe:34.2,forward_pe:28.1,pb:11.9,peg:2.1},growth:{earnings_growth:0.16,revenue_growth:0.15},
+      past:{roe:0.37,profit_margin:0.36,gross_margin:0.69},health:{debt_to_equity:33,current_ratio:1.3},
+      dividend:{yield:0.0072,payout:0.25},analyst:{target:480,upside:12.0,num:48,rec:"buy"},
+      fair_value:465,fair_upside:8.5,snowflake:{value:44,future:74,past:88,health:82,dividend:46},
+      rewards:["Crecimiento sólido y rentable impulsado por la nube","Balance saludable con deuda contenida","Dividendo creciente y sostenible"],
+      risks:["Valoración algo exigente frente a su crecimiento"],
+      spark:sparkGen(360,428,0.18)},
+    TSLA:{ticker:"TSLA",name:"Tesla, Inc.",sector:"Automóviles",type:"stock",currency:"USD",
+      summary:"Tesla diseña, fabrica y vende vehículos eléctricos y sistemas de almacenamiento de energía.",
+      price:248.9,prev_close:255.1,mcap:795e9,change_1d:-2.4,change_7d:-3.8,change_1y:-8.5,
+      valuation:{pe:71.0,forward_pe:88.5,pb:11.2,peg:3.8},growth:{earnings_growth:-0.05,revenue_growth:0.02},
+      past:{roe:0.20,profit_margin:0.13,gross_margin:0.18},health:{debt_to_equity:12,current_ratio:1.8},
+      dividend:{yield:0,payout:0},analyst:{target:230,upside:-7.6,num:44,rec:"hold"},
+      fair_value:195,fair_upside:-21.6,snowflake:{value:18,future:64,past:70,health:86,dividend:5},
+      rewards:["Balance muy sólido y baja deuda"],
+      risks:["Cotiza muy por encima del valor estimado","Beneficios decrecientes el último año","Múltiplos extremadamente altos (P/E 71)"],
+      spark:sparkGen(270,248,0.25)},
+    SPY:{ticker:"SPY",name:"SPDR S&P 500 ETF",sector:"ETF · Índice amplio",type:"etf",currency:"USD",
+      summary:"ETF que replica el índice S&P 500, exponiendo al inversor a las 500 mayores empresas de EE.UU.",
+      price:452.3,prev_close:451.0,mcap:0,change_1d:0.3,change_7d:1.0,change_1y:16.4,
+      valuation:{pe:null,forward_pe:null,pb:null,peg:null},growth:{earnings_growth:null,revenue_growth:null},
+      past:{roe:null,profit_margin:null,gross_margin:null},health:{debt_to_equity:null,current_ratio:null},
+      dividend:{yield:0.013,payout:null},analyst:{target:null,upside:null,num:null,rec:null},
+      fair_value:null,fair_upside:null,snowflake:null,
+      rewards:["Diversificación instantánea en 500 empresas","Costo muy bajo (expense ratio 0.09%)"],
+      risks:["Expuesto a la volatilidad general del mercado"],
+      spark:sparkGen(410,452,0.12)},
+    "BTCUSD":{ticker:"BTCUSD",name:"Bitcoin",sector:"Cripto",type:"crypto",currency:"USD",
+      summary:"Bitcoin es el primer activo digital descentralizado, con oferta limitada a 21 millones.",
+      price:64200,prev_close:63100,mcap:1270e9,change_1d:1.7,change_7d:-2.4,change_1y:41.0,
+      valuation:{pe:null,forward_pe:null,pb:null,peg:null},growth:{earnings_growth:null,revenue_growth:null},
+      past:{roe:null,profit_margin:null,gross_margin:null},health:{debt_to_equity:null,current_ratio:null},
+      dividend:{yield:0,payout:null},analyst:{target:null,upside:null,num:null,rec:null},
+      fair_value:null,fair_upside:null,snowflake:null,
+      rewards:["Activo escaso con adopción creciente","Mercado líquido 24/7"],
+      risks:["Alta volatilidad","Sin flujos de caja ni fundamentales tradicionales"],
+      spark:sparkGen(45000,64200,0.5)},
+  };
+}
+function sparkGen(start,end,vol){ const n=52,out=[]; let v=start; const drift=(end-start)/n;
+  for(let i=0;i<n;i++){ v+=drift + (Math.random()-0.5)*start*vol*0.06; out.push(+v.toFixed(2)); } out[n-1]=end; return out; }
+
+async function viewStocks(){
+  const m=$("#main");
+  m.innerHTML=head("Análisis","Análisis de acciones","Busca una acción, ETF o cripto y explora su ficha: valoración, crecimiento, salud financiera y más.");
+  m.append(el(`<div id="stkShell">${loading()}</div>`));
+  let idx=null;
+  try{ const u=sb.storage.from("media").getPublicUrl("fundamentals/index.json").data.publicUrl;
+    const r=await fetch(u,{cache:"no-store"}); if(r.ok) idx=await r.json(); }catch(e){}
+  let list;
+  if(idx&&Array.isArray(idx.stocks)&&idx.stocks.length) list=idx.stocks;
+  else list=Object.values(stocksDemo()).map(s=>({ticker:s.ticker,name:s.name,sector:s.sector,type:s.type,price:s.price,change_1y:s.change_1y,demo:true}));
+  state.cache.stocks=list;
+  const box=$("#stkShell");
+  box.innerHTML=`<div class="stk-search"><span class="stk-mag">${icon("search")}</span>
+    <input id="stkQ" class="input" placeholder="Buscar: NVIDIA, AAPL, SPY, Bitcoin…" oninput="app.filterStocks(this.value)" autocomplete="off"></div>
+    <div id="stkList" class="stk-grid"></div>`;
+  renderStockList("");
+}
+function renderStockList(q){
+  const box=$("#stkList"); if(!box) return; q=(q||"").toLowerCase();
+  const list=(state.cache.stocks||[]).filter(s=>s.ticker.toLowerCase().includes(q)||(s.name||"").toLowerCase().includes(q));
+  if(!list.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Sin resultados para "${esc(q)}".</p>`; return; }
+  box.innerHTML=list.map(s=>{ const up=(s.change_1y||0)>=0;
+    return `<div class="stk-card card" onclick="app.openStock('${s.ticker}')">
+      <div class="flex between"><div><b class="stk-tk">${esc(s.ticker)}</b><div class="stk-nm">${esc(s.name||"")}</div></div>
+        <span class="stk-badge">${esc(s.type==="crypto"?"Cripto":s.type==="etf"?"ETF":"Acción")}</span></div>
+      <div class="flex between" style="margin-top:.7rem;align-items:flex-end">
+        <span class="stk-sec">${esc(s.sector||"")}</span>
+        <span class="mono ${up?"pos":"neg"}">${up?"+":""}${(s.change_1y??0).toFixed(1)}% <span style="color:var(--faint);font-size:.7rem">1A</span></span></div>
+    </div>`; }).join("");
+}
+async function viewStockDetail(ticker){
+  const m=$("#main"); m.classList.add("wide");
+  m.innerHTML=head("Análisis",esc(ticker));
+  m.append(el(`<div id="stkDet">${loading()}</div>`));
+  let s=null;
+  try{ const u=sb.storage.from("media").getPublicUrl("fundamentals/"+ticker+".json").data.publicUrl;
+    const r=await fetch(u,{cache:"no-store"}); if(r.ok) s=await r.json(); }catch(e){}
+  if(!s){ s=stocksDemo()[ticker]; if(s) s.demo=true; }
+  const box=$("#stkDet"); if(!box) return;
+  if(!s){ box.innerHTML=`<div class="card empty"><p>No encontramos datos para ${esc(ticker)}.</p>
+    <button class="btn btn-ghost btn-sm" style="width:auto;margin-top:.5rem" onclick="location.hash='#/acciones'">← Volver</button></div>`; return; }
+  const premium = state.profile.role==="admin" || state.profile.premium_courses;
+  const up1=(s.change_1y||0)>=0;
+  box.innerHTML=`
+    <button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/acciones'">← Volver al buscador</button>
+    ${s.demo?`<div class="radar-demo-note" style="margin-top:.8rem">Datos de <b>demostración</b>. Al correr el pipeline de fundamentales con yfinance, verás datos reales.</div>`:""}
+    <div class="stk-head card" style="margin-top:.8rem">
+      <div class="stk-head-main">
+        <div class="flex" style="gap:.5rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">${esc(s.name)}</h2><span class="stk-badge">${esc(s.type==="crypto"?"Cripto":s.type==="etf"?"ETF":"Acción")}</span></div>
+        <div class="stk-sec" style="margin:.2rem 0 .6rem">${esc(s.sector||"")} · ${esc(s.ticker)}</div>
+        <div class="flex" style="gap:1.2rem;align-items:flex-end;flex-wrap:wrap">
+          <div class="stk-price">${money(s.price,"USD")}</div>
+          ${chgPill("1D",s.change_1d)} ${chgPill("7D",s.change_7d)} ${chgPill("1A",s.change_1y)}
+        </div>
+        <p class="card-sub" style="margin:.8rem 0 0;max-width:60ch">${esc(s.summary||"")}</p>
+      </div>
+      <div class="stk-spark">${sparkSVG(s.spark||[],up1)}${s.mcap?`<div class="stk-mcap">Cap. bursátil<br><b>${mcapStr(s.mcap)}</b></div>`:""}</div>
+    </div>
+    <div class="stk-grid2">
+      <div class="card stk-snow">
+        <h3>Análisis "Copo de nieve"</h3>
+        <p class="card-sub">Qué tan fuerte es en cada dimensión (0–100).</p>
+        ${s.snowflake?snowflakeSVG(s.snowflake):`<p class="empty" style="padding:1.4rem">Este activo (${esc(s.type==="crypto"?"cripto":"ETF")}) no tiene fundamentales tradicionales para el copo de nieve.</p>`}
+      </div>
+      <div class="card">
+        <h3>Recompensas y riesgos</h3>
+        <div class="rr-sec"><div class="rr-t ok">✓ Recompensas</div>${(s.rewards||[]).map(r=>`<div class="rr-item ok">${esc(r)}</div>`).join("")||'<div class="rr-item" style="color:var(--faint)">—</div>'}</div>
+        <div class="rr-sec"><div class="rr-t bad">⚠ Riesgos</div>${(s.risks||[]).map(r=>`<div class="rr-item bad">${esc(r)}</div>`).join("")||'<div class="rr-item" style="color:var(--faint)">—</div>'}</div>
+      </div>
+    </div>
+    ${premium ? stockDetailSections(s) : stockPremiumLock(s)}`;
+}
+function chgPill(lbl,v){ if(v==null) return ""; const up=v>=0;
+  return `<div class="chg-pill ${up?"pos":"neg"}"><span class="cl">${lbl}</span> ${up?"+":""}${v.toFixed(1)}%</div>`; }
+function mcapStr(v){ if(!v) return "—"; if(v>=1e12) return "US$"+(v/1e12).toFixed(2)+" B"; if(v>=1e9) return "US$"+(v/1e9).toFixed(1)+" MM"; return "US$"+(v/1e6).toFixed(0)+" M"; }
+function metricRow(lbl,val,good){ return `<div class="mx-row"><span>${lbl}</span><b class="mono ${good===true?"pos":good===false?"neg":""}">${val}</b></div>`; }
+function stockDetailSections(s){
+  const v=s.valuation||{},g=s.growth||{},p=s.past||{},h=s.health||{},d=s.dividend||{},an=s.analyst||{};
+  const pctv=x=>x==null?"—":(x>=0?"+":"")+(x*100).toFixed(1)+"%";
+  return `<div class="stk-sections">
+    <div class="card"><h3>💵 Valoración</h3>
+      ${s.fair_value!=null?`<div class="fair-box"><span>Valor justo estimado</span><b class="mono">${money(s.fair_value,"USD")}</b>
+        <span class="mono ${s.fair_upside>=0?"pos":"neg"}">${s.fair_upside>=0?"▲ "+s.fair_upside.toFixed(1)+"% infravalorado":"▼ "+Math.abs(s.fair_upside).toFixed(1)+"% sobrevalorado"}</span></div>`:""}
+      ${metricRow("P/E (precio/beneficio)",v.pe??"—",v.pe!=null?v.pe<25:null)}
+      ${metricRow("P/E adelantado",v.forward_pe??"—")}
+      ${metricRow("P/B (precio/valor libro)",v.pb??"—")}
+      ${metricRow("PEG (P/E ajustado a crecimiento)",v.peg??"—",v.peg!=null?v.peg<1.5:null)}
+      ${an.target!=null?metricRow("Objetivo de analistas ("+an.num+")",money(an.target,"USD")):""}
+      <p class="disc-mini">Valor justo = estimación propia simple (PEG≈1). No es asesoría financiera.</p></div>
+    <div class="card"><h3>📈 Crecimiento futuro</h3>
+      ${metricRow("Crecimiento de beneficios (est.)",pctv(g.earnings_growth),g.earnings_growth!=null?g.earnings_growth>0:null)}
+      ${metricRow("Crecimiento de ingresos (est.)",pctv(g.revenue_growth),g.revenue_growth!=null?g.revenue_growth>0:null)}</div>
+    <div class="card"><h3>🏆 Rendimiento pasado</h3>
+      ${metricRow("ROE (retorno sobre capital)",pctv(p.roe),p.roe!=null?p.roe>0.15:null)}
+      ${metricRow("Margen neto",pctv(p.profit_margin))}
+      ${metricRow("Margen bruto",pctv(p.gross_margin))}</div>
+    <div class="card"><h3>🩺 Salud financiera</h3>
+      ${metricRow("Deuda / Patrimonio",h.debt_to_equity!=null?h.debt_to_equity.toFixed(0)+"%":"—",h.debt_to_equity!=null?h.debt_to_equity<100:null)}
+      ${metricRow("Liquidez corriente",h.current_ratio??"—",h.current_ratio!=null?h.current_ratio>1:null)}</div>
+    <div class="card"><h3>💰 Dividendos</h3>
+      ${metricRow("Rendimiento por dividendo",d.yield?(d.yield*100).toFixed(2)+"%":"—")}
+      ${metricRow("Payout (% de beneficios)",d.payout?(d.payout*100).toFixed(0)+"%":"—",d.payout!=null?d.payout<0.8:null)}</div>
+  </div>`;
+}
+function stockPremiumLock(s){
+  return `<div class="card stk-lock">
+    <div class="stk-lock-blur">${stockDetailSections(s)}</div>
+    <div class="stk-lock-cta">
+      <span class="pill" style="color:var(--gold)">🔒 Premium</span>
+      <h3 style="margin:.5rem 0 .3rem">Desbloquea el análisis completo</h3>
+      <p class="card-sub" style="max-width:44ch;margin:0 auto">Valoración con valor justo, crecimiento, rendimiento pasado, salud financiera y dividendos — para cada acción.</p>
+      <button class="btn btn-primary btn-sm" style="width:auto;margin-top:.9rem" onclick="location.hash='#/mensajes'">Pedir acceso premium</button>
+    </div>
+  </div>`;
+}
+function sparkSVG(data,up){ if(!data||!data.length) return "";
+  const W=220,H=64,min=Math.min(...data),max=Math.max(...data),rng=max-min||1;
+  const pts=data.map((v,i)=>`${(i/(data.length-1)*W).toFixed(1)},${(H-4-((v-min)/rng)*(H-8)).toFixed(1)}`).join(" ");
+  const col=up?"#3DD6A0":"#c96a6a"; const id="sg"+Math.random().toString(36).slice(2,6);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" class="spark">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".25"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+    <polygon points="0,${H} ${pts} ${W},${H}" fill="url(#${id})"/>
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6"/></svg>`;
+}
+function snowflakeSVG(sn){
+  const axes=[["Valor","value"],["Futuro","future"],["Pasado","past"],["Salud","health"],["Dividendos","dividend"]];
+  const cx=150,cy=140,R=95,N=5; const ang=i=>(-Math.PI/2)+i*2*Math.PI/N;
+  const pt=(i,r)=>[cx+Math.cos(ang(i))*r, cy+Math.sin(ang(i))*r];
+  let rings=""; [0.25,0.5,0.75,1].forEach(f=>{ const p=axes.map((_,i)=>pt(i,R*f).map(n=>n.toFixed(1)).join(",")).join(" "); rings+=`<polygon points="${p}" fill="none" stroke="#26344e" stroke-width=".7"/>`; });
+  let spokes="",labels="";
+  axes.forEach((a,i)=>{ const [x,y]=pt(i,R); spokes+=`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#26344e" stroke-width=".7"/>`;
+    const [lx,ly]=pt(i,R+18); labels+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" fill="var(--muted)" font-size="10" text-anchor="middle" dominant-baseline="middle" font-family="'JetBrains Mono'">${a[0]}</text>`; });
+  const blob=axes.map((a,i)=>pt(i,R*Math.max(0.04,(sn[a[1]]||0)/100)).map(n=>n.toFixed(1)).join(",")).join(" ");
+  const avg=axes.reduce((s,a)=>s+(sn[a[1]]||0),0)/N;
+  const col=avg>=66?"#3DD6A0":avg>=40?"#8FD14F":"#c9a24f";
+  return `<svg viewBox="0 0 300 285" width="100%" style="max-width:340px;display:block;margin:.4rem auto 0">
+    ${rings}${spokes}
+    <polygon points="${blob}" fill="${col}" fill-opacity=".35" stroke="${col}" stroke-width="2"/>
+    ${axes.map((a,i)=>{ const [x,y]=pt(i,R*Math.max(0.04,(sn[a[1]]||0)/100)); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${col}"/>`; }).join("")}
+    ${labels}</svg>`;
 }
 
 async function viewDineroReal(){
@@ -3510,6 +3723,8 @@ const app = {
   },
   tradeInPortfolio(id){ state.cache.tradePf=id; location.hash="#/operar"; },
   toggleIdea(head){ head.closest(".idea-acc")?.classList.toggle("idea-collapsed"); },
+  openStock(t){ location.hash="#/acciones/"+t; },
+  filterStocks(q){ renderStockList(q); },
   suggInput(pfId, inp){ const k=inp.dataset.k; let v=Math.max(0,Math.min(100,Math.round(+inp.value||0)));
     if(state.cache.csSugg&&state.cache.csSugg[pfId]){ state.cache.csSugg[pfId][k]=v; csSum(pfId); } },
   async saveSuggestion(pfId){
@@ -4102,6 +4317,7 @@ async function anyPortfolio(uid){
    ============================================================ */
 function icon(n){
   const p={
+    search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
     money:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M14.5 9.3c-.5-.7-1.4-1.1-2.5-1.1-1.5 0-2.6.8-2.6 1.9 0 2.6 5.2 1.3 5.2 3.9 0 1.1-1.1 1.9-2.6 1.9-1.1 0-2-.4-2.5-1.1"/>',
     home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
     gauge:'<path d="M12 13l4-4"/><path d="M4 18a8 8 0 1 1 16 0"/>',
