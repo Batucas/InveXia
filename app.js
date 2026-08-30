@@ -309,12 +309,12 @@ function renderCCItems(q){
 const NAV_CLIENT=[
   ["inicio","Inicio",icon("home")],
   ["riesgo","Perfil de riesgo",icon("gauge")],
+  ["acciones","Análisis de acciones",icon("search")],
   ["cartera","Mi cartera",icon("pie")],
   ["operar","Operar",icon("trade")],
   ["dinero-real","Invertir real",icon("money"),"soon"],
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
-  ["acciones","Análisis de acciones",icon("search")],
   ["radar","Radar",icon("radar")],
   ["terminal","Terminal de opciones",icon("term")],
   ["brief","Brief macro",icon("brief")],
@@ -1053,8 +1053,11 @@ function stockLogo(s, big){
   const mono=esc((s.ticker||"?").slice(0,2));
   const lc=s.type==="crypto"?"#F5C451":s.type==="etf"?"#2DD4BF":"#2E7DF6";
   const cls=big?"stk-logo lg":"stk-logo";
-  if(dom) return `<div class="${cls}" style="--lc:${lc}"><img src="https://logo.clearbit.com/${dom}" alt="" loading="lazy" onerror="this.parentNode.classList.add('mono');this.remove()"><span>${mono}</span></div>`;
-  return `<div class="${cls} mono" style="--lc:${lc}"><span>${mono}</span></div>`;
+  const srcs=[];
+  if(s.type!=="crypto") srcs.push(`https://financialmodelingprep.com/image-stock/${encodeURIComponent(s.ticker)}.png`);
+  if(dom){ srcs.push(`https://icons.duckduckgo.com/ip3/${dom}.ico`); srcs.push(`https://www.google.com/s2/favicons?domain=${dom}&sz=128`); }
+  if(!srcs.length) return `<div class="${cls} mono" style="--lc:${lc}"><span>${mono}</span></div>`;
+  return `<div class="${cls}" style="--lc:${lc}"><img src="${srcs[0]}" alt="" loading="lazy" referrerpolicy="no-referrer" data-srcs="${esc(srcs.join("|"))}" data-i="0" onerror="app.logoErr(this)"><span>${mono}</span></div>`;
 }
 function stocksDemo(){
   return {
@@ -3835,6 +3838,8 @@ const app = {
   tradeInPortfolio(id){ state.cache.tradePf=id; location.hash="#/operar"; },
   toggleIdea(head){ head.closest(".idea-acc")?.classList.toggle("idea-collapsed"); },
   openStock(t){ location.hash="#/acciones/"+t; },
+  logoErr(img){ const list=(img.dataset.srcs||"").split("|").filter(Boolean); let i=(+img.dataset.i||0)+1;
+    if(i<list.length){ img.dataset.i=i; img.src=list[i]; } else { img.parentNode.classList.add("mono"); img.remove(); } },
   filterStocks(q){ renderStockList(q); },
   stkMode(m){ state.cache.stkMode=m; viewStocks(); },
   resetScreen(){ state.cache.screen={value:0,future:0,past:0,health:0,dividend:0}; drawScreenSnow(); applyScreen(); },
