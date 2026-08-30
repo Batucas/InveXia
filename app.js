@@ -1155,7 +1155,6 @@ async function viewStockDetail(ticker){
   const box=$("#stkDet"); if(!box) return;
   if(!s){ box.innerHTML=`<div class="card empty"><p>No encontramos datos para ${esc(ticker)}.</p>
     <button class="btn btn-ghost btn-sm" style="width:auto;margin-top:.5rem" onclick="location.hash='#/acciones'">← Volver</button></div>`; return; }
-  const premium = state.profile.role==="admin" || state.profile.premium_courses;
   const up1=(s.change_1y||0)>=0;
   box.innerHTML=`
     <button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/acciones'">← Volver al buscador</button>
@@ -1184,7 +1183,7 @@ async function viewStockDetail(ticker){
         <div class="rr-sec"><div class="rr-t bad">⚠ Riesgos</div>${(s.risks||[]).map(r=>`<div class="rr-item bad">${esc(r)}</div>`).join("")||'<div class="rr-item" style="color:var(--faint)">—</div>'}</div>
       </div>
     </div>
-    ${premium ? stockDetailSections(s) : stockPremiumLock(s)}`;
+    ${stockDetailSections(s)}`;
 }
 function chgPill(lbl,v){ if(v==null) return ""; const up=v>=0;
   return `<div class="chg-pill ${up?"pos":"neg"}"><span class="cl">${lbl}</span> ${up?"+":""}${v.toFixed(1)}%</div>`; }

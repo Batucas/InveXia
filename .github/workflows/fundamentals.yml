@@ -1,0 +1,46 @@
+# ============================================================
+#  InveXia · Fundamentales — análisis de acciones (Simply Wall St-style)
+#  ------------------------------------------------------------
+#  Corre fundamentals_pipeline.py y sube fundamentals/*.json a
+#  Supabase Storage (bucket 'media'). La app lo lee solo.
+#
+#  Usa los MISMOS secrets que QuantNet / Radar:
+#     SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#  Ubicación obligatoria: .github/workflows/fundamentals.yml
+# ============================================================
+
+name: Fundamentales de acciones
+
+on:
+  # Una vez al día, a las 23:15 UTC (tras el cierre de EE.UU.)
+  schedule:
+    - cron: "15 23 * * 1-5"
+  # Botón para correrlo manualmente (pestaña Actions)
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Procesar solo los primeros N (0 = todos)"
+        required: false
+        default: "0"
+
+jobs:
+  run-fundamentals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install yfinance numpy pandas requests lxml
+
+      - name: Ejecutar el pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python fundamentals_pipeline.py --limit ${{ github.event.inputs.limit || 0 }}
