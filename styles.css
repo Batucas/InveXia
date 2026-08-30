@@ -1290,3 +1290,21 @@ body.focus-mode .main.wide{padding:.6rem}
 .stk-lock-blur{filter:blur(6px);opacity:.5;pointer-events:none;max-height:280px;overflow:hidden}
 .stk-lock-cta{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(180deg,rgba(10,20,36,.5),rgba(10,20,36,.92))}
 @media(max-width:820px){ .stk-head{grid-template-columns:1fr} .stk-spark{text-align:left} .stk-grid2{grid-template-columns:1fr} }
+
+/* v5.5 · Logo, perfil y screener con snowflake arrastrable */
+.stk-logo{width:44px;height:44px;border-radius:11px;overflow:hidden;background:#fff;flex:none;display:grid;place-items:center}
+.stk-logo.lg{width:60px;height:60px;border-radius:14px}
+.stk-logo img{width:100%;height:100%;object-fit:contain;padding:5px;box-sizing:border-box}
+.stk-logo span{display:none}
+.stk-logo.mono{background:var(--lc,#2E7DF6)}
+.stk-logo.mono span{display:grid;place-items:center;width:100%;height:100%;color:#fff;font-family:'Sora';font-weight:700;font-size:1rem}
+.stk-logo.lg.mono span{font-size:1.3rem}
+.screener-grid{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:1.2rem;align-items:start}
+.scr-h:active{cursor:grabbing}
+.scr-vals{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin:.6rem 0 1rem}
+.scr-tag{font-family:'JetBrains Mono';font-size:.7rem;color:var(--muted);background:var(--navy-950);border:1px solid var(--line);border-radius:20px;padding:.2rem .55rem}
+.scr-tag b{color:var(--gold)}
+.scr-row{display:flex;align-items:center;gap:.7rem;padding:.6rem;border-radius:10px;cursor:pointer;transition:.12s var(--tin);border:1px solid transparent}
+.scr-row:hover{background:rgba(46,125,246,.07);border-color:var(--line)}
+.scr-mini{flex:none;display:grid;place-items:center}
+@media(max-width:820px){ .screener-grid{grid-template-columns:1fr} }

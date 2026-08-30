@@ -245,6 +245,24 @@ def build_report(ticker, sector_es, kind):
            "rec": info.get("recommendationKey")}
     fv, fu = fair_value(_n(info.get("forwardEps")), grw["earnings_growth"], price)
 
+    # dominio para el logo (desde el sitio web)
+    website = info.get("website") or ""
+    domain = ""
+    if website:
+        domain = website.replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0].strip()
+
+    profile = {
+        "industry": info.get("industry"),
+        "country": info.get("country"),
+        "employees": info.get("fullTimeEmployees"),
+        "website": website or None,
+        "ps": _n(info.get("priceToSalesTrailing12Months")),
+        "ev_ebitda": _n(info.get("enterpriseToEbitda")),
+        "beta": _n(info.get("beta")),
+        "wk_high": _n(info.get("fiftyTwoWeekHigh")),
+        "wk_low": _n(info.get("fiftyTwoWeekLow")),
+    }
+
     d = {
         "ticker": ticker,
         "name": info.get("longName") or info.get("shortName") or ticker,
@@ -258,6 +276,7 @@ def build_report(ticker, sector_es, kind):
         "spark": spark, "valuation": val, "growth": grw, "past": pst,
         "health": hlt, "dividend": div, "analyst": ana,
         "fair_value": fv, "fair_upside": fu,
+        "domain": domain or None, "profile": profile,
     }
 
     if kind == "stock":
@@ -339,7 +358,10 @@ def main():
                 continue
             upload(f"fundamentals/{t}.json", d)
             index.append({"ticker": t, "name": d["name"], "sector": d["sector"],
-                          "type": kind, "price": d["price"], "change_1y": d["change_1y"]})
+                          "type": kind, "price": d["price"], "change_1y": d["change_1y"],
+                          "domain": d.get("domain"), "mcap": d.get("mcap"),
+                          "pe": d["valuation"]["pe"], "div_yield": d["dividend"]["yield"],
+                          "snowflake": d.get("snowflake")})
             print(f"  [{i+1}/{len(items)}] {t} ✓")
         except Exception as ex:
             print(f"  [{i+1}/{len(items)}] {t}: error {ex}")

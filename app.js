@@ -1047,6 +1047,15 @@ async function processAllPending(){
 }
 
 /* ===================== Análisis de acciones (tipo Simply Wall St) ===================== */
+const DEMO_DOMAINS={NVDA:"nvidia.com",AAPL:"apple.com",MSFT:"microsoft.com",TSLA:"tesla.com",AMZN:"amazon.com",META:"meta.com",GOOGL:"abc.xyz",AVGO:"broadcom.com"};
+function stockLogo(s, big){
+  const dom=s.domain||DEMO_DOMAINS[s.ticker]||(s.website?s.website.replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0]:null);
+  const mono=esc((s.ticker||"?").slice(0,2));
+  const lc=s.type==="crypto"?"#F5C451":s.type==="etf"?"#2DD4BF":"#2E7DF6";
+  const cls=big?"stk-logo lg":"stk-logo";
+  if(dom) return `<div class="${cls}" style="--lc:${lc}"><img src="https://logo.clearbit.com/${dom}" alt="" loading="lazy" onerror="this.parentNode.classList.add('mono');this.remove()"><span>${mono}</span></div>`;
+  return `<div class="${cls} mono" style="--lc:${lc}"><span>${mono}</span></div>`;
+}
 function stocksDemo(){
   return {
     NVDA:{ticker:"NVDA",name:"NVIDIA Corporation",sector:"Semiconductores",type:"stock",currency:"USD",
@@ -1116,16 +1125,25 @@ function sparkGen(start,end,vol){ const n=52,out=[]; let v=start; const drift=(e
 
 async function viewStocks(){
   const m=$("#main");
-  m.innerHTML=head("Análisis","Análisis de acciones","Busca una acción, ETF o cripto y explora su ficha: valoración, crecimiento, salud financiera y más.");
+  m.innerHTML=head("Análisis","Análisis de acciones","Busca una acción, ETF o cripto y explora su ficha, o filtra el mercado con el screener.");
   m.append(el(`<div id="stkShell">${loading()}</div>`));
   let idx=null;
   try{ const u=sb.storage.from("media").getPublicUrl("fundamentals/index.json").data.publicUrl;
     const r=await fetch(u,{cache:"no-store"}); if(r.ok) idx=await r.json(); }catch(e){}
   let list;
   if(idx&&Array.isArray(idx.stocks)&&idx.stocks.length) list=idx.stocks;
-  else list=Object.values(stocksDemo()).map(s=>({ticker:s.ticker,name:s.name,sector:s.sector,type:s.type,price:s.price,change_1y:s.change_1y,demo:true}));
+  else { list=Object.values(stocksDemo()).map(s=>({ticker:s.ticker,name:s.name,sector:s.sector,type:s.type,price:s.price,change_1y:s.change_1y,snowflake:s.snowflake,pe:s.valuation?.pe,mcap:s.mcap,demo:true})).concat(screenerDemo()); }
   state.cache.stocks=list;
+  const mode=state.cache.stkMode||"buscar";
   const box=$("#stkShell");
+  box.innerHTML=`<div class="courses-toggle" style="margin-bottom:1.1rem">
+      <button class="ct-btn ${mode==="buscar"?"on":""}" onclick="app.stkMode('buscar')">Buscar</button>
+      <button class="ct-btn ${mode==="screener"?"on":""}" onclick="app.stkMode('screener')">Screener 🔺</button></div>
+    <div id="stkMode"></div>`;
+  if(mode==="screener") buildScreener(); else renderSearchMode();
+}
+function renderSearchMode(){
+  const box=$("#stkMode"); if(!box) return;
   box.innerHTML=`<div class="stk-search"><span class="stk-mag">${icon("search")}</span>
     <input id="stkQ" class="input" placeholder="Buscar: NVIDIA, AAPL, SPY, Bitcoin…" oninput="app.filterStocks(this.value)" autocomplete="off"></div>
     <div id="stkList" class="stk-grid"></div>`;
@@ -1137,7 +1155,7 @@ function renderStockList(q){
   if(!list.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Sin resultados para "${esc(q)}".</p>`; return; }
   box.innerHTML=list.map(s=>{ const up=(s.change_1y||0)>=0;
     return `<div class="stk-card card" onclick="app.openStock('${s.ticker}')">
-      <div class="flex between"><div><b class="stk-tk">${esc(s.ticker)}</b><div class="stk-nm">${esc(s.name||"")}</div></div>
+      <div class="flex" style="gap:.7rem;align-items:center">${stockLogo(s)}<div style="flex:1;min-width:0"><b class="stk-tk">${esc(s.ticker)}</b><div class="stk-nm">${esc(s.name||"")}</div></div>
         <span class="stk-badge">${esc(s.type==="crypto"?"Cripto":s.type==="etf"?"ETF":"Acción")}</span></div>
       <div class="flex between" style="margin-top:.7rem;align-items:flex-end">
         <span class="stk-sec">${esc(s.sector||"")}</span>
@@ -1161,9 +1179,9 @@ async function viewStockDetail(ticker){
     ${s.demo?`<div class="radar-demo-note" style="margin-top:.8rem">Datos de <b>demostración</b>. Al correr el pipeline de fundamentales con yfinance, verás datos reales.</div>`:""}
     <div class="stk-head card" style="margin-top:.8rem">
       <div class="stk-head-main">
-        <div class="flex" style="gap:.5rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">${esc(s.name)}</h2><span class="stk-badge">${esc(s.type==="crypto"?"Cripto":s.type==="etf"?"ETF":"Acción")}</span></div>
-        <div class="stk-sec" style="margin:.2rem 0 .6rem">${esc(s.sector||"")} · ${esc(s.ticker)}</div>
-        <div class="flex" style="gap:1.2rem;align-items:flex-end;flex-wrap:wrap">
+        <div class="flex" style="gap:.9rem;align-items:center;flex-wrap:wrap">${stockLogo(s,true)}<div><div class="flex" style="gap:.5rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">${esc(s.name)}</h2><span class="stk-badge">${esc(s.type==="crypto"?"Cripto":s.type==="etf"?"ETF":"Acción")}</span></div>
+        <div class="stk-sec" style="margin:.2rem 0 0">${esc(s.sector||"")} · ${esc(s.ticker)}</div></div></div>
+        <div class="flex" style="gap:1.2rem;align-items:flex-end;flex-wrap:wrap;margin-top:.7rem">
           <div class="stk-price">${money(s.price,"USD")}</div>
           ${chgPill("1D",s.change_1d)} ${chgPill("7D",s.change_7d)} ${chgPill("1A",s.change_1y)}
         </div>
@@ -1190,8 +1208,18 @@ function chgPill(lbl,v){ if(v==null) return ""; const up=v>=0;
 function mcapStr(v){ if(!v) return "—"; if(v>=1e12) return "US$"+(v/1e12).toFixed(2)+" B"; if(v>=1e9) return "US$"+(v/1e9).toFixed(1)+" MM"; return "US$"+(v/1e6).toFixed(0)+" M"; }
 function metricRow(lbl,val,good){ return `<div class="mx-row"><span>${lbl}</span><b class="mono ${good===true?"pos":good===false?"neg":""}">${val}</b></div>`; }
 function stockDetailSections(s){
-  const v=s.valuation||{},g=s.growth||{},p=s.past||{},h=s.health||{},d=s.dividend||{},an=s.analyst||{};
+  const v=s.valuation||{},g=s.growth||{},p=s.past||{},h=s.health||{},d=s.dividend||{},an=s.analyst||{},pr=s.profile||{};
   const pctv=x=>x==null?"—":(x>=0?"+":"")+(x*100).toFixed(1)+"%";
+  const empStr=pr.employees?Number(pr.employees).toLocaleString("es-BO"):null;
+  const prof = (pr.industry||pr.country||pr.employees||pr.website||pr.beta!=null||pr.wk_high!=null) ? `
+    <div class="card"><h3>🏢 Perfil de la empresa</h3>
+      ${pr.industry?metricRow("Industria",esc(pr.industry)):""}
+      ${pr.country?metricRow("País",esc(pr.country)):""}
+      ${empStr?metricRow("Empleados",empStr):""}
+      ${pr.beta!=null?metricRow("Beta (volatilidad vs. mercado)",pr.beta.toFixed(2)):""}
+      ${(pr.wk_high!=null&&pr.wk_low!=null)?metricRow("Rango 52 semanas",money(pr.wk_low,"USD")+" – "+money(pr.wk_high,"USD")):""}
+      ${pr.website?`<div class="mx-row"><span>Sitio web</span><a class="mono" href="${esc(pr.website)}" target="_blank" rel="noopener" style="color:var(--blue-400)">${esc((pr.website||"").replace(/^https?:\/\//,"").replace(/\/$/,""))}</a></div>`:""}
+    </div>` : "";
   return `<div class="stk-sections">
     <div class="card"><h3>💵 Valoración</h3>
       ${s.fair_value!=null?`<div class="fair-box"><span>Valor justo estimado</span><b class="mono">${money(s.fair_value,"USD")}</b>
@@ -1199,6 +1227,8 @@ function stockDetailSections(s){
       ${metricRow("P/E (precio/beneficio)",v.pe??"—",v.pe!=null?v.pe<25:null)}
       ${metricRow("P/E adelantado",v.forward_pe??"—")}
       ${metricRow("P/B (precio/valor libro)",v.pb??"—")}
+      ${pr.ps!=null?metricRow("P/S (precio/ventas)",pr.ps.toFixed(1)):""}
+      ${pr.ev_ebitda!=null?metricRow("EV/EBITDA",pr.ev_ebitda.toFixed(1)):""}
       ${metricRow("PEG (P/E ajustado a crecimiento)",v.peg??"—",v.peg!=null?v.peg<1.5:null)}
       ${an.target!=null?metricRow("Objetivo de analistas ("+an.num+")",money(an.target,"USD")):""}
       <p class="disc-mini">Valor justo = estimación propia simple (PEG≈1). No es asesoría financiera.</p></div>
@@ -1215,6 +1245,7 @@ function stockDetailSections(s){
     <div class="card"><h3>💰 Dividendos</h3>
       ${metricRow("Rendimiento por dividendo",d.yield?(d.yield*100).toFixed(2)+"%":"—")}
       ${metricRow("Payout (% de beneficios)",d.payout?(d.payout*100).toFixed(0)+"%":"—",d.payout!=null?d.payout<0.8:null)}</div>
+    ${prof}
   </div>`;
 }
 function stockPremiumLock(s){
@@ -1254,6 +1285,87 @@ function snowflakeSVG(sn){
     ${axes.map((a,i)=>{ const [x,y]=pt(i,R*Math.max(0.04,(sn[a[1]]||0)/100)); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${col}"/>`; }).join("")}
     ${labels}</svg>`;
 }
+
+/* ===== Screener con copo de nieve arrastrable ===== */
+function screenerDemo(){
+  const mk=(t,n,sec,val,fut,pas,hea,div,pe,mc,ch)=>({ticker:t,name:n,sector:sec,type:"stock",
+    snowflake:{value:val,future:fut,past:pas,health:hea,dividend:div},pe,mcap:mc,change_1y:ch,demo:true});
+  return [
+    mk("GOOGL","Alphabet Inc.","Comunicación",58,78,86,80,20,24,2100e9,28),
+    mk("AMZN","Amazon.com","Consumo discrecional",40,82,74,66,5,30,1950e9,32),
+    mk("META","Meta Platforms","Comunicación",62,80,84,78,34,22,1300e9,41),
+    mk("JPM","JPMorgan Chase","Financiero",70,54,72,64,60,18,620e9,29),
+    mk("KO","Coca-Cola","Consumo básico",56,48,70,58,74,25,270e9,11),
+    mk("JNJ","Johnson & Johnson","Salud",64,50,66,82,72,15,380e9,7),
+    mk("PG","Procter & Gamble","Consumo básico",52,46,68,70,68,26,390e9,9),
+    mk("XOM","Exxon Mobil","Energía",76,44,60,74,66,13,480e9,4),
+    mk("V","Visa Inc.","Financiero",48,72,90,86,30,30,560e9,16),
+    mk("WMT","Walmart","Consumo básico",44,58,64,60,42,35,600e9,45),
+    mk("PFE","Pfizer","Salud",82,40,50,56,88,9,160e9,-12),
+    mk("DIS","Walt Disney","Comunicación",66,62,44,58,20,22,200e9,6),
+    mk("MA","Mastercard","Financiero",42,74,92,80,28,34,430e9,18),
+    mk("HD","Home Depot","Consumo discrecional",50,56,78,54,52,24,380e9,12),
+    mk("CVX","Chevron","Energía",78,42,58,76,70,14,290e9,3),
+    mk("ABBV","AbbVie","Salud",60,52,62,48,80,17,310e9,15),
+  ];
+}
+const SCR_AXES=[["Valor","value"],["Futuro","future"],["Pasado","past"],["Salud","health"],["Dividendos","dividend"]];
+function buildScreener(){
+  const box=$("#stkMode"); if(!box) return;
+  if(!state.cache.screen) state.cache.screen={value:0,future:0,past:0,health:0,dividend:0};
+  box.innerHTML=`<div class="screener-grid">
+    <div class="card">
+      <h3>Filtro copo de nieve</h3>
+      <p class="card-sub">Arrastra cada punto hacia afuera para exigir un mínimo en esa dimensión. Muestra las acciones que igualan o superan tu filtro.</p>
+      <svg id="scrSnow" viewBox="0 0 300 300" style="width:100%;max-width:360px;display:block;margin:.4rem auto;touch-action:none"></svg>
+      <div class="scr-vals" id="scrVals"></div>
+      <button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.resetScreen()">Restablecer filtro</button>
+    </div>
+    <div class="card"><div class="flex between"><h3 style="margin:0">Resultados</h3><span id="scrCount" class="mono" style="color:var(--muted)"></span></div>
+      <div id="scrResults" class="mt"></div></div>
+  </div>`;
+  drawScreenSnow(); applyScreen();
+}
+function scrPt(i,r){ const cx=150,cy=150,R=100,ang=(-Math.PI/2)+i*2*Math.PI/5; return [cx+Math.cos(ang)*r,cy+Math.sin(ang)*r]; }
+function drawScreenSnow(){
+  const svg=document.getElementById("scrSnow"); if(!svg) return; const R=100, f=state.cache.screen;
+  let s="";
+  [0.25,0.5,0.75,1].forEach(k=>{ const p=SCR_AXES.map((_,i)=>scrPt(i,R*k).map(n=>n.toFixed(1)).join(",")).join(" "); s+=`<polygon points="${p}" fill="none" stroke="#26344e" stroke-width=".7"/>`; });
+  SCR_AXES.forEach((a,i)=>{ const [x,y]=scrPt(i,R); s+=`<line x1="150" y1="150" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#26344e" stroke-width=".7"/>`;
+    const [lx,ly]=scrPt(i,R+20); s+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" fill="var(--muted)" font-size="10" text-anchor="middle" dominant-baseline="middle" font-family="'JetBrains Mono'">${a[0]}</text>`; });
+  const blob=SCR_AXES.map((a,i)=>scrPt(i,R*(f[a[1]]/100)).map(n=>n.toFixed(1)).join(",")).join(" ");
+  s+=`<polygon points="${blob}" fill="#F5C451" fill-opacity=".28" stroke="#F5C451" stroke-width="2"/>`;
+  SCR_AXES.forEach((a,i)=>{ const [x,y]=scrPt(i,R*(f[a[1]]/100)); s+=`<circle class="scr-h" data-i="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" fill="#F5C451" stroke="#0A1424" stroke-width="2" style="cursor:grab"/>`; });
+  svg.innerHTML=s;
+  svg.querySelectorAll(".scr-h").forEach(h=>h.addEventListener("pointerdown",scrDragStart));
+  const vb=$("#scrVals"); if(vb) vb.innerHTML=SCR_AXES.map(a=>`<span class="scr-tag">${a[0]}: <b>${f[a[1]]}</b></span>`).join("");
+}
+function scrDragStart(e){ e.preventDefault(); const svg=document.getElementById("scrSnow"); const i=+e.target.dataset.i;
+  const move=(ev)=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY;
+    const loc=pt.matrixTransform(svg.getScreenCTM().inverse());
+    const ang=(-Math.PI/2)+i*2*Math.PI/5, dx=loc.x-150, dy=loc.y-150;
+    let d=dx*Math.cos(ang)+dy*Math.sin(ang); d=Math.max(0,Math.min(100,d));
+    state.cache.screen[SCR_AXES[i][1]]=Math.round(d); drawScreenSnow(); applyScreen(); };
+  const up=()=>{ document.removeEventListener("pointermove",move); document.removeEventListener("pointerup",up); };
+  document.addEventListener("pointermove",move); document.addEventListener("pointerup",up);
+}
+function applyScreen(){
+  const box=$("#scrResults"); if(!box) return; const f=state.cache.screen;
+  const uni=(state.cache.stocks||[]).filter(s=>s.snowflake);
+  const pass=uni.filter(s=>SCR_AXES.every(a=>(s.snowflake[a[1]]||0)>=f[a[1]]))
+    .sort((a,b)=>SCR_AXES.reduce((x,ax)=>x+(b.snowflake[ax[1]]||0),0)-SCR_AXES.reduce((x,ax)=>x+(a.snowflake[ax[1]]||0),0));
+  const cnt=$("#scrCount"); if(cnt) cnt.textContent=pass.length+" de "+uni.length;
+  if(!uni.length){ box.innerHTML=`<p class="empty" style="padding:1rem">El screener necesita datos con copo de nieve. Corre el pipeline de fundamentales.</p>`; return; }
+  if(!pass.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Ninguna acción cumple ese filtro. Baja alguna exigencia.</p>`; return; }
+  box.innerHTML=pass.slice(0,40).map(s=>{ const up=(s.change_1y||0)>=0;
+    return `<div class="scr-row" onclick="app.openStock('${s.ticker}')">
+      ${stockLogo(s)}<div style="flex:1;min-width:0"><b>${esc(s.ticker)}</b> <span class="stk-nm" style="display:inline">${esc(s.name||"")}</span><div class="stk-sec">${esc(s.sector||"")}</div></div>
+      <div style="text-align:right"><span class="mono ${up?"pos":"neg"}">${up?"+":""}${(s.change_1y??0).toFixed(1)}%</span><div style="font-size:.66rem;color:var(--faint)">1A</div></div>
+      <span class="scr-mini">${miniSnow(s.snowflake)}</span></div>`; }).join("");
+}
+function miniSnow(sn){ const blob=SCR_AXES.map((a,i)=>{ const ang=(-Math.PI/2)+i*2*Math.PI/5,r=13*(sn[a[1]]||0)/100; return [16+Math.cos(ang)*r,16+Math.sin(ang)*r].map(n=>n.toFixed(1)).join(","); }).join(" ");
+  const avg=SCR_AXES.reduce((s,a)=>s+(sn[a[1]]||0),0)/5, col=avg>=66?"#3DD6A0":avg>=40?"#8FD14F":"#c9a24f";
+  return `<svg viewBox="0 0 32 32" width="30" height="30"><polygon points="${blob}" fill="${col}" fill-opacity=".4" stroke="${col}" stroke-width="1.2"/></svg>`; }
 
 async function viewDineroReal(){
   const m=$("#main");
@@ -3724,6 +3836,8 @@ const app = {
   toggleIdea(head){ head.closest(".idea-acc")?.classList.toggle("idea-collapsed"); },
   openStock(t){ location.hash="#/acciones/"+t; },
   filterStocks(q){ renderStockList(q); },
+  stkMode(m){ state.cache.stkMode=m; viewStocks(); },
+  resetScreen(){ state.cache.screen={value:0,future:0,past:0,health:0,dividend:0}; drawScreenSnow(); applyScreen(); },
   suggInput(pfId, inp){ const k=inp.dataset.k; let v=Math.max(0,Math.min(100,Math.round(+inp.value||0)));
     if(state.cache.csSugg&&state.cache.csSugg[pfId]){ state.cache.csSugg[pfId][k]=v; csSum(pfId); } },
   async saveSuggestion(pfId){
