@@ -185,6 +185,50 @@ def build_universe():
 
 
 # ------------------------------------------------------------------ ficha
+def annual_financials(yft):
+    """Extrae ingresos, BPA y acciones en circulación de los últimos años."""
+    try:
+        inc = yft.income_stmt
+        bs = yft.balance_sheet
+    except Exception:
+        return None
+    if inc is None or getattr(inc, "empty", True):
+        return None
+    cols = list(inc.columns)[:5][::-1]   # hasta 5 años, del más antiguo al más nuevo
+
+    def row(df, *names):
+        if df is None:
+            return None
+        for n in names:
+            if n in df.index:
+                return df.loc[n]
+        return None
+
+    rev_r = row(inc, "Total Revenue", "TotalRevenue", "Operating Revenue")
+    eps_r = row(inc, "Diluted EPS", "Basic EPS")
+    ni_r = row(inc, "Net Income", "Net Income Common Stockholders", "NetIncome")
+    sh_r = row(bs, "Ordinary Shares Number", "Share Issued", "Common Stock Shares Outstanding")
+
+    years, revenue, eps, shares = [], [], [], []
+    for c in cols:
+        try:
+            years.append(c.year)
+        except Exception:
+            years.append(str(c))
+        revenue.append(_n(rev_r.get(c)) if rev_r is not None else None)
+        sh = _n(sh_r.get(c)) if sh_r is not None else None
+        shares.append(sh)
+        e = _n(eps_r.get(c)) if eps_r is not None else None
+        if e is None and ni_r is not None and sh:
+            ni = _n(ni_r.get(c))
+            e = round(ni / sh, 2) if ni else None
+        eps.append(e)
+
+    if not any(v is not None for v in revenue) and not any(v is not None for v in eps):
+        return None
+    return {"years": years, "revenue": revenue, "eps": eps, "shares": shares}
+
+
 def build_report(ticker, sector_es, kind):
     import yfinance as yf
     yft = yf.Ticker(ticker)
@@ -245,6 +289,71 @@ def build_report(ticker, sector_es, kind):
            "rec": info.get("recommendationKey")}
     fv, fu = fair_value(_n(info.get("forwardEps")), grw["earnings_growth"], price)
 
+    # ---- métricas detalladas estilo Finviz ----
+    import pandas as pd
+    stats = {}
+    if hist is not None and len(hist) > 20:
+        cl = hist["Close"].dropna()
+        last = float(cl.iloc[-1])
+
+        def _perf(n):
+            if len(cl) > n:
+                b = float(cl.iloc[-n - 1])
+                return round((last - b) / b * 100, 1) if b else None
+            return None
+
+        ytd = None
+        try:
+            yr = cl.index[-1].year
+            ycl = cl[cl.index.year == yr]
+            if len(ycl) > 1 and float(ycl.iloc[0]):
+                ytd = round((last - float(ycl.iloc[0])) / float(ycl.iloc[0]) * 100, 1)
+        except Exception:
+            pass
+        stats["perf"] = {"week": _perf(5), "month": _perf(21), "quarter": _perf(63),
+                         "half": _perf(126), "ytd": ytd,
+                         "year": _perf(252) or (round(ch1y, 1) if ch1y is not None else None)}
+        # RSI 14
+        try:
+            dd = cl.diff().dropna()
+            up = dd.clip(lower=0).rolling(14).mean().iloc[-1]
+            dn = (-dd.clip(upper=0)).rolling(14).mean().iloc[-1]
+            stats["rsi"] = round(100 - 100 / (1 + up / dn), 1) if dn else (100.0 if up else None)
+        except Exception:
+            stats["rsi"] = None
+        # ATR 14
+        try:
+            hh, ll, pc = hist["High"], hist["Low"], cl.shift(1)
+            tr = pd.concat([(hh - ll), (hh - pc).abs(), (ll - pc).abs()], axis=1).max(axis=1)
+            stats["atr"] = round(float(tr.rolling(14).mean().iloc[-1]), 2)
+        except Exception:
+            stats["atr"] = None
+        sma50 = float(cl.rolling(50).mean().iloc[-1]) if len(cl) >= 50 else None
+        sma200 = float(cl.rolling(200).mean().iloc[-1]) if len(cl) >= 200 else None
+        stats["sma50_pct"] = round((last - sma50) / sma50 * 100, 1) if sma50 else None
+        stats["sma200_pct"] = round((last - sma200) / sma200 * 100, 1) if sma200 else None
+
+    fcf = _n(info.get("freeCashflow"))
+    mc = _n(info.get("marketCap"))
+    stats.update({
+        "income": _n(info.get("netIncomeToCommon")),
+        "revenue": _n(info.get("totalRevenue")),
+        "book_sh": _n(info.get("bookValue")),
+        "cash_sh": _n(info.get("totalCashPerShare")),
+        "roa": _n(info.get("returnOnAssets")),
+        "quick_ratio": _n(info.get("quickRatio")),
+        "ev_sales": _n(info.get("enterpriseToRevenue")),
+        "p_fcf": (round(mc / fcf, 1) if fcf and mc and fcf > 0 else None),
+        "shares_out": _n(info.get("sharesOutstanding")),
+        "float_shares": _n(info.get("floatShares")),
+        "insider_own": _n(info.get("heldPercentInsiders")),
+        "inst_own": _n(info.get("heldPercentInstitutions")),
+        "short_float": _n(info.get("shortPercentOfFloat")),
+        "avg_volume": _n(info.get("averageVolume")),
+        "eps_ttm": _n(info.get("trailingEps")),
+        "eps_fwd": _n(info.get("forwardEps")),
+    })
+
     # dominio para el logo (desde el sitio web)
     website = info.get("website") or ""
     domain = ""
@@ -276,7 +385,8 @@ def build_report(ticker, sector_es, kind):
         "spark": spark, "valuation": val, "growth": grw, "past": pst,
         "health": hlt, "dividend": div, "analyst": ana,
         "fair_value": fv, "fair_upside": fu,
-        "domain": domain or None, "profile": profile,
+        "domain": domain or None, "profile": profile, "stats": stats,
+        "financials": (annual_financials(yft) if kind == "stock" else None),
     }
 
     if kind == "stock":
