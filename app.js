@@ -1068,6 +1068,9 @@ function stocksDemo(){
       past:{roe:0.91,profit_margin:0.55,gross_margin:0.75},health:{debt_to_equity:22,current_ratio:4.1},
       dividend:{yield:0.0003,payout:0.01},analyst:{target:145,upside:19.4,num:56,rec:"buy"},
       fair_value:140,fair_upside:15.3,snowflake:{value:38,future:92,past:96,health:88,dividend:6},
+      profile:{industry:"Semiconductores",country:"Estados Unidos",employees:29600,website:"https://www.nvidia.com",ps:31.2,ev_ebitda:45.8,beta:1.68,wk_high:153.1,wk_low:86.6},
+      stats:{income:53008e6,revenue:130497e6,book_sh:2.7,cash_sh:1.4,roa:0.65,quick_ratio:3.4,ev_sales:28.1,p_fcf:52.3,shares_out:24500e6,float_shares:23400e6,insider_own:0.041,inst_own:0.66,short_float:0.012,avg_volume:245e6,eps_ttm:2.53,eps_fwd:3.85,rsi:57.2,atr:4.1,sma50_pct:5.4,sma200_pct:19.8,perf:{week:1.3,month:8.2,quarter:14.1,half:22.6,ytd:31.0,year:24.9}},
+      financials:{years:[2022,2023,2024,2025],eps:[0.17,0.17,1.19,2.53],revenue:[26914e6,26974e6,60922e6,130497e6],shares:[25000e6,24700e6,24600e6,24500e6]},
       rewards:["Se prevé un crecimiento anual de beneficios de 42%","Los beneficios crecieron 88% el año pasado","Deuda muy bien cubierta por el flujo de caja"],
       risks:["Cotiza con múltiplos elevados (P/E 52)","Precio volátil en los últimos 3 meses"],
       spark:sparkGen(80,121,0.35)},
@@ -1204,7 +1207,65 @@ async function viewStockDetail(ticker){
         <div class="rr-sec"><div class="rr-t bad">⚠ Riesgos</div>${(s.risks||[]).map(r=>`<div class="rr-item bad">${esc(r)}</div>`).join("")||'<div class="rr-item" style="color:var(--faint)">—</div>'}</div>
       </div>
     </div>
-    ${stockDetailSections(s)}`;
+    ${stockDetailSections(s)}
+    <div class="card stk-chart-card"><div class="flex between"><h3 style="margin:0">Gráfico</h3><span class="card-sub" style="margin:0">Velas · TradingView</span></div>
+      <div id="tvChart" class="stk-tvchart"></div></div>
+    ${finvizGrid(s)}
+    ${financialsBlock(s.financials)}`;
+  const sym=s.ticker; setTimeout(()=>{ try{ tvWidget(sym); }catch(e){} }, 60);
+}
+function barsSVG(years, vals, color, fmt){
+  const W=300,H=155,n=vals.length||1;
+  const nums=vals.filter(v=>v!=null);
+  const max=Math.max(...nums,0), min=Math.min(...nums,0), range=(max-min)||1;
+  const top=20, bot=H-22, plot=bot-top, zeroY=top+(max/range)*plot;
+  const gap=(W-16)/n, bw=gap*0.56;
+  let s=`<line x1="8" y1="${zeroY.toFixed(1)}" x2="${W-8}" y2="${zeroY.toFixed(1)}" stroke="#26344e" stroke-width=".7"/>`;
+  vals.forEach((v,i)=>{ const x=8+i*gap+(gap-bw)/2;
+    if(v!=null){ const h=Math.abs(v)/range*plot, y=v>=0?zeroY-h:zeroY;
+      s+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1,h).toFixed(1)}" rx="2" fill="${color}" opacity=".9"/>`;
+      s+=`<text x="${(x+bw/2).toFixed(1)}" y="${(v>=0?y-4:y+h+10).toFixed(1)}" fill="var(--muted)" font-size="8.5" text-anchor="middle" font-family="'JetBrains Mono'">${esc(fmt(v))}</text>`;
+    }
+    s+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-5}" fill="var(--faint)" font-size="8.5" text-anchor="middle">${esc(years[i])}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${s}</svg>`;
+}
+function financialsBlock(fin){
+  if(!fin||!fin.years||!fin.years.length) return "";
+  const Brev=x=>x==null?"—":(Math.abs(x)>=1e9?(x/1e9).toFixed(1):Math.abs(x)>=1e6?(x/1e6).toFixed(0)+"M":(+x).toFixed(0));
+  const Bsh=x=>x==null?"—":(x/1e9).toFixed(2);
+  const Beps=x=>x==null?"—":(+x).toFixed(2);
+  const hasEps=(fin.eps||[]).some(v=>v!=null), hasRev=(fin.revenue||[]).some(v=>v!=null), hasSh=(fin.shares||[]).some(v=>v!=null);
+  if(!hasEps&&!hasRev&&!hasSh) return "";
+  return `<div class="card fin-card"><h3>📈 Historial financiero anual</h3>
+    <div class="fin-grid">
+      ${hasEps?`<div class="fin-col"><div class="fin-t">BPA (EPS)</div>${barsSVG(fin.years,fin.eps,"#4FA3FF",Beps)}</div>`:""}
+      ${hasRev?`<div class="fin-col"><div class="fin-t">Ingresos (miles de millones US$)</div>${barsSVG(fin.years,fin.revenue,"#8B5CF6",Brev)}</div>`:""}
+      ${hasSh?`<div class="fin-col"><div class="fin-t">Acciones en circulación (MM)</div>${barsSVG(fin.years,fin.shares,"#2DD4BF",Bsh)}</div>`:""}
+    </div></div>`;
+}
+function finvizGrid(s){
+  const st=s.stats||{}, v=s.valuation||{}, p=s.past||{}, h=s.health||{}, d=s.dividend||{}, pr=s.profile||{}, perf=st.perf||{};
+  if(!s.stats && !pr.beta && v.pe==null) return "";
+  const f1=x=>x==null?"—":(+x).toFixed(1), f2=x=>x==null?"—":(+x).toFixed(2), f0=x=>x==null?"—":(+x).toFixed(0);
+  const pc=x=>x==null?"—":(x*100).toFixed(1)+"%";
+  const big=x=>{ if(x==null) return "—"; const a=Math.abs(x); if(a>=1e12) return (x/1e12).toFixed(2)+" B"; if(a>=1e9) return (x/1e9).toFixed(2)+" MM"; if(a>=1e6) return (x/1e6).toFixed(1)+" M"; if(a>=1e3) return (x/1e3).toFixed(0)+" mil"; return (+x).toFixed(0); };
+  const rows=[
+    ["P/E",f1(v.pe)],["P/E adel.",f1(v.forward_pe)],["PEG",f2(v.peg)],["P/S",f1(pr.ps)],
+    ["P/B",f1(v.pb)],["P/FCF",f1(st.p_fcf)],["EV/EBITDA",f1(pr.ev_ebitda)],["EV/Ventas",f1(st.ev_sales)],
+    ["ROE",pc(p.roe)],["ROA",pc(st.roa)],["M. bruto",pc(p.gross_margin)],["M. neto",pc(p.profit_margin)],
+    ["Deuda/Patr.",h.debt_to_equity!=null?f2(h.debt_to_equity/100):"—"],["Liquidez",f1(h.current_ratio)],["Quick",f1(st.quick_ratio)],["Beta",f2(pr.beta)],
+    ["RSI (14)",f0(st.rsi)],["ATR (14)",f1(st.atr)],["SMA50",st.sma50_pct!=null?(st.sma50_pct>=0?"+":"")+st.sma50_pct+"%":"—"],["SMA200",st.sma200_pct!=null?(st.sma200_pct>=0?"+":"")+st.sma200_pct+"%":"—"],
+    ["Beneficio",big(st.income)],["Ingresos",big(st.revenue)],["Acciones",big(st.shares_out)],["Float",big(st.float_shares)],
+    ["Prop. instit.",pc(st.inst_own)],["Prop. interna",pc(st.insider_own)],["Short float",pc(st.short_float)],["Vol. prom.",big(st.avg_volume)],
+    ["EPS (ttm)",f2(st.eps_ttm)],["EPS próx.",f2(st.eps_fwd)],["Dividendo",d.yield?(d.yield*100).toFixed(2)+"%":"—"],["Payout",d.payout?(d.payout*100).toFixed(0)+"%":"—"],
+  ];
+  const perfCells=[["Semana",perf.week],["Mes",perf.month],["Trim.",perf.quarter],["6M",perf.half],["YTD",perf.ytd],["Año",perf.year]]
+    .map(([l,x])=>`<div class="perf-cell"><span class="pl">${l}</span><b class="mono ${x==null?"":x>=0?"pos":"neg"}">${x==null?"—":(x>=0?"+":"")+x.toFixed(1)+"%"}</b></div>`).join("");
+  return `<div class="card fv-card"><div class="flex between"><h3 style="margin:0">📊 Datos detallados</h3><span class="card-sub" style="margin:0">estilo Finviz</span></div>
+    <div class="perf-strip">${perfCells}</div>
+    <div class="fv-grid">${rows.map(([l,val])=>`<div class="fv-cell"><span>${l}</span><b class="mono">${val}</b></div>`).join("")}</div>
+    <p class="disc-mini">Datos de yfinance. RSI/ATR/SMA calculados sobre 1 año. No es asesoría financiera.</p></div>`;
 }
 function chgPill(lbl,v){ if(v==null) return ""; const up=v>=0;
   return `<div class="chg-pill ${up?"pos":"neg"}"><span class="cl">${lbl}</span> ${up?"+":""}${v.toFixed(1)}%</div>`; }
@@ -1332,15 +1393,18 @@ function buildScreener(){
 function scrPt(i,r){ const cx=150,cy=150,R=100,ang=(-Math.PI/2)+i*2*Math.PI/5; return [cx+Math.cos(ang)*r,cy+Math.sin(ang)*r]; }
 function drawScreenSnow(){
   const svg=document.getElementById("scrSnow"); if(!svg) return; const R=100, f=state.cache.screen;
+  const dr=i=>Math.max(13, R*(f[SCR_AXES[i][1]]/100));   // radio mínimo visible para poder jalar
   let s="";
   [0.25,0.5,0.75,1].forEach(k=>{ const p=SCR_AXES.map((_,i)=>scrPt(i,R*k).map(n=>n.toFixed(1)).join(",")).join(" "); s+=`<polygon points="${p}" fill="none" stroke="#26344e" stroke-width=".7"/>`; });
   SCR_AXES.forEach((a,i)=>{ const [x,y]=scrPt(i,R); s+=`<line x1="150" y1="150" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#26344e" stroke-width=".7"/>`;
     const [lx,ly]=scrPt(i,R+20); s+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" fill="var(--muted)" font-size="10" text-anchor="middle" dominant-baseline="middle" font-family="'JetBrains Mono'">${a[0]}</text>`; });
-  const blob=SCR_AXES.map((a,i)=>scrPt(i,R*(f[a[1]]/100)).map(n=>n.toFixed(1)).join(",")).join(" ");
+  const blob=SCR_AXES.map((a,i)=>scrPt(i,dr(i)).map(n=>n.toFixed(1)).join(",")).join(" ");
   s+=`<polygon points="${blob}" fill="#F5C451" fill-opacity=".28" stroke="#F5C451" stroke-width="2"/>`;
-  SCR_AXES.forEach((a,i)=>{ const [x,y]=scrPt(i,R*(f[a[1]]/100)); s+=`<circle class="scr-h" data-i="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" fill="#F5C451" stroke="#0A1424" stroke-width="2" style="cursor:grab"/>`; });
+  SCR_AXES.forEach((a,i)=>{ const [x,y]=scrPt(i,dr(i));
+    s+=`<circle class="scr-hit" data-i="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="16" fill="transparent" style="cursor:grab"/>`;
+    s+=`<circle class="scr-h" data-i="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" fill="#F5C451" stroke="#0A1424" stroke-width="2" style="cursor:grab;pointer-events:none"/>`; });
   svg.innerHTML=s;
-  svg.querySelectorAll(".scr-h").forEach(h=>h.addEventListener("pointerdown",scrDragStart));
+  svg.querySelectorAll(".scr-hit").forEach(h=>h.addEventListener("pointerdown",scrDragStart));
   const vb=$("#scrVals"); if(vb) vb.innerHTML=SCR_AXES.map(a=>`<span class="scr-tag">${a[0]}: <b>${f[a[1]]}</b></span>`).join("");
 }
 function scrDragStart(e){ e.preventDefault(); const svg=document.getElementById("scrSnow"); const i=+e.target.dataset.i;
