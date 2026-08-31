@@ -310,6 +310,7 @@ const NAV_CLIENT=[
   ["inicio","Inicio",icon("home")],
   ["riesgo","Perfil de riesgo",icon("gauge")],
   ["acciones","Análisis de acciones",icon("search")],
+  ["resultados","Calendario de resultados",icon("cal")],
   ["cartera","Mi cartera",icon("pie")],
   ["operar","Operar",icon("trade")],
   ["dinero-real","Invertir real",icon("money"),"soon"],
@@ -430,6 +431,7 @@ async function render(){
       if(state.view==="cartera")    return void await viewPortfolio();
       if(state.view==="acciones"&&state.param) return void await viewStockDetail(state.param);
       if(state.view==="acciones")   return void await viewStocks();
+      if(state.view==="resultados") return void await viewEarnings();
       if(state.view==="operar")     return void await viewTrade();
       if(state.view==="dinero-real") return void await viewDineroReal();
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
@@ -1483,6 +1485,75 @@ function applyScreen(){
 function miniSnow(sn){ const blob=SCR_AXES.map((a,i)=>{ const ang=(-Math.PI/2)+i*2*Math.PI/5,r=13*(sn[a[1]]||0)/100; return [16+Math.cos(ang)*r,16+Math.sin(ang)*r].map(n=>n.toFixed(1)).join(","); }).join(" ");
   const avg=SCR_AXES.reduce((s,a)=>s+(sn[a[1]]||0),0)/5, col=avg>=66?"#3DD6A0":avg>=40?"#8FD14F":"#c9a24f";
   return `<svg viewBox="0 0 32 32" width="30" height="30"><polygon points="${blob}" fill="${col}" fill-opacity=".4" stroke="${col}" stroke-width="1.2"/></svg>`; }
+
+/* ===== Calendario de resultados (reportes trimestrales) ===== */
+function earningsDemo(){
+  const D=(dd)=>{ const d=new Date(); d.setDate(d.getDate()+dd); return d.toISOString().slice(0,10); };
+  return {
+    upcoming:[
+      {ticker:"NVDA",name:"NVIDIA Corp",domain:"nvidia.com",sector:"Semiconductores",date:D(6)},
+      {ticker:"CRM",name:"Salesforce",domain:"salesforce.com",sector:"Software",date:D(6)},
+      {ticker:"COST",name:"Costco",domain:"costco.com",sector:"Consumo básico",date:D(9)},
+      {ticker:"AVGO",name:"Broadcom",domain:"broadcom.com",sector:"Semiconductores",date:D(12)},
+      {ticker:"ORCL",name:"Oracle",domain:"oracle.com",sector:"Software",date:D(13)},
+      {ticker:"ADBE",name:"Adobe",domain:"adobe.com",sector:"Software",date:D(20)},
+    ],
+    recent:[
+      {ticker:"AAPL",name:"Apple Inc.",domain:"apple.com",date:D(-3),eps_est:1.42,eps_act:1.57,surprise:10.6,revenue:94036e6,revenue_yoy:6.1},
+      {ticker:"MSFT",name:"Microsoft",domain:"microsoft.com",date:D(-4),eps_est:3.10,eps_act:3.30,surprise:6.5,revenue:65585e6,revenue_yoy:16.0},
+      {ticker:"AMZN",name:"Amazon",domain:"amazon.com",date:D(-5),eps_est:1.14,eps_act:1.43,surprise:25.4,revenue:158877e6,revenue_yoy:11.0},
+      {ticker:"META",name:"Meta Platforms",domain:"meta.com",date:D(-5),eps_est:5.25,eps_act:6.03,surprise:14.9,revenue:40589e6,revenue_yoy:19.0},
+      {ticker:"TSLA",name:"Tesla",domain:"tesla.com",date:D(-8),eps_est:0.60,eps_act:0.72,surprise:20.0,revenue:25182e6,revenue_yoy:8.0},
+      {ticker:"KO",name:"Coca-Cola",domain:"coca-cola.com",date:D(-9),eps_est:0.74,eps_act:0.77,surprise:4.1,revenue:11854e6,revenue_yoy:-1.0},
+      {ticker:"INTC",name:"Intel",domain:"intel.com",date:D(-11),eps_est:-0.02,eps_act:-0.46,surprise:-2200,revenue:13284e6,revenue_yoy:-6.0},
+    ]};
+}
+async function viewEarnings(){
+  const m=$("#main");
+  m.innerHTML=head("Mercado","Calendario de resultados","Reportes trimestrales: cuándo publican y cómo les fue (BPA estimado vs. real e ingresos).");
+  m.append(el(`<div id="earnShell">${loading()}</div>`));
+  let cal=null;
+  try{ const u=sb.storage.from("media").getPublicUrl("earnings/calendar.json").data.publicUrl;
+    const r=await fetch(u,{cache:"no-store"}); if(r.ok) cal=await r.json(); }catch(e){}
+  const demo=!(cal&&((cal.upcoming&&cal.upcoming.length)||(cal.recent&&cal.recent.length)));
+  if(demo) cal=earningsDemo();
+  state.cache.earn=cal;
+  const mode=state.cache.earnMode||"proximos";
+  const box=$("#earnShell");
+  box.innerHTML=`${demo?`<div class="radar-demo-note" style="margin-bottom:1rem">Datos de <b>demostración</b>. Al correr el pipeline de fundamentales verás el calendario real.</div>`:""}
+    <div class="courses-toggle" style="margin-bottom:1.1rem">
+      <button class="ct-btn ${mode==="proximos"?"on":""}" onclick="app.earnMode('proximos')">📅 Próximos</button>
+      <button class="ct-btn ${mode==="recientes"?"on":""}" onclick="app.earnMode('recientes')">✅ Recientes · cómo les fue</button></div>
+    <div id="earnList"></div>`;
+  if(mode==="recientes") renderEarnRecent(); else renderEarnUpcoming();
+}
+function earnDateLabel(iso){ const d=new Date(iso+"T12:00:00"); return d.toLocaleDateString("es-BO",{weekday:"short",day:"numeric",month:"short"}); }
+function renderEarnUpcoming(){
+  const box=$("#earnList"); if(!box) return; const list=(state.cache.earn?.upcoming)||[];
+  if(!list.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Sin próximos reportes.</p>`; return; }
+  const groups={}; list.forEach(x=>{ (groups[x.date]=groups[x.date]||[]).push(x); });
+  box.innerHTML=Object.keys(groups).sort().map(date=>`
+    <div class="earn-day"><div class="earn-date">${earnDateLabel(date)}</div>
+      <div class="earn-cards">${groups[date].map(x=>`<div class="earn-chip" onclick="app.openStock('${x.ticker}')">
+        ${stockLogo(x)}<div><b>${esc(x.ticker)}</b><div class="stk-nm">${esc(x.name||"")}</div></div></div>`).join("")}</div>
+    </div>`).join("");
+}
+function renderEarnRecent(){
+  const box=$("#earnList"); if(!box) return; const list=(state.cache.earn?.recent)||[];
+  if(!list.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Sin resultados recientes.</p>`; return; }
+  const B=x=>x==null?"—":(Math.abs(x)>=1e9?(x/1e9).toFixed(1)+" MM":(x/1e6).toFixed(0)+" M");
+  box.innerHTML=`<div class="earn-table">
+    <div class="et-head"><span>Empresa</span><span>Fecha</span><span>BPA est.</span><span>BPA real</span><span>Sorpresa</span><span>Ingresos</span></div>
+    ${list.map(x=>{ const beat=x.surprise!=null&&x.surprise>=0;
+      return `<div class="et-row" onclick="app.openStock('${x.ticker}')">
+        <span class="et-co">${stockLogo(x)}<div><b>${esc(x.ticker)}</b><div class="stk-nm">${esc(x.name||"")}</div></div></span>
+        <span class="mono">${earnDateLabel(x.date)}</span>
+        <span class="mono">${x.eps_est!=null?x.eps_est.toFixed(2):"—"}</span>
+        <span class="mono"><b>${x.eps_act!=null?x.eps_act.toFixed(2):"—"}</b></span>
+        <span class="mono ${x.surprise==null?"":beat?"pos":"neg"}">${x.surprise==null?"—":(beat?"▲ +":"▼ ")+x.surprise.toFixed(1)+"%"}</span>
+        <span class="mono">${B(x.revenue)}${x.revenue_yoy!=null?` <span class="${x.revenue_yoy>=0?"pos":"neg"}" style="font-size:.7rem">(${x.revenue_yoy>=0?"+":""}${x.revenue_yoy}%)</span>`:""}</span>
+      </div>`; }).join("")}</div>`;
+}
 
 async function viewDineroReal(){
   const m=$("#main");
@@ -3956,6 +4027,7 @@ const app = {
     if(i<list.length){ img.dataset.i=i; img.src=list[i]; } else { img.parentNode.classList.add("mono"); img.remove(); } },
   filterStocks(q){ renderStockList(q); },
   stkMode(m){ state.cache.stkMode=m; viewStocks(); },
+  earnMode(m){ state.cache.earnMode=m; viewEarnings(); },
   resetScreen(){ state.cache.screen={value:0,future:0,past:0,health:0,dividend:0}; drawScreenSnow(); applyScreen(); },
   suggInput(pfId, inp){ const k=inp.dataset.k; let v=Math.max(0,Math.min(100,Math.round(+inp.value||0)));
     if(state.cache.csSugg&&state.cache.csSugg[pfId]){ state.cache.csSugg[pfId][k]=v; csSum(pfId); } },

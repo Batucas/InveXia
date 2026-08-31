@@ -197,6 +197,47 @@ def _ceo(info):
         return None
 
 
+def earnings_info(yft):
+    """Próxima fecha de reporte + últimos resultados trimestrales (BPA est. vs. real)."""
+    import pandas as pd
+    out = {"next_date": None, "quarters": []}
+    try:
+        ed = yft.earnings_dates
+    except Exception:
+        ed = None
+    if ed is not None and not getattr(ed, "empty", True):
+        try:
+            tz = ed.index.tz
+            now = pd.Timestamp.now(tz=tz) if tz else pd.Timestamp.now()
+            fut = ed[ed.index > now].sort_index()
+            if len(fut):
+                out["next_date"] = fut.index[0].strftime("%Y-%m-%d")
+            past = ed[ed.index <= now].sort_index(ascending=False).head(4)
+            for dt_, row in past.iterrows():
+                rep = _n(row.get("Reported EPS"))
+                est = _n(row.get("EPS Estimate"))
+                if rep is None and est is None:
+                    continue
+                sur = round((rep - est) / abs(est) * 100, 1) if (rep is not None and est not in (None, 0)) else None
+                out["quarters"].append({"date": dt_.strftime("%Y-%m-%d"),
+                                        "eps_est": est, "eps_act": rep, "surprise": sur})
+        except Exception:
+            pass
+    try:
+        qi = yft.quarterly_income_stmt
+        if qi is not None and not getattr(qi, "empty", True) and "Total Revenue" in qi.index:
+            rev = qi.loc["Total Revenue"].dropna()
+            if len(rev):
+                out["last_revenue"] = _n(rev.iloc[0])
+                if len(rev) > 4 and _n(rev.iloc[4]):
+                    out["revenue_yoy"] = round((float(rev.iloc[0]) - float(rev.iloc[4])) / abs(float(rev.iloc[4])) * 100, 1)
+    except Exception:
+        pass
+    if not out["next_date"] and not out["quarters"]:
+        return None
+    return out
+
+
 def annual_financials(yft):
     """Extrae ingresos, BPA y acciones en circulación de los últimos años."""
     try:
@@ -405,6 +446,7 @@ def build_report(ticker, sector_es, kind):
         "domain": domain or None, "profile": profile, "stats": stats,
         "capital": capital, "ownership": ownership,
         "financials": (annual_financials(yft) if kind == "stock" else None),
+        "earnings": (earnings_info(yft) if kind == "stock" else None),
     }
 
     if kind == "stock":
@@ -478,6 +520,7 @@ def main():
         items = items[:a.limit]
 
     index = []
+    cal_up, cal_recent = [], []
     for i, (t, sec, kind) in enumerate(items):
         try:
             d = build_report(t, sec, kind)
@@ -490,13 +533,29 @@ def main():
                           "domain": d.get("domain"), "mcap": d.get("mcap"),
                           "pe": d["valuation"]["pe"], "div_yield": d["dividend"]["yield"],
                           "snowflake": d.get("snowflake")})
+            e = d.get("earnings")
+            if e:
+                if e.get("next_date"):
+                    cal_up.append({"ticker": t, "name": d["name"], "domain": d.get("domain"),
+                                   "sector": d["sector"], "date": e["next_date"]})
+                if e.get("quarters"):
+                    q = e["quarters"][0]
+                    cal_recent.append({"ticker": t, "name": d["name"], "domain": d.get("domain"),
+                                       "date": q["date"], "eps_est": q["eps_est"], "eps_act": q["eps_act"],
+                                       "surprise": q["surprise"], "revenue": e.get("last_revenue"),
+                                       "revenue_yoy": e.get("revenue_yoy")})
             print(f"  [{i+1}/{len(items)}] {t} ✓")
         except Exception as ex:
             print(f"  [{i+1}/{len(items)}] {t}: error {ex}")
 
     upload("fundamentals/index.json",
            {"generated_at": dt.datetime.utcnow().isoformat() + "Z", "stocks": index})
-    print(f"\nListo: {len(index)} fichas subidas.")
+    cal_up.sort(key=lambda x: x["date"])
+    cal_recent.sort(key=lambda x: x["date"], reverse=True)
+    upload("earnings/calendar.json",
+           {"generated_at": dt.datetime.utcnow().isoformat() + "Z",
+            "upcoming": cal_up[:250], "recent": cal_recent[:250]})
+    print(f"\nListo: {len(index)} fichas · {len(cal_up)} próximos · {len(cal_recent)} recientes.")
 
 
 if __name__ == "__main__":
