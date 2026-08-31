@@ -212,7 +212,10 @@ def earnings_info(yft):
             fut = ed[ed.index > now].sort_index()
             if len(fut):
                 out["next_date"] = fut.index[0].strftime("%Y-%m-%d")
+<<<<<<< HEAD
                 out["next_eps_est"] = _n(fut.iloc[0].get("EPS Estimate"))
+=======
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
             past = ed[ed.index <= now].sort_index(ascending=False).head(4)
             for dt_, row in past.iterrows():
                 rep = _n(row.get("Reported EPS"))
@@ -234,6 +237,7 @@ def earnings_info(yft):
                     out["revenue_yoy"] = round((float(rev.iloc[0]) - float(rev.iloc[4])) / abs(float(rev.iloc[4])) * 100, 1)
     except Exception:
         pass
+<<<<<<< HEAD
     try:
         calx = yft.calendar
         if isinstance(calx, dict):
@@ -242,22 +246,43 @@ def earnings_info(yft):
                 out["next_eps_est"] = _n(calx.get("Earnings Average"))
     except Exception:
         pass
+=======
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
     if not out["next_date"] and not out["quarters"]:
         return None
     return out
 
 
+<<<<<<< HEAD
 def _financials_df(inc, bs, quarterly=False, n=5):
     if inc is None or getattr(inc, "empty", True):
         return None
     cols = list(inc.columns)[:n][::-1]
+=======
+def annual_financials(yft):
+    """Extrae ingresos, BPA y acciones en circulación de los últimos años."""
+    try:
+        inc = yft.income_stmt
+        bs = yft.balance_sheet
+    except Exception:
+        return None
+    if inc is None or getattr(inc, "empty", True):
+        return None
+    cols = list(inc.columns)[:5][::-1]   # hasta 5 años, del más antiguo al más nuevo
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
 
     def row(df, *names):
         if df is None:
             return None
+<<<<<<< HEAD
         for nm in names:
             if nm in df.index:
                 return df.loc[nm]
+=======
+        for n in names:
+            if n in df.index:
+                return df.loc[n]
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
         return None
 
     rev_r = row(inc, "Total Revenue", "TotalRevenue", "Operating Revenue")
@@ -267,6 +292,7 @@ def _financials_df(inc, bs, quarterly=False, n=5):
 
     years, revenue, eps, shares, net_income = [], [], [], [], []
     for c in cols:
+<<<<<<< HEAD
         if quarterly:
             try:
                 years.append(f"{(c.month - 1)//3 + 1}T{c.year % 100:02d}")
@@ -277,6 +303,12 @@ def _financials_df(inc, bs, quarterly=False, n=5):
                 years.append(c.year)
             except Exception:
                 years.append(str(c))
+=======
+        try:
+            years.append(c.year)
+        except Exception:
+            years.append(str(c))
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
         revenue.append(_n(rev_r.get(c)) if rev_r is not None else None)
         ni = _n(ni_r.get(c)) if ni_r is not None else None
         net_income.append(ni)
@@ -292,6 +324,7 @@ def _financials_df(inc, bs, quarterly=False, n=5):
     return {"years": years, "revenue": revenue, "eps": eps, "shares": shares, "net_income": net_income}
 
 
+<<<<<<< HEAD
 def annual_financials(yft):
     try:
         return _financials_df(yft.income_stmt, yft.balance_sheet, quarterly=False, n=5)
@@ -306,6 +339,8 @@ def quarterly_financials(yft):
         return None
 
 
+=======
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
 def build_report(ticker, sector_es, kind):
     import yfinance as yf
     yft = yf.Ticker(ticker)
@@ -469,7 +504,10 @@ def build_report(ticker, sector_es, kind):
         "domain": domain or None, "profile": profile, "stats": stats,
         "capital": capital, "ownership": ownership,
         "financials": (annual_financials(yft) if kind == "stock" else None),
+<<<<<<< HEAD
         "financials_q": (quarterly_financials(yft) if kind == "stock" else None),
+=======
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
         "earnings": (earnings_info(yft) if kind == "stock" else None),
     }
 
@@ -561,8 +599,12 @@ def main():
             if e:
                 if e.get("next_date"):
                     cal_up.append({"ticker": t, "name": d["name"], "domain": d.get("domain"),
+<<<<<<< HEAD
                                    "sector": d["sector"], "date": e["next_date"],
                                    "eps_est": e.get("next_eps_est"), "rev_est": e.get("rev_est")})
+=======
+                                   "sector": d["sector"], "date": e["next_date"]})
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
                 if e.get("quarters"):
                     q = e["quarters"][0]
                     cal_recent.append({"ticker": t, "name": d["name"], "domain": d.get("domain"),

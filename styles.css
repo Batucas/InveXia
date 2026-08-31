@@ -1359,7 +1359,10 @@ body.focus-mode .main.wide{padding:.6rem}
 @media(max-width:820px){ .et-head{display:none}
   .et-row{grid-template-columns:1fr 1fr;gap:.3rem .6rem;border:1px solid var(--line);border-radius:10px;margin-bottom:.6rem;padding:.7rem}
   .et-row span:not(.et-co){text-align:right} .et-co{grid-column:1/-1;margin-bottom:.3rem} }
+<<<<<<< HEAD
 
 /* v6.0 · Estimaciones en calendario */
 .earn-est{font-size:.68rem;color:var(--faint);margin-top:.25rem}
 .earn-est b{color:var(--muted)}
+=======
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120

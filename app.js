@@ -1074,7 +1074,10 @@ function stocksDemo(){
       stats:{income:53008e6,revenue:130497e6,book_sh:2.7,cash_sh:1.4,roa:0.65,quick_ratio:3.4,ev_sales:28.1,p_fcf:52.3,shares_out:24500e6,float_shares:23400e6,insider_own:0.041,inst_own:0.66,short_float:0.012,avg_volume:245e6,eps_ttm:2.53,eps_fwd:3.85,rsi:57.2,atr:4.1,sma50_pct:5.4,sma200_pct:19.8,perf:{week:1.3,month:8.2,quarter:14.1,half:22.6,ytd:31.0,year:24.9}},
       financials:{years:[2022,2023,2024,2025],eps:[0.17,0.17,1.19,2.53],revenue:[26914e6,26974e6,60922e6,130497e6],net_income:[9752e6,4368e6,29760e6,72880e6],shares:[25000e6,24700e6,24600e6,24500e6]},
       capital:{mcap:2980e9,debt:9700e6,cash:34800e6,ev:2955e9},ownership:{float:23400e6,shares_out:24500e6},
+<<<<<<< HEAD
       financials_q:{years:["4T24","1T25","2T25","3T25","4T25"],revenue:[22103e6,26044e6,30040e6,35082e6,39331e6],net_income:[12285e6,14881e6,16599e6,19309e6,22091e6],eps:[0.49,0.60,0.67,0.78,0.90],shares:[24600e6,24580e6,24550e6,24520e6,24500e6]},
+=======
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
       rewards:["Se prevé un crecimiento anual de beneficios de 42%","Los beneficios crecieron 88% el año pasado","Deuda muy bien cubierta por el flujo de caja"],
       risks:["Cotiza con múltiplos elevados (P/E 52)","Precio volátil en los últimos 3 meses"],
       spark:sparkGen(80,121,0.35)},
@@ -1212,6 +1215,7 @@ async function viewStockDetail(ticker){
       </div>
     </div>
     ${stockDetailSections(s)}
+<<<<<<< HEAD
     <div class="card stk-chart-card"><h3 style="margin:0">Gráfico</h3>
       <div id="tvChart" class="stk-tvchart"></div></div>
     ${finvizGrid(s)}
@@ -1236,6 +1240,15 @@ function renderFinBlock(){
   box.innerHTML=`<div class="card fin-card"><div class="flex between" style="flex-wrap:wrap;gap:.6rem;align-items:center"><h3 style="margin:0">📈 Historial financiero</h3>${toggle}</div>
     ${financialsCharts(fin)}</div>`;
 }
+=======
+    <div class="card stk-chart-card"><div class="flex between"><h3 style="margin:0">Gráfico</h3><span class="card-sub" style="margin:0">Velas · TradingView</span></div>
+      <div id="tvChart" class="stk-tvchart"></div></div>
+    ${finvizGrid(s)}
+    ${capitalBlock(s)}
+    ${financialsBlock(s.financials)}`;
+  const sym=s.ticker; setTimeout(()=>{ try{ tvWidget(sym); }catch(e){} }, 60);
+}
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
 function donutSVG(segs, center, sub){
   const total=segs.reduce((a,x)=>a+Math.max(0,x.value||0),0)||1;
   const R=48,C=2*Math.PI*R; let off=0;
@@ -1295,21 +1308,36 @@ function barsSVG(years, vals, color, fmt){
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%">${s}</svg>`;
 }
+<<<<<<< HEAD
 function financialsCharts(fin){
   if(!fin||!fin.years||!fin.years.length) return `<p class="empty" style="padding:1rem">Sin datos para este periodo.</p>`;
+=======
+function financialsBlock(fin){
+  if(!fin||!fin.years||!fin.years.length) return "";
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
   const Brev=x=>x==null?"—":(Math.abs(x)>=1e9?(x/1e9).toFixed(1):Math.abs(x)>=1e6?(x/1e6).toFixed(0)+"M":(+x).toFixed(0));
   const Bsh=x=>x==null?"—":(x/1e9).toFixed(2);
   const Beps=x=>x==null?"—":(+x).toFixed(2);
   const ni=fin.net_income||[];
   const margin=(fin.revenue||[]).map((r,i)=>(r&&ni[i]!=null)?+(ni[i]/r*100).toFixed(1):null);
   const hasEps=(fin.eps||[]).some(v=>v!=null), hasRev=(fin.revenue||[]).some(v=>v!=null), hasSh=(fin.shares||[]).some(v=>v!=null), hasNi=ni.some(v=>v!=null), hasMg=margin.some(v=>v!=null);
+<<<<<<< HEAD
   return `<div class="fin-grid">
+=======
+  if(!hasEps&&!hasRev&&!hasSh) return "";
+  return `<div class="card fin-card"><h3>📈 Historial financiero anual</h3>
+    <div class="fin-grid">
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
       ${hasRev?`<div class="fin-col"><div class="fin-t">Ingresos (miles de millones US$)</div>${barsSVG(fin.years,fin.revenue,"#4FA3FF",Brev)}</div>`:""}
       ${hasNi?`<div class="fin-col"><div class="fin-t">Beneficio neto (miles de millones US$)</div>${barsSVG(fin.years,ni,"#2DD4BF",Brev)}</div>`:""}
       ${hasMg?`<div class="fin-col"><div class="fin-t">Margen neto (%)</div>${barsSVG(fin.years,margin,"#F5C451",x=>x.toFixed(1)+"%")}</div>`:""}
       ${hasEps?`<div class="fin-col"><div class="fin-t">BPA (EPS)</div>${barsSVG(fin.years,fin.eps,"#8B5CF6",Beps)}</div>`:""}
       ${hasSh?`<div class="fin-col"><div class="fin-t">Acciones en circulación (MM)</div>${barsSVG(fin.years,fin.shares,"#94A8C7",Bsh)}</div>`:""}
+<<<<<<< HEAD
     </div>`;
+=======
+    </div></div>`;
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
 }
 function finvizGrid(s){
   const st=s.stats||{}, v=s.valuation||{}, p=s.past||{}, h=s.health||{}, d=s.dividend||{}, pr=s.profile||{}, perf=st.perf||{};
@@ -1329,7 +1357,11 @@ function finvizGrid(s){
   ];
   const perfCells=[["Semana",perf.week],["Mes",perf.month],["Trim.",perf.quarter],["6M",perf.half],["YTD",perf.ytd],["Año",perf.year]]
     .map(([l,x])=>`<div class="perf-cell"><span class="pl">${l}</span><b class="mono ${x==null?"":x>=0?"pos":"neg"}">${x==null?"—":(x>=0?"+":"")+x.toFixed(1)+"%"}</b></div>`).join("");
+<<<<<<< HEAD
   return `<div class="card fv-card"><h3 style="margin:0 0 .3rem">📊 Datos detallados</h3>
+=======
+  return `<div class="card fv-card"><div class="flex between"><h3 style="margin:0">📊 Datos detallados</h3><span class="card-sub" style="margin:0">estilo Finviz</span></div>
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
     <div class="perf-strip">${perfCells}</div>
     <div class="fv-grid">${rows.map(([l,val])=>`<div class="fv-cell"><span>${l}</span><b class="mono">${val}</b></div>`).join("")}</div>
     <p class="disc-mini">Datos de yfinance. RSI/ATR/SMA calculados sobre 1 año. No es asesoría financiera.</p></div>`;
@@ -1507,12 +1539,21 @@ function earningsDemo(){
   const D=(dd)=>{ const d=new Date(); d.setDate(d.getDate()+dd); return d.toISOString().slice(0,10); };
   return {
     upcoming:[
+<<<<<<< HEAD
       {ticker:"NVDA",name:"NVIDIA Corp",domain:"nvidia.com",sector:"Semiconductores",date:D(6),eps_est:0.88,rev_est:41200e6},
       {ticker:"CRM",name:"Salesforce",domain:"salesforce.com",sector:"Software",date:D(6),eps_est:2.36,rev_est:9350e6},
       {ticker:"COST",name:"Costco",domain:"costco.com",sector:"Consumo básico",date:D(9),eps_est:5.80,rev_est:79200e6},
       {ticker:"AVGO",name:"Broadcom",domain:"broadcom.com",sector:"Semiconductores",date:D(12),eps_est:1.47,rev_est:14100e6},
       {ticker:"ORCL",name:"Oracle",domain:"oracle.com",sector:"Software",date:D(13),eps_est:1.48,rev_est:14300e6},
       {ticker:"ADBE",name:"Adobe",domain:"adobe.com",sector:"Software",date:D(20),eps_est:4.66,rev_est:5480e6},
+=======
+      {ticker:"NVDA",name:"NVIDIA Corp",domain:"nvidia.com",sector:"Semiconductores",date:D(6)},
+      {ticker:"CRM",name:"Salesforce",domain:"salesforce.com",sector:"Software",date:D(6)},
+      {ticker:"COST",name:"Costco",domain:"costco.com",sector:"Consumo básico",date:D(9)},
+      {ticker:"AVGO",name:"Broadcom",domain:"broadcom.com",sector:"Semiconductores",date:D(12)},
+      {ticker:"ORCL",name:"Oracle",domain:"oracle.com",sector:"Software",date:D(13)},
+      {ticker:"ADBE",name:"Adobe",domain:"adobe.com",sector:"Software",date:D(20)},
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
     ],
     recent:[
       {ticker:"AAPL",name:"Apple Inc.",domain:"apple.com",date:D(-3),eps_est:1.42,eps_act:1.57,surprise:10.6,revenue:94036e6,revenue_yoy:6.1},
@@ -1550,12 +1591,17 @@ function renderEarnUpcoming(){
   const groups={}; list.forEach(x=>{ (groups[x.date]=groups[x.date]||[]).push(x); });
   box.innerHTML=Object.keys(groups).sort().map(date=>`
     <div class="earn-day"><div class="earn-date">${earnDateLabel(date)}</div>
+<<<<<<< HEAD
       <div class="earn-cards">${groups[date].map(x=>{
         const B=v=>v==null?null:(Math.abs(v)>=1e9?(v/1e9).toFixed(1)+" MM":(v/1e6).toFixed(0)+" M");
         const est=[]; if(x.eps_est!=null) est.push(`BPA esp. <b>${x.eps_est.toFixed(2)}</b>`); if(x.rev_est!=null) est.push(`Ing. esp. <b>${B(x.rev_est)}</b>`);
         return `<div class="earn-chip" onclick="app.openStock('${x.ticker}')">
         ${stockLogo(x)}<div style="flex:1;min-width:0"><b>${esc(x.ticker)}</b><div class="stk-nm">${esc(x.name||"")}</div>
         ${est.length?`<div class="earn-est">${est.join(" · ")}</div>`:""}</div></div>`; }).join("")}</div>
+=======
+      <div class="earn-cards">${groups[date].map(x=>`<div class="earn-chip" onclick="app.openStock('${x.ticker}')">
+        ${stockLogo(x)}<div><b>${esc(x.ticker)}</b><div class="stk-nm">${esc(x.name||"")}</div></div></div>`).join("")}</div>
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
     </div>`).join("");
 }
 function renderEarnRecent(){
@@ -4048,7 +4094,10 @@ const app = {
   filterStocks(q){ renderStockList(q); },
   stkMode(m){ state.cache.stkMode=m; viewStocks(); },
   earnMode(m){ state.cache.earnMode=m; viewEarnings(); },
+<<<<<<< HEAD
   finMode(m){ state.cache.finMode=m; renderFinBlock(); },
+=======
+>>>>>>> db49f6c8a566f645a670ffa62f6b379a47b49120
   resetScreen(){ state.cache.screen={value:0,future:0,past:0,health:0,dividend:0}; drawScreenSnow(); applyScreen(); },
   suggInput(pfId, inp){ const k=inp.dataset.k; let v=Math.max(0,Math.min(100,Math.round(+inp.value||0)));
     if(state.cache.csSugg&&state.cache.csSugg[pfId]){ state.cache.csSugg[pfId][k]=v; csSum(pfId); } },
