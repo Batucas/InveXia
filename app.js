@@ -1070,7 +1070,8 @@ function stocksDemo(){
       fair_value:140,fair_upside:15.3,snowflake:{value:38,future:92,past:96,health:88,dividend:6},
       profile:{industry:"Semiconductores",country:"Estados Unidos",employees:29600,website:"https://www.nvidia.com",ps:31.2,ev_ebitda:45.8,beta:1.68,wk_high:153.1,wk_low:86.6},
       stats:{income:53008e6,revenue:130497e6,book_sh:2.7,cash_sh:1.4,roa:0.65,quick_ratio:3.4,ev_sales:28.1,p_fcf:52.3,shares_out:24500e6,float_shares:23400e6,insider_own:0.041,inst_own:0.66,short_float:0.012,avg_volume:245e6,eps_ttm:2.53,eps_fwd:3.85,rsi:57.2,atr:4.1,sma50_pct:5.4,sma200_pct:19.8,perf:{week:1.3,month:8.2,quarter:14.1,half:22.6,ytd:31.0,year:24.9}},
-      financials:{years:[2022,2023,2024,2025],eps:[0.17,0.17,1.19,2.53],revenue:[26914e6,26974e6,60922e6,130497e6],shares:[25000e6,24700e6,24600e6,24500e6]},
+      financials:{years:[2022,2023,2024,2025],eps:[0.17,0.17,1.19,2.53],revenue:[26914e6,26974e6,60922e6,130497e6],net_income:[9752e6,4368e6,29760e6,72880e6],shares:[25000e6,24700e6,24600e6,24500e6]},
+      capital:{mcap:2980e9,debt:9700e6,cash:34800e6,ev:2955e9},ownership:{float:23400e6,shares_out:24500e6},
       rewards:["Se prevé un crecimiento anual de beneficios de 42%","Los beneficios crecieron 88% el año pasado","Deuda muy bien cubierta por el flujo de caja"],
       risks:["Cotiza con múltiplos elevados (P/E 52)","Precio volátil en los últimos 3 meses"],
       spark:sparkGen(80,121,0.35)},
@@ -1211,8 +1212,52 @@ async function viewStockDetail(ticker){
     <div class="card stk-chart-card"><div class="flex between"><h3 style="margin:0">Gráfico</h3><span class="card-sub" style="margin:0">Velas · TradingView</span></div>
       <div id="tvChart" class="stk-tvchart"></div></div>
     ${finvizGrid(s)}
+    ${capitalBlock(s)}
     ${financialsBlock(s.financials)}`;
   const sym=s.ticker; setTimeout(()=>{ try{ tvWidget(sym); }catch(e){} }, 60);
+}
+function donutSVG(segs, center, sub){
+  const total=segs.reduce((a,x)=>a+Math.max(0,x.value||0),0)||1;
+  const R=48,C=2*Math.PI*R; let off=0;
+  const arcs=segs.map(x=>{ const len=C*(Math.max(0,x.value||0)/total);
+    const a=`<circle cx="60" cy="60" r="${R}" fill="none" stroke="${x.color}" stroke-width="15" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 60 60)"/>`;
+    off+=len; return a; }).join("");
+  return `<svg viewBox="0 0 120 120" width="130" height="130">${arcs}
+    <text x="60" y="58" text-anchor="middle" fill="var(--text)" font-size="14" font-family="'JetBrains Mono'">${esc(center||"")}</text>
+    <text x="60" y="72" text-anchor="middle" fill="var(--faint)" font-size="7.5">${esc(sub||"")}</text></svg>`;
+}
+function hbar(label, val, max, color, fmt){
+  const w=max>0?Math.max(2,Math.abs(val||0)/max*100):0;
+  return `<div class="hb-row"><span class="hb-l">${esc(label)}</span>
+    <span class="hb-track"><span class="hb-fill" style="width:${w.toFixed(1)}%;background:${color}"></span></span>
+    <b class="hb-v mono">${val==null?"—":esc(fmt(val))}</b></div>`;
+}
+function capitalBlock(s){
+  const cap=s.capital||{}, ow=s.ownership||{};
+  const B=x=>{ if(x==null) return "—"; const a=Math.abs(x); return a>=1e12?(x/1e12).toFixed(2)+" B":a>=1e9?(x/1e9).toFixed(1)+" MM":a>=1e6?(x/1e6).toFixed(0)+" M":(+x).toFixed(0); };
+  const Bsh=x=>x==null?"—":(x/1e9).toFixed(2)+" MM";
+  const hasCap=cap.mcap!=null||cap.debt!=null||cap.cash!=null||cap.ev!=null;
+  const restricted=(ow.shares_out!=null&&ow.float!=null)?Math.max(0,ow.shares_out-ow.float):null;
+  const hasOwn=ow.float!=null&&ow.shares_out!=null;
+  if(!hasCap&&!hasOwn) return "";
+  const capMax=Math.max(cap.mcap||0,cap.debt||0,cap.cash||0,cap.ev||0);
+  return `<div class="cap-grid">
+    ${hasCap?`<div class="card"><h3>🏛️ Estructura de capital</h3>
+      <div class="hbars" style="margin-top:.7rem">
+        ${hbar("Cap. de mercado",cap.mcap,capMax,"#3DD6A0",B)}
+        ${hbar("Deuda total",cap.debt,capMax,"#F5C451",B)}
+        ${hbar("Efectivo",cap.cash,capMax,"#4FA3FF",B)}
+        ${hbar("Valor de empresa (EV)",cap.ev,capMax,"#8B5CF6",B)}
+      </div></div>`:""}
+    ${hasOwn?`<div class="card"><h3>👥 Propiedad</h3>
+      <div class="own-row">
+        ${donutSVG([{value:ow.float,color:"#F5C451"},{value:restricted,color:"#4FA3FF"}], Bsh(ow.shares_out), "acciones")}
+        <div class="own-legend">
+          <div class="ol-item"><span class="dot" style="background:#F5C451"></span>Flotante<b>${Bsh(ow.float)} (${ow.shares_out?Math.round(ow.float/ow.shares_out*100):0}%)</b></div>
+          <div class="ol-item"><span class="dot" style="background:#4FA3FF"></span>Restringidas<b>${Bsh(restricted)} (${ow.shares_out?Math.round(restricted/ow.shares_out*100):0}%)</b></div>
+        </div>
+      </div></div>`:""}
+  </div>`;
 }
 function barsSVG(years, vals, color, fmt){
   const W=300,H=155,n=vals.length||1;
@@ -1235,13 +1280,17 @@ function financialsBlock(fin){
   const Brev=x=>x==null?"—":(Math.abs(x)>=1e9?(x/1e9).toFixed(1):Math.abs(x)>=1e6?(x/1e6).toFixed(0)+"M":(+x).toFixed(0));
   const Bsh=x=>x==null?"—":(x/1e9).toFixed(2);
   const Beps=x=>x==null?"—":(+x).toFixed(2);
-  const hasEps=(fin.eps||[]).some(v=>v!=null), hasRev=(fin.revenue||[]).some(v=>v!=null), hasSh=(fin.shares||[]).some(v=>v!=null);
+  const ni=fin.net_income||[];
+  const margin=(fin.revenue||[]).map((r,i)=>(r&&ni[i]!=null)?+(ni[i]/r*100).toFixed(1):null);
+  const hasEps=(fin.eps||[]).some(v=>v!=null), hasRev=(fin.revenue||[]).some(v=>v!=null), hasSh=(fin.shares||[]).some(v=>v!=null), hasNi=ni.some(v=>v!=null), hasMg=margin.some(v=>v!=null);
   if(!hasEps&&!hasRev&&!hasSh) return "";
   return `<div class="card fin-card"><h3>📈 Historial financiero anual</h3>
     <div class="fin-grid">
-      ${hasEps?`<div class="fin-col"><div class="fin-t">BPA (EPS)</div>${barsSVG(fin.years,fin.eps,"#4FA3FF",Beps)}</div>`:""}
-      ${hasRev?`<div class="fin-col"><div class="fin-t">Ingresos (miles de millones US$)</div>${barsSVG(fin.years,fin.revenue,"#8B5CF6",Brev)}</div>`:""}
-      ${hasSh?`<div class="fin-col"><div class="fin-t">Acciones en circulación (MM)</div>${barsSVG(fin.years,fin.shares,"#2DD4BF",Bsh)}</div>`:""}
+      ${hasRev?`<div class="fin-col"><div class="fin-t">Ingresos (miles de millones US$)</div>${barsSVG(fin.years,fin.revenue,"#4FA3FF",Brev)}</div>`:""}
+      ${hasNi?`<div class="fin-col"><div class="fin-t">Beneficio neto (miles de millones US$)</div>${barsSVG(fin.years,ni,"#2DD4BF",Brev)}</div>`:""}
+      ${hasMg?`<div class="fin-col"><div class="fin-t">Margen neto (%)</div>${barsSVG(fin.years,margin,"#F5C451",x=>x.toFixed(1)+"%")}</div>`:""}
+      ${hasEps?`<div class="fin-col"><div class="fin-t">BPA (EPS)</div>${barsSVG(fin.years,fin.eps,"#8B5CF6",Beps)}</div>`:""}
+      ${hasSh?`<div class="fin-col"><div class="fin-t">Acciones en circulación (MM)</div>${barsSVG(fin.years,fin.shares,"#94A8C7",Bsh)}</div>`:""}
     </div></div>`;
 }
 function finvizGrid(s){
@@ -1278,6 +1327,7 @@ function stockDetailSections(s){
   const prof = (pr.industry||pr.country||pr.employees||pr.website||pr.beta!=null||pr.wk_high!=null) ? `
     <div class="card"><h3>🏢 Perfil de la empresa</h3>
       ${pr.industry?metricRow("Industria",esc(pr.industry)):""}
+      ${pr.ceo?metricRow("CEO",esc(pr.ceo)):""}
       ${pr.country?metricRow("País",esc(pr.country)):""}
       ${empStr?metricRow("Empleados",empStr):""}
       ${pr.beta!=null?metricRow("Beta (volatilidad vs. mercado)",pr.beta.toFixed(2)):""}

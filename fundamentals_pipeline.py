@@ -185,6 +185,18 @@ def build_universe():
 
 
 # ------------------------------------------------------------------ ficha
+def _ceo(info):
+    try:
+        offs = info.get("companyOfficers") or []
+        for o in offs:
+            t = (o.get("title") or "").lower()
+            if "ceo" in t or "chief executive" in t:
+                return o.get("name")
+        return offs[0].get("name") if offs else None
+    except Exception:
+        return None
+
+
 def annual_financials(yft):
     """Extrae ingresos, BPA y acciones en circulación de los últimos años."""
     try:
@@ -209,24 +221,25 @@ def annual_financials(yft):
     ni_r = row(inc, "Net Income", "Net Income Common Stockholders", "NetIncome")
     sh_r = row(bs, "Ordinary Shares Number", "Share Issued", "Common Stock Shares Outstanding")
 
-    years, revenue, eps, shares = [], [], [], []
+    years, revenue, eps, shares, net_income = [], [], [], [], []
     for c in cols:
         try:
             years.append(c.year)
         except Exception:
             years.append(str(c))
         revenue.append(_n(rev_r.get(c)) if rev_r is not None else None)
+        ni = _n(ni_r.get(c)) if ni_r is not None else None
+        net_income.append(ni)
         sh = _n(sh_r.get(c)) if sh_r is not None else None
         shares.append(sh)
         e = _n(eps_r.get(c)) if eps_r is not None else None
-        if e is None and ni_r is not None and sh:
-            ni = _n(ni_r.get(c))
-            e = round(ni / sh, 2) if ni else None
+        if e is None and ni and sh:
+            e = round(ni / sh, 2)
         eps.append(e)
 
     if not any(v is not None for v in revenue) and not any(v is not None for v in eps):
         return None
-    return {"years": years, "revenue": revenue, "eps": eps, "shares": shares}
+    return {"years": years, "revenue": revenue, "eps": eps, "shares": shares, "net_income": net_income}
 
 
 def build_report(ticker, sector_es, kind):
@@ -370,7 +383,11 @@ def build_report(ticker, sector_es, kind):
         "beta": _n(info.get("beta")),
         "wk_high": _n(info.get("fiftyTwoWeekHigh")),
         "wk_low": _n(info.get("fiftyTwoWeekLow")),
+        "ceo": _ceo(info),
     }
+    capital = {"mcap": _n(info.get("marketCap")), "debt": _n(info.get("totalDebt")),
+               "cash": _n(info.get("totalCash")), "ev": _n(info.get("enterpriseValue"))}
+    ownership = {"float": _n(info.get("floatShares")), "shares_out": _n(info.get("sharesOutstanding"))}
 
     d = {
         "ticker": ticker,
@@ -386,6 +403,7 @@ def build_report(ticker, sector_es, kind):
         "health": hlt, "dividend": div, "analyst": ana,
         "fair_value": fv, "fair_upside": fu,
         "domain": domain or None, "profile": profile, "stats": stats,
+        "capital": capital, "ownership": ownership,
         "financials": (annual_financials(yft) if kind == "stock" else None),
     }
 
