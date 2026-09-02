@@ -1654,13 +1654,14 @@ async function viewBrain(){
   const m=$("#main"); m.classList.add("wide");
   m.innerHTML=`<div class="brain-head">
       <div><div class="eyebrow-b">SISTEMA · TIEMPO REAL</div><h1 class="brain-title">Cerebro del mercado</h1>
-        <p class="brain-sub">El mercado como un organismo vivo: cada sector es un núcleo de neuronas, cada correlación una sinapsis que se dispara.</p></div>
+        <p class="brain-sub">El mercado como un organismo vivo: cada sector es un núcleo de neuronas, cada correlación una sinapsis que se dispara. Pasa el cursor sobre un activo o filtra por sector.</p></div>
       <div id="brainStats" class="brain-stats"></div></div>
+    <div class="brain-filters" id="brainFilters"></div>
     <div class="brain-stage"><canvas id="brainCanvas"></canvas>
       <div class="brain-legend" id="brainLegend"></div></div>
     <div class="brain-panels">
       <div class="tpanel" id="tp-act"></div>
-      <div class="tpanel" id="tp-sec"></div>
+      <div class="tpanel" id="tp-heat"></div>
       <div class="tpanel" id="tp-pulse"></div>
       <div class="tpanel" id="tp-state"></div>
     </div>`;
@@ -1669,35 +1670,41 @@ async function viewBrain(){
     const r=await fetch(u,{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.stocks&&j.stocks.length) stocks=j.stocks.filter(s=>s.type==="stock"); } }catch(e){}
   const demo=!stocks||stocks.length<20; if(demo) stocks=brainDemo();
   const data=buildBrainData(stocks);
-  renderBrainHUD(data, demo);
+  state.cache.brainData=data; state.cache.brainSel=null;
+  renderBrainStats(data, demo);
+  renderBrainFilters(data);
+  renderBrainStatic(data);
   const cv=$("#brainCanvas"); if(cv) brainCanvas(cv, data);
+  startBrainTelemetry(data);
 }
-function renderBrainHUD(data, demo){
+function sectorIdx(data,name){ return data.sectors.findIndex(s=>s.name===name); }
+function renderBrainStats(data, demo){
   const up=data.sectors.filter(s=>s.avg>=0).length, dn=data.sectors.length-up;
   $("#brainStats").innerHTML=`
     <div class="bstat"><span class="bk">Activos</span><b>${data.total}</b></div>
     <div class="bstat"><span class="bk">Sectores</span><b>${data.sectors.length}</b></div>
     <div class="bstat"><span class="bk">Sinapsis</span><b class="mono" id="bSyn">—</b></div>
-    ${demo?`<span class="pill-soon" style="align-self:center">DEMO</span>`:`<span class="bstat live"><span class="bk">Estado</span><b style="color:#3DD6A0">● activo</b></span>`}`;
-  $("#brainLegend").innerHTML=data.sectors.map(s=>`<span class="bl-item"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</span>`).join("");
-  // Panel: Sectores (barras por |avg|)
+    <div class="bstat"><span class="bk">Acciones/s</span><b class="mono" id="apsNum">320</b></div>
+    ${demo?`<span class="pill-soon" style="align-self:center">DEMO</span>`:`<span class="bstat"><span class="bk">Estado</span><b style="color:#3DD6A0">● activo</b></span>`}`;
+  $("#brainLegend").innerHTML=`<span class="bl-hint">clic en un sector para aislarlo</span>`;
+}
+function renderBrainFilters(data){
+  const sel=state.cache.brainSel;
+  $("#brainFilters").innerHTML=`<button class="bf-chip ${!sel?"on":""}" onclick="app.brainSelect(-1)">Todos</button>`+
+    data.sectors.map((s,i)=>`<button class="bf-chip ${sel===s.name?"on":""}" style="--c:${s.color}" onclick="app.brainSelect(${i})"><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</button>`).join("");
+}
+function renderBrainStatic(data){
+  const sel=state.cache.brainSel;
   const maxAvg=Math.max(...data.sectors.map(s=>Math.abs(s.avg)),1);
-  $("#tp-sec").innerHTML=`<div class="tp-t">Sectores · rendimiento 1A</div>${data.sectors.map(s=>`
-    <div class="tp-bar"><span class="tp-bl" style="color:${s.color}">${esc(s.name)}</span>
-      <span class="tp-track"><span style="width:${Math.abs(s.avg)/maxAvg*100}%;background:${s.avg>=0?"#3DD6A0":"#c96a6a"}"></span></span>
-      <b class="mono ${s.avg>=0?"pos":"neg"}">${s.avg>=0?"+":""}${s.avg}%</b></div>`).join("")}`;
-  // Panel: Actividad (top movers)
-  const movers=data.sectors.flatMap(s=>s.stocks.map(x=>({...x,color:s.color}))).filter(x=>x.change_1y!=null).sort((a,b)=>Math.abs(b.change_1y)-Math.abs(a.change_1y)).slice(0,10);
-  $("#tp-act").innerHTML=`<div class="tp-t">Actividad · mayores movimientos</div>${movers.map(x=>`
-    <div class="tp-log"><span class="dot" style="background:${x.color}"></span><b>${esc(x.ticker)}</b>
-      <span class="tp-lo-sec">${esc(x.sector||"")}</span><b class="mono ${x.change_1y>=0?"pos":"neg"}">${x.change_1y>=0?"+":""}${x.change_1y}%</b></div>`).join("")}`;
-  // Panel: Estado
+  $("#tp-sec")&&($("#tp-sec").innerHTML="");
+  // Estado por sector (con resaltado del seleccionado)
   $("#tp-state").innerHTML=`<div class="tp-t">Estado por sector</div>${[...data.sectors].sort((a,b)=>b.avg-a.avg).map(s=>`
-    <div class="tp-st"><span class="tp-bl" style="color:${s.color}">${esc(s.name)}</span>
+    <div class="tp-st ${sel===s.name?"hl":""}"><span class="tp-bl" style="color:${s.color}">${esc(s.name)}</span>
       <span class="tp-badge ${s.avg>=1?"up":s.avg<=-1?"dn":"eq"}">${s.avg>=1?"▲ subiendo":s.avg<=-1?"▼ bajando":"— estable"}</span></div>`).join("")}`;
-  // Panel: Pulso
+  // Pulso
+  const up=data.sectors.filter(s=>s.avg>=0).length, dn=data.sectors.length-up;
   $("#tp-pulse").innerHTML=`<div class="tp-t">Pulso del mercado</div>
-    <div class="pulse-big"><b>${up}</b><span>sectores al alza</span> · <b>${dn}</b><span>a la baja</span></div>
+    <div class="pulse-big"><b>${up}</b><span>al alza</span> · <b>${dn}</b><span>a la baja</span></div>
     <canvas id="pulseCv" class="pulse-cv"></canvas>
     <div class="tp-foot">actividad neuronal en tiempo real</div>`;
   const pc=$("#pulseCv"); if(pc) pulseCanvas(pc);
@@ -1706,72 +1713,119 @@ function makeGlow(color){ const c=document.createElement("canvas"); c.width=c.he
   const rg=g.createRadialGradient(16,16,0,16,16,16); rg.addColorStop(0,color); rg.addColorStop(.4,color+"88"); rg.addColorStop(1,"rgba(0,0,0,0)");
   g.fillStyle=rg; g.fillRect(0,0,32,32); return c; }
 function brainCanvas(canvas, data){
-  const ctx=canvas.getContext("2d"); let W=0,H=0,DPR=1,nodes=[],edges=[],particles=[],glows={},t=0;
+  const ctx=canvas.getContext("2d"); let W=0,H=0,DPR=1,nodes=[],edges=[],particles=[],glows={},t=0,mx=-999,my=-999,hover=null;
   data.sectors.forEach(s=>{ if(!glows[s.color]) glows[s.color]=makeGlow(s.color); });
   function layout(){
-    W=canvas.clientWidth||600; H=canvas.clientHeight||420; DPR=Math.min(2,window.devicePixelRatio||1);
+    W=canvas.clientWidth||600; H=canvas.clientHeight||480; DPR=Math.min(2,window.devicePixelRatio||1);
     canvas.width=W*DPR; canvas.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
-    nodes=[]; edges=[]; const cx=W/2, cy=H/2, R=Math.min(W,H)*0.37;
-    const N=data.sectors.length; const clusters=data.sectors.map((s,i)=>{ const a=i/N*Math.PI*2-Math.PI/2;
-      const jit=(Math.sin(i*12.9)*0.5+0.5); return {s, x:cx+Math.cos(a)*R*(0.72+jit*0.34), y:cy+Math.sin(a)*R*(0.62+((i*7)%5)/5*0.34), r:26+s.stocks.length*3.2}; });
+    nodes=[]; edges=[]; const cx=W/2, cy=H/2, R=Math.min(W,H)*0.46;   // más separación
+    const N=data.sectors.length;
+    const clusters=data.sectors.map((s,i)=>{ const a=i/N*Math.PI*2-Math.PI/2;
+      const rad=R*(0.86+((i*37)%13)/13*0.24);
+      return {s, i, x:cx+Math.cos(a)*rad*(W>H?1.15:0.9), y:cy+Math.sin(a)*rad*(W>H?0.82:1), r:18+s.stocks.length*2.6}; });
     const maxCh=Math.max(...data.sectors.flatMap(s=>s.stocks.map(x=>Math.abs(x.change_1y||0))),1);
-    clusters.forEach(cl=>{ cl.s.stocks.forEach((st,k)=>{ const ang=Math.random()*Math.PI*2, rr=Math.pow(Math.random(),.6)*cl.r;
+    clusters.forEach(cl=>{ cl.s.stocks.forEach((st)=>{ const ang=Math.random()*6.28, rr=Math.pow(Math.random(),.6)*cl.r;
       const act=Math.min(1,Math.abs(st.change_1y||0)/maxCh);
-      nodes.push({bx:cl.x+Math.cos(ang)*rr, by:cl.y+Math.sin(ang)*rr, x:0,y:0, ph:Math.random()*6.28, sp:0.6+Math.random()*0.8,
-        amp:2+Math.random()*4, size:1.6+Math.min(4,(Math.log10((st.mcap||1e9))-8))*0.7, color:cl.s.color, act, cl}); }); });
-    // sinapsis dentro del clúster
-    clusters.forEach(cl=>{ const ns=nodes.filter(n=>n.cl===cl); for(let i=0;i<ns.length;i++){ const a=ns[i], b=ns[(i+1+Math.floor(Math.random()*2))%ns.length]; if(a!==b) edges.push({a,b,w:0.12,intra:true}); } });
-    // sinapsis entre clústeres (más brillantes, llevan partículas)
-    for(let i=0;i<clusters.length;i++){ const c1=clusters[i], c2=clusters[(i+1)%clusters.length], c3=clusters[(i+3)%clusters.length];
-      [c2,c3].forEach(cj=>{ const n1=nodes.filter(n=>n.cl===c1), n2=nodes.filter(n=>n.cl===cj); if(n1.length&&n2.length){ const a=n1[Math.floor(Math.random()*n1.length)], b=n2[Math.floor(Math.random()*n2.length)]; edges.push({a,b,w:0.4,inter:true}); } }); }
-    canvas.__syn=edges.length; const bs=document.getElementById("bSyn"); if(bs) bs.textContent=edges.length;
+      nodes.push({bx:cl.x+Math.cos(ang)*rr, by:cl.y+Math.sin(ang)*rr, x:0,y:0, ph:Math.random()*6.28, sp:0.5+Math.random()*0.7,
+        amp:2+Math.random()*3.5, size:1.7+Math.min(4,(Math.log10((st.mcap||1e9))-8))*0.7, color:cl.s.color, sec:cl.s.name, act, cl, st}); }); });
+    clusters.forEach(cl=>{ const ns=nodes.filter(n=>n.cl===cl); for(let i=0;i<ns.length;i++){ const a=ns[i], b=ns[(i+1+Math.floor(Math.random()*2))%ns.length]; if(a!==b) edges.push({a,b,intra:true}); } });
+    for(let i=0;i<clusters.length;i++){ const c1=clusters[i];
+      [clusters[(i+1)%clusters.length],clusters[(i+3)%clusters.length]].forEach(cj=>{ const n1=nodes.filter(n=>n.cl===c1), n2=nodes.filter(n=>n.cl===cj); if(n1.length&&n2.length) edges.push({a:n1[Math.floor(Math.random()*n1.length)], b:n2[Math.floor(Math.random()*n2.length)], inter:true}); }); }
+    const bs=document.getElementById("bSyn"); if(bs) bs.textContent=edges.length;
   }
   layout();
   let ro; try{ ro=new ResizeObserver(()=>layout()); ro.observe(canvas); }catch(e){}
+  canvas.addEventListener("mousemove",e=>{ const r=canvas.getBoundingClientRect(); mx=e.clientX-r.left; my=e.clientY-r.top; });
+  canvas.addEventListener("mouseleave",()=>{ mx=my=-999; });
+  canvas.addEventListener("click",()=>{ if(hover) app.brainSelect(hover.cl.i); });
   function frame(){
-    if(!document.body.contains(canvas)){ if(ro)ro.disconnect(); return; }  // detener al salir
-    t+=0.016;
+    if(!document.body.contains(canvas)){ if(ro)ro.disconnect(); return; }
+    t+=0.016; const sel=state.cache.brainSel;
     ctx.setTransform(DPR,0,0,DPR,0,0);
-    ctx.globalCompositeOperation="source-over"; ctx.fillStyle="rgba(6,10,20,0.20)"; ctx.fillRect(0,0,W,H);   // estela
-    // mover nodos (respiración)
+    ctx.globalCompositeOperation="source-over"; ctx.fillStyle="rgba(6,10,20,0.22)"; ctx.fillRect(0,0,W,H);
+    // órbitas de fondo
+    ctx.save(); ctx.translate(W/2,H/2); ctx.rotate(t*0.03); ctx.strokeStyle="rgba(79,163,255,0.06)"; ctx.lineWidth=1; ctx.setLineDash([4,7]);
+    for(let k=1;k<=3;k++){ ctx.beginPath(); ctx.ellipse(0,0,Math.min(W,H)*0.30*k*0.55,Math.min(W,H)*0.24*k*0.55,0,0,6.28); ctx.stroke(); } ctx.restore(); ctx.setLineDash([]);
+    // hover
+    hover=null; if(mx>-900){ let best=14; nodes.forEach(n=>{ const d=Math.hypot(n.x-mx,n.y-my); if(d<best){ best=d; hover=n; } }); }
+    canvas.style.cursor=hover?"pointer":"default";
     nodes.forEach(n=>{ n.x=n.bx+Math.cos(t*n.sp+n.ph)*n.amp; n.y=n.by+Math.sin(t*n.sp*1.1+n.ph)*n.amp; });
-    // sinapsis
+    const dim=n=>sel&&n.sec!==sel?0.12:1;
     ctx.globalCompositeOperation="lighter";
-    edges.forEach(e=>{ ctx.strokeStyle=e.a.color; ctx.globalAlpha=e.intra?0.05:0.10; ctx.lineWidth=e.intra?0.5:0.8;
+    edges.forEach(e=>{ const f=Math.min(dim(e.a),dim(e.b)); ctx.strokeStyle=e.a.color; ctx.globalAlpha=(e.intra?0.05:0.10)*f; ctx.lineWidth=e.intra?0.5:0.8;
       ctx.beginPath(); ctx.moveTo(e.a.x,e.a.y); ctx.lineTo(e.b.x,e.b.y); ctx.stroke(); });
     ctx.globalAlpha=1;
-    // spawn partículas en sinapsis inter
-    if(particles.length<220 && Math.random()<0.6){ const inter=edges.filter(e=>e.inter); if(inter.length){ const e=inter[Math.floor(Math.random()*inter.length)]; particles.push({e,p:0,sp:0.008+Math.random()*0.02,col:e.a.color}); } }
+    if(particles.length<240 && Math.random()<0.7){ const inter=edges.filter(e=>e.inter&&dim(e.a)>0.5); if(inter.length){ const e=inter[Math.floor(Math.random()*inter.length)]; particles.push({e,p:0,sp:0.008+Math.random()*0.022,col:e.a.color}); } }
     particles=particles.filter(pt=>{ pt.p+=pt.sp; if(pt.p>=1) return false;
       const x=pt.e.a.x+(pt.e.b.x-pt.e.a.x)*pt.p, y=pt.e.a.y+(pt.e.b.y-pt.e.a.y)*pt.p;
-      ctx.fillStyle=pt.col; ctx.globalAlpha=Math.sin(pt.p*Math.PI); ctx.beginPath(); ctx.arc(x,y,1.6,0,6.28); ctx.fill(); return true; });
+      ctx.fillStyle=pt.col; ctx.globalAlpha=Math.sin(pt.p*Math.PI)*Math.min(dim(pt.e.a),dim(pt.e.b)); ctx.beginPath(); ctx.arc(x,y,1.7,0,6.28); ctx.fill(); return true; });
     ctx.globalAlpha=1;
-    // nodos + glow
-    nodes.forEach(n=>{ const pulse=0.6+0.4*Math.sin(t*2+n.ph); const gl=glows[n.color]; const gr=(6+n.size*3)*(0.5+n.act*0.8)*pulse;
-      if(gl){ ctx.globalAlpha=0.5+n.act*0.5; ctx.drawImage(gl,n.x-gr,n.y-gr,gr*2,gr*2); }
-      ctx.globalAlpha=1; ctx.fillStyle=n.color; ctx.beginPath(); ctx.arc(n.x,n.y,n.size,0,6.28); ctx.fill(); });
+    nodes.forEach(n=>{ const f=dim(n); const pulse=0.6+0.4*Math.sin(t*2+n.ph); const gl=glows[n.color]; const gr=(6+n.size*3)*(0.5+n.act*0.8)*pulse*(n===hover?1.5:1);
+      if(gl){ ctx.globalAlpha=(0.5+n.act*0.5)*f; ctx.drawImage(gl,n.x-gr,n.y-gr,gr*2,gr*2); }
+      ctx.globalAlpha=f; ctx.fillStyle=n.color; ctx.beginPath(); ctx.arc(n.x,n.y,n.size*(n===hover?1.6:1),0,6.28); ctx.fill(); });
     ctx.globalCompositeOperation="source-over"; ctx.globalAlpha=1;
     // etiquetas de sector
     ctx.font="600 10px 'JetBrains Mono', monospace"; ctx.textAlign="center";
-    data.sectors.forEach((s,i)=>{ const ns=nodes.filter(n=>n.cl&&n.cl.s===s); if(!ns.length) return;
-      const mx=ns.reduce((a,n)=>a+n.x,0)/ns.length, my=Math.min(...ns.map(n=>n.y));
-      ctx.fillStyle=s.color; ctx.globalAlpha=0.9; ctx.fillText(s.name.toLowerCase(), mx, my-8); });
+    data.sectors.forEach((s)=>{ const ns=nodes.filter(n=>n.sec===s.name); if(!ns.length) return;
+      const mxs=ns.reduce((a,n)=>a+n.x,0)/ns.length, mys=Math.min(...ns.map(n=>n.y));
+      ctx.fillStyle=s.color; ctx.globalAlpha=(sel&&sel!==s.name?0.25:0.95); ctx.fillText(s.name.toLowerCase(), mxs, mys-9);
+      ctx.globalAlpha=(sel&&sel!==s.name?0.15:0.5); ctx.font="8px 'JetBrains Mono'"; ctx.fillText(`${s.count} activos · ${s.avg>=0?"+":""}${s.avg}%`, mxs, mys+2); ctx.font="600 10px 'JetBrains Mono'"; });
     ctx.globalAlpha=1;
+    // tooltip
+    if(hover){ const label=`${hover.st.ticker}  ${hover.st.change_1y>=0?"+":""}${hover.st.change_1y??"—"}%`; ctx.font="600 11px 'JetBrains Mono'";
+      const w=ctx.measureText(label).width+16; let tx=hover.x+12, ty=hover.y-12; if(tx+w>W) tx=hover.x-12-w;
+      ctx.fillStyle="rgba(10,20,36,0.95)"; ctx.strokeStyle=hover.color; ctx.lineWidth=1; roundRect(ctx,tx,ty-16,w,22,5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#EAF1FB"; ctx.textAlign="left"; ctx.fillText(label, tx+8, ty); }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 }
+function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function pulseCanvas(cv){
   const ctx=cv.getContext("2d"); let W,H,DPR,data=[],t=0;
-  function rs(){ W=cv.clientWidth||240; H=cv.clientHeight||44; DPR=Math.min(2,window.devicePixelRatio||1); cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
-  rs();
+  W=cv.clientWidth||240; H=cv.clientHeight||44; DPR=Math.min(2,window.devicePixelRatio||1); cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let i=0;i<80;i++) data.push(0.5);
   function frame(){ if(!document.body.contains(cv)) return; t+=0.05;
-    data.push(0.5+0.35*Math.sin(t)*Math.sin(t*0.37)+ (Math.random()-0.5)*0.25); if(data.length>80) data.shift();
+    data.push(0.5+0.35*Math.sin(t)*Math.sin(t*0.37)+(Math.random()-0.5)*0.25); if(data.length>80) data.shift();
     ctx.clearRect(0,0,W,H); ctx.strokeStyle="#3DD6A0"; ctx.lineWidth=1.4; ctx.beginPath();
     data.forEach((v,i)=>{ const x=i/(data.length-1)*W, y=H-v*H*0.9-2; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
     requestAnimationFrame(frame); }
   requestAnimationFrame(frame);
+}
+function renderRunLog(log){
+  const box=$("#tp-act"); if(!box) return;
+  box.innerHTML=`<div class="tp-t">Actividad · en vivo</div>${log.map((x,i)=>`
+    <div class="tp-log ${i===0?"fresh":""}"><span class="tp-time mono">${esc(x.time||"")}</span><span class="dot" style="background:${x.c}"></span><b>${esc(x.t)}</b>
+      <span class="tp-lo-sec">${esc(x.sec||"")}</span><b class="mono ${x.ch>=0?"pos":"neg"}">${x.ch>=0?"+":""}${x.ch}%</b></div>`).join("")}`;
+}
+function drawHeat(ctx,cv,heat,secs){
+  const DPR=Math.min(2,window.devicePixelRatio||1); const W=cv.clientWidth||220,H=cv.clientHeight||120;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,W,H);
+  const rows=heat.length, cols=heat[0].length, cw=W/cols, ch=H/rows;
+  heat.forEach((row,r)=>{ row.forEach((v,c)=>{ ctx.globalAlpha=0.12+v*0.88; ctx.fillStyle=secs[r].color; ctx.fillRect(c*cw+0.5, r*ch+0.5, cw-1, ch-1); }); });
+  ctx.globalAlpha=1;
+}
+function startBrainTelemetry(data){
+  const movers=data.sectors.flatMap(s=>s.stocks.map(x=>({t:x.ticker,sec:s.name,c:s.color,ch:x.change_1y}))).filter(x=>x.ch!=null);
+  if(!movers.length) return;
+  let log=movers.slice().sort((a,b)=>Math.abs(b.ch)-Math.abs(a.ch)).slice(0,9).map(x=>({...x,time:new Date().toTimeString().slice(0,8)}));
+  const heatSecs=data.sectors.slice(0,7), COLS=24;
+  const heat=heatSecs.map(s=>Array(COLS).fill(0).map(()=>Math.min(1,Math.abs(s.avg)/25*0.5+Math.random()*0.4)));
+  $("#tp-heat").innerHTML=`<div class="tp-t">Mapa de calor · actividad por sector</div>
+    <div class="heat-legend">${heatSecs.map(s=>`<span class="hl2"><span class="dot" style="background:${s.color}"></span>${esc(s.name.slice(0,4))}</span>`).join("")}</div>
+    <canvas id="heatCv" class="heat-cv"></canvas>`;
+  const heatCv=$("#heatCv"); const hctx=heatCv?heatCv.getContext("2d"):null;
+  let last=0,lastHeat=0,lastCnt=0,aps=320;
+  renderRunLog(log); if(hctx) drawHeat(hctx,heatCv,heat,heatSecs);
+  function tick(ts){
+    if(!document.body.contains($("#tp-act")||document.createElement("div"))) return;
+    if(!document.getElementById("tp-heat")) return;
+    if(ts-lastCnt>110){ lastCnt=ts; aps=Math.max(140,Math.min(720,aps+(Math.random()-0.5)*44)); const a=$("#apsNum"); if(a) a.textContent=Math.round(aps); }
+    if(ts-last>1300){ last=ts; const pick=movers[Math.floor(Math.random()*movers.length)]; log.unshift({...pick,time:new Date().toTimeString().slice(0,8)}); if(log.length>9) log.pop(); renderRunLog(log); }
+    if(ts-lastHeat>360){ lastHeat=ts; heat.forEach((row,i)=>{ row.shift(); row.push(Math.max(0,Math.min(1,Math.abs(heatSecs[i].avg)/25*0.4+Math.random()*0.7))); }); if(hctx) drawHeat(hctx,heatCv,heat,heatSecs); }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 }
 
 async function viewDineroReal(){
@@ -4248,6 +4302,7 @@ const app = {
   stkMode(m){ state.cache.stkMode=m; viewStocks(); },
   earnMode(m){ state.cache.earnMode=m; viewEarnings(); },
   finMode(m){ state.cache.finMode=m; renderFinBlock(); },
+  brainSelect(i){ const d=state.cache.brainData; if(!d) return; state.cache.brainSel=(i==null||i<0)?null:d.sectors[i].name; renderBrainFilters(d); renderBrainStatic(d); },
   resetScreen(){ state.cache.screen={value:0,future:0,past:0,health:0,dividend:0}; drawScreenSnow(); applyScreen(); },
   setFilter(i,j){ state.cache.scrSel=state.cache.scrSel||{}; state.cache.scrSel[i]=j; applyFilters(); },
   resetFilters(){ state.cache.scrSel={}; buildFilterScreener(); },
