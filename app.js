@@ -1706,7 +1706,7 @@ function renderBrainStats(data, demo){
     <div class="bstat"><span class="bk">Sinapsis</span><b class="mono" id="bSyn">—</b></div>
     <div class="bstat"><span class="bk">Acciones/s</span><b class="mono" id="apsNum">320</b></div>
     ${demo?`<span class="pill-soon" style="align-self:center">DEMO</span>`:`<span class="bstat"><span class="bk">Estado</span><b style="color:#3DD6A0">● activo</b></span>`}`;
-  $("#brainLegend").innerHTML=`<span class="bl-hint">clic en un sector para aislarlo</span>`;
+  const _bl=$("#brainLegend"); if(_bl) _bl.innerHTML=`<span class="bl-hint">clic en un sector para aislarlo</span>`;
 }
 function renderBrainFilters(data){
   const sel=state.cache.brainSel;
