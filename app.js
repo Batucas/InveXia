@@ -438,6 +438,7 @@ async function render(){
       if(state.view==="dinero-real") return void await viewDineroReal();
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
       if(state.view==="quantnet")   return void await viewQuantNet();
+      if(state.view==="cerebro")    return void await viewBrain();
       if(state.view==="radar")      return void await viewRadar();
       if(state.view==="terminal")   return void await viewTerminal();
       if(state.view==="brief")      return void await viewBrief();
