@@ -1363,3 +1363,8 @@ body.focus-mode .main.wide{padding:.6rem}
 /* v6.0 · Estimaciones en calendario */
 .earn-est{font-size:.68rem;color:var(--faint);margin-top:.25rem}
 .earn-est b{color:var(--muted)}
+
+/* v6.1 · Screener con filtros (tipo Finviz) */
+.filt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.7rem 1rem;margin-top:.9rem}
+.filt label{display:block;font-size:.72rem;color:var(--faint);margin-bottom:.25rem}
+.filt select.input{width:100%;padding:.4rem .5rem;font-size:.82rem;cursor:pointer}

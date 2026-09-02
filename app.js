@@ -1142,15 +1142,25 @@ async function viewStocks(){
     const r=await fetch(u,{cache:"no-store"}); if(r.ok) idx=await r.json(); }catch(e){}
   let list;
   if(idx&&Array.isArray(idx.stocks)&&idx.stocks.length) list=idx.stocks;
-  else { list=Object.values(stocksDemo()).map(s=>({ticker:s.ticker,name:s.name,sector:s.sector,type:s.type,price:s.price,change_1y:s.change_1y,snowflake:s.snowflake,pe:s.valuation?.pe,mcap:s.mcap,demo:true})).concat(screenerDemo()); }
+  else { list=Object.values(stocksDemo()).map(s=>({ticker:s.ticker,name:s.name,sector:s.sector,type:s.type,price:s.price,change_1y:s.change_1y,snowflake:s.snowflake,pe:s.valuation?.pe,forward_pe:s.valuation?.forward_pe,peg:s.valuation?.peg,pb:s.valuation?.pb,ps:s.profile?.ps,mcap:s.mcap,div_yield:s.dividend?.yield,roe:s.past?.roe,beta:s.profile?.beta,rsi:s.stats?.rsi,demo:true})).concat(screenerDemo()); }
   state.cache.stocks=list;
   const mode=state.cache.stkMode||"buscar";
   const box=$("#stkShell");
-  box.innerHTML=`<div class="courses-toggle" style="margin-bottom:1.1rem">
+  box.innerHTML=`<div class="courses-toggle" style="margin-bottom:1.1rem;flex-wrap:wrap">
       <button class="ct-btn ${mode==="buscar"?"on":""}" onclick="app.stkMode('buscar')">Buscar</button>
-      <button class="ct-btn ${mode==="screener"?"on":""}" onclick="app.stkMode('screener')">Screener 🔺</button></div>
+      <button class="ct-btn ${mode==="filtros"?"on":""}" onclick="app.stkMode('filtros')">Filtros ⚙️</button>
+      <button class="ct-btn ${mode==="screener"?"on":""}" onclick="app.stkMode('screener')">Copo de nieve 🔺</button></div>
     <div id="stkMode"></div>`;
-  if(mode==="screener") buildScreener(); else renderSearchMode();
+  if(mode==="screener") buildScreener(); else if(mode==="filtros") buildFilterScreener(); else renderSearchMode();
+}
+function stockCard(s){ const up=(s.change_1y||0)>=0;
+  return `<div class="stk-card card" onclick="app.openStock('${s.ticker}')">
+      <div class="flex" style="gap:.7rem;align-items:center">${stockLogo(s)}<div style="flex:1;min-width:0"><b class="stk-tk">${esc(s.ticker)}</b><div class="stk-nm">${esc(s.name||"")}</div></div>
+        <span class="stk-badge">${esc(s.type==="crypto"?"Cripto":s.type==="etf"?"ETF":"Acción")}</span></div>
+      <div class="flex between" style="margin-top:.7rem;align-items:flex-end">
+        <span class="stk-sec">${esc(s.sector||"")}</span>
+        <span class="mono ${up?"pos":"neg"}">${up?"+":""}${(s.change_1y??0).toFixed(1)}% <span style="color:var(--faint);font-size:.7rem">1A</span></span></div>
+    </div>`;
 }
 function renderSearchMode(){
   const box=$("#stkMode"); if(!box) return;
@@ -1163,14 +1173,7 @@ function renderStockList(q){
   const box=$("#stkList"); if(!box) return; q=(q||"").toLowerCase();
   const list=(state.cache.stocks||[]).filter(s=>s.ticker.toLowerCase().includes(q)||(s.name||"").toLowerCase().includes(q));
   if(!list.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Sin resultados para "${esc(q)}".</p>`; return; }
-  box.innerHTML=list.map(s=>{ const up=(s.change_1y||0)>=0;
-    return `<div class="stk-card card" onclick="app.openStock('${s.ticker}')">
-      <div class="flex" style="gap:.7rem;align-items:center">${stockLogo(s)}<div style="flex:1;min-width:0"><b class="stk-tk">${esc(s.ticker)}</b><div class="stk-nm">${esc(s.name||"")}</div></div>
-        <span class="stk-badge">${esc(s.type==="crypto"?"Cripto":s.type==="etf"?"ETF":"Acción")}</span></div>
-      <div class="flex between" style="margin-top:.7rem;align-items:flex-end">
-        <span class="stk-sec">${esc(s.sector||"")}</span>
-        <span class="mono ${up?"pos":"neg"}">${up?"+":""}${(s.change_1y??0).toFixed(1)}% <span style="color:var(--faint);font-size:.7rem">1A</span></span></div>
-    </div>`; }).join("");
+  box.innerHTML=list.map(s=>stockCard(s)).join("");
 }
 async function viewStockDetail(ticker){
   const m=$("#main"); m.classList.add("wide");
@@ -1421,7 +1424,8 @@ function snowflakeSVG(sn){
 /* ===== Screener con copo de nieve arrastrable ===== */
 function screenerDemo(){
   const mk=(t,n,sec,val,fut,pas,hea,div,pe,mc,ch)=>({ticker:t,name:n,sector:sec,type:"stock",
-    snowflake:{value:val,future:fut,past:pas,health:hea,dividend:div},pe,mcap:mc,change_1y:ch,demo:true});
+    snowflake:{value:val,future:fut,past:pas,health:hea,dividend:div},pe,mcap:mc,change_1y:ch,demo:true,
+    div_yield:+(div/2200).toFixed(4),roe:+(pas/320).toFixed(3),beta:+(0.7+(100-hea)/60).toFixed(2),ps:+(pe/12).toFixed(1),pb:+((100-val)/12).toFixed(1),forward_pe:+(pe*0.82).toFixed(1),peg:+(pe/Math.max(5,fut)).toFixed(2),rsi:+(35+fut*0.4).toFixed(0)});
   return [
     mk("GOOGL","Alphabet Inc.","Comunicación",58,78,86,80,20,24,2100e9,28),
     mk("AMZN","Amazon.com","Consumo discrecional",40,82,74,66,5,30,1950e9,32),
@@ -1523,6 +1527,51 @@ function earningsDemo(){
       {ticker:"KO",name:"Coca-Cola",domain:"coca-cola.com",date:D(-9),eps_est:0.74,eps_act:0.77,surprise:4.1,revenue:11854e6,revenue_yoy:-1.0},
       {ticker:"INTC",name:"Intel",domain:"intel.com",date:D(-11),eps_est:-0.02,eps_act:-0.46,surprise:-2200,revenue:13284e6,revenue_yoy:-6.0},
     ]};
+}
+/* ===== Screener con filtros (tipo Finviz) ===== */
+function screenerFilters(uni){
+  const sectors=[...new Set(uni.map(s=>s.sector).filter(Boolean))].sort();
+  const gt=(k,v)=>s=>s[k]!=null&&s[k]>v, lt=(k,v)=>s=>s[k]!=null&&s[k]<v, bt=(k,a,b)=>s=>s[k]!=null&&s[k]>=a&&s[k]<b;
+  return [
+    {label:"Tipo",opts:[["Cualquiera",null],["Acción",s=>s.type==="stock"||!s.type],["ETF",s=>s.type==="etf"],["Cripto",s=>s.type==="crypto"]]},
+    {label:"Sector",opts:[["Cualquiera",null],...sectors.map(x=>[x,s=>s.sector===x])]},
+    {label:"Cap. de mercado",opts:[["Cualquiera",null],["Mega (>200 MM)",gt("mcap",200e9)],["Grande (10–200 MM)",bt("mcap",10e9,200e9)],["Mediana (2–10 MM)",bt("mcap",2e9,10e9)],["Pequeña (<2 MM)",lt("mcap",2e9)]]},
+    {label:"P/E",opts:[["Cualquiera",null],["Bajo (<15)",lt("pe",15)],["Moderado (<25)",lt("pe",25)],["Menos de 40",lt("pe",40)],["Alto (>40)",gt("pe",40)]]},
+    {label:"P/E adelantado",opts:[["Cualquiera",null],["<15",lt("forward_pe",15)],["<25",lt("forward_pe",25)],["<40",lt("forward_pe",40)]]},
+    {label:"PEG",opts:[["Cualquiera",null],["<1 (barata)",lt("peg",1)],["<2",lt("peg",2)]]},
+    {label:"P/B",opts:[["Cualquiera",null],["<1",lt("pb",1)],["<3",lt("pb",3)]]},
+    {label:"P/S",opts:[["Cualquiera",null],["<2",lt("ps",2)],["<5",lt("ps",5)]]},
+    {label:"Dividendo",opts:[["Cualquiera",null],["Paga (>0%)",gt("div_yield",0)],["Más de 2%",gt("div_yield",0.02)],["Más de 4%",gt("div_yield",0.04)]]},
+    {label:"ROE",opts:[["Cualquiera",null],["Más de 10%",gt("roe",0.10)],["Más de 20%",gt("roe",0.20)]]},
+    {label:"Beta",opts:[["Cualquiera",null],["Defensiva (<1)",lt("beta",1)],["Agresiva (>1.5)",gt("beta",1.5)]]},
+    {label:"RSI (14)",opts:[["Cualquiera",null],["Sobreventa (<30)",lt("rsi",30)],["Neutral (30–70)",bt("rsi",30,70)],["Sobrecompra (>70)",gt("rsi",70)]]},
+    {label:"Rendimiento 1A",opts:[["Cualquiera",null],["Positivo",gt("change_1y",0)],["Más de 20%",gt("change_1y",20)],["Negativo",lt("change_1y",0)]]},
+  ];
+}
+function buildFilterScreener(){
+  const box=$("#stkMode"); if(!box) return;
+  const uni=state.cache.stocks||[];
+  state.cache.scrFilters=screenerFilters(uni);
+  if(!state.cache.scrSel) state.cache.scrSel={};
+  const f=state.cache.scrFilters;
+  box.innerHTML=`<div class="card">
+    <div class="flex between" style="flex-wrap:wrap;gap:.5rem"><h3 style="margin:0">Filtros ⚙️</h3><button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.resetFilters()">Limpiar filtros</button></div>
+    <div class="filt-grid">${f.map((flt,i)=>`<div class="filt"><label>${esc(flt.label)}</label>
+      <select class="input" onchange="app.setFilter(${i},this.selectedIndex)">${flt.opts.map((o,j)=>`<option ${(state.cache.scrSel[i]||0)===j?"selected":""}>${esc(o[0])}</option>`).join("")}</select></div>`).join("")}</div>
+  </div>
+  <div class="flex between" style="margin:1.1rem 0 .7rem"><div class="nav-label" style="padding:0">Resultados</div><span id="filtCount" class="mono" style="color:var(--muted)"></span></div>
+  <div id="filtResults" class="stk-grid"></div>`;
+  applyFilters();
+}
+function applyFilters(){
+  const box=$("#filtResults"); if(!box) return;
+  const uni=state.cache.stocks||[], filters=state.cache.scrFilters||[], sel=state.cache.scrSel||{};
+  let res=uni.slice();
+  filters.forEach((flt,i)=>{ const pred=flt.opts[sel[i]||0]&&flt.opts[sel[i]||0][1]; if(pred) res=res.filter(pred); });
+  const cnt=$("#filtCount"); if(cnt) cnt.textContent=res.length+" de "+uni.length;
+  if(!res.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Ninguna coincide con esos filtros. Prueba aflojando alguno.</p>`; return; }
+  res.sort((a,b)=>(b.change_1y||0)-(a.change_1y||0));
+  box.innerHTML=res.slice(0,60).map(s=>stockCard(s)).join("");
 }
 async function viewEarnings(){
   const m=$("#main");
@@ -4050,6 +4099,8 @@ const app = {
   earnMode(m){ state.cache.earnMode=m; viewEarnings(); },
   finMode(m){ state.cache.finMode=m; renderFinBlock(); },
   resetScreen(){ state.cache.screen={value:0,future:0,past:0,health:0,dividend:0}; drawScreenSnow(); applyScreen(); },
+  setFilter(i,j){ state.cache.scrSel=state.cache.scrSel||{}; state.cache.scrSel[i]=j; applyFilters(); },
+  resetFilters(){ state.cache.scrSel={}; buildFilterScreener(); },
   suggInput(pfId, inp){ const k=inp.dataset.k; let v=Math.max(0,Math.min(100,Math.round(+inp.value||0)));
     if(state.cache.csSugg&&state.cache.csSugg[pfId]){ state.cache.csSugg[pfId][k]=v; csSum(pfId); } },
   async saveSuggestion(pfId){

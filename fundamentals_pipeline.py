@@ -556,6 +556,10 @@ def main():
                           "type": kind, "price": d["price"], "change_1y": d["change_1y"],
                           "domain": d.get("domain"), "mcap": d.get("mcap"),
                           "pe": d["valuation"]["pe"], "div_yield": d["dividend"]["yield"],
+                          "forward_pe": d["valuation"]["forward_pe"], "peg": d["valuation"]["peg"],
+                          "pb": d["valuation"]["pb"], "ps": d["profile"].get("ps"),
+                          "roe": d["past"]["roe"], "beta": d["profile"].get("beta"),
+                          "rsi": d["stats"].get("rsi"),
                           "snowflake": d.get("snowflake")})
             e = d.get("earnings")
             if e:
