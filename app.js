@@ -1650,32 +1650,52 @@ function buildBrainData(stocks){
   }).filter(s=>s.stocks.length).sort((a,b)=>b.count-a.count).slice(0,11);
   return {sectors, total:stocks.length};
 }
+function loadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[data-s="${src}"]`)&&(src.includes("three")?window.THREE:window.brain3D)) return res(); const s=document.createElement("script"); s.src=src; s.dataset.s=src; s.onload=()=>res(); s.onerror=()=>rej(new Error("no se pudo cargar "+src)); document.head.appendChild(s); }); }
+async function ensureThree(){ if(!window.THREE) await loadScript("three.min.js"); if(!window.brain3D) await loadScript("brain3d.js"); }
 async function viewBrain(){
   const m=$("#main"); m.classList.add("wide");
-  m.innerHTML=`<div class="brain-head">
-      <div><div class="eyebrow-b">SISTEMA · TIEMPO REAL</div><h1 class="brain-title">Cerebro del mercado</h1>
-        <p class="brain-sub">El mercado como un organismo vivo: cada sector es un núcleo de neuronas, cada correlación una sinapsis que se dispara. Pasa el cursor sobre un activo o filtra por sector.</p></div>
+  m.innerHTML=`<div class="brain-wrap" id="brainWrap">
+    <div class="brain-head">
+      <div><div class="eyebrow-b">SISTEMA · TIEMPO REAL · 3D</div><h1 class="brain-title">Cerebro del mercado</h1>
+        <p class="brain-sub">El mercado en 3D: cada sector es un núcleo de neuronas y cada correlación una sinapsis. Arrastra para rotar · rueda o pellizca para acercarte · toca un activo o un sector para aislarlo.</p></div>
       <div id="brainStats" class="brain-stats"></div></div>
     <div class="brain-filters" id="brainFilters"></div>
-    <div class="brain-stage"><canvas id="brainCanvas"></canvas>
-      <div class="brain-legend" id="brainLegend"></div></div>
-    <div class="brain-panels">
+    <div class="brain-stage" id="brainStage">
+      <div id="brainMount" class="brain-mount"></div>
+      <div id="brainLabels" class="brain-labels"></div>
+      <div id="brainTip" class="brain-tip"></div>
+      <div class="brain-toolbar">
+        <button class="b3-btn" onclick="app.brainRotate(this)">⟳ Rotación</button>
+        <button class="b3-btn" onclick="app.brainReset()">⌖ Centrar</button>
+        <button class="b3-btn" onclick="app.brainMin(this)">▾ Minimizar panel</button>
+      </div>
+      <div class="brain-loading" id="brainLoading">Cargando visor 3D…</div>
+    </div>
+    <div class="brain-panels" id="brainPanels">
       <div class="tpanel" id="tp-act"></div>
       <div class="tpanel" id="tp-heat"></div>
       <div class="tpanel" id="tp-pulse"></div>
       <div class="tpanel" id="tp-state"></div>
-    </div>`;
+    </div>
+  </div>`;
   let stocks=null;
   try{ const u=sb.storage.from("media").getPublicUrl("fundamentals/index.json").data.publicUrl;
     const r=await fetch(u,{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.stocks&&j.stocks.length) stocks=j.stocks.filter(s=>s.type==="stock"); } }catch(e){}
   const demo=!stocks||stocks.length<20; if(demo) stocks=brainDemo();
   const data=buildBrainData(stocks);
-  state.cache.brainData=data; state.cache.brainSel=null;
+  state.cache.brainData=data; state.cache.brainSel=null; state.cache.brainAuto=true;
   renderBrainStats(data, demo);
   renderBrainFilters(data);
   renderBrainStatic(data);
-  const cv=$("#brainCanvas"); if(cv) brainCanvas(cv, data);
   startBrainTelemetry(data);
+  try{
+    await ensureThree();
+    if(state.view!=="cerebro") return;   // el usuario navegó a otra parte mientras cargaba
+    const ld=$("#brainLoading"); if(ld) ld.remove();
+    window.__brainOnSelect=(i)=>{ state.cache.brainSel=(i<0?null:data.sectors[i].name); renderBrainFilters(data); renderBrainStatic(data); };
+    const bs=$("#bSyn"); const mount=$("#brainMount");
+    if(mount){ state.cache.brain3dAPI=window.brain3D(mount, data); }
+  }catch(e){ const ld=$("#brainLoading"); if(ld) ld.innerHTML=`<div class="brain-fallback">No se pudo cargar el visor 3D. Verifica que <b>three.min.js</b> y <b>brain3d.js</b> estén subidos al repo.</div>`; console.error(e); }
 }
 function sectorIdx(data,name){ return data.sectors.findIndex(s=>s.name===name); }
 function renderBrainStats(data, demo){
@@ -4302,7 +4322,10 @@ const app = {
   stkMode(m){ state.cache.stkMode=m; viewStocks(); },
   earnMode(m){ state.cache.earnMode=m; viewEarnings(); },
   finMode(m){ state.cache.finMode=m; renderFinBlock(); },
-  brainSelect(i){ const d=state.cache.brainData; if(!d) return; state.cache.brainSel=(i==null||i<0)?null:d.sectors[i].name; renderBrainFilters(d); renderBrainStatic(d); },
+  brainSelect(i){ const d=state.cache.brainData; if(!d) return; state.cache.brainSel=(i==null||i<0)?null:d.sectors[i].name; renderBrainFilters(d); renderBrainStatic(d); if(state.cache.brain3dAPI) state.cache.brain3dAPI.setSelected((i==null||i<0)?null:i); },
+  brainRotate(btn){ const nv=!(state.cache.brainAuto!==false); state.cache.brainAuto=nv; if(state.cache.brain3dAPI) state.cache.brain3dAPI.setAutoRotate(nv); if(btn) btn.classList.toggle("off",!nv); },
+  brainReset(){ if(state.cache.brain3dAPI&&state.cache.brain3dAPI.reset) state.cache.brain3dAPI.reset(); },
+  brainMin(btn){ const w=$("#brainWrap"); if(!w) return; const on=w.classList.toggle("panels-min"); if(btn) btn.textContent=on?"▴ Mostrar panel":"▾ Minimizar panel"; },
   resetScreen(){ state.cache.screen={value:0,future:0,past:0,health:0,dividend:0}; drawScreenSnow(); applyScreen(); },
   setFilter(i,j){ state.cache.scrSel=state.cache.scrSel||{}; state.cache.scrSel[i]=j; applyFilters(); },
   resetFilters(){ state.cache.scrSel={}; buildFilterScreener(); },
