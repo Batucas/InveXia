@@ -318,7 +318,6 @@ const NAV_CLIENT=[
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
   ["cerebro","Cerebro del mercado",icon("brain")],
-  ["nodos","Mapa de nodos",icon("nodes")],
   ["radar","Radar",icon("radar")],
   ["terminal","Terminal de opciones",icon("term")],
   ["brief","Brief macro",icon("brief")],
@@ -426,7 +425,6 @@ async function render(){
       if(state.view==="mensajes")      return void await viewAdminInbox();
       if(state.view==="quantnet")      return void await viewQuantNet();
       if(state.view==="cerebro")        return void await viewBrain();
-      if(state.view==="nodos")          return void await viewNetMap();
     } else {
       if(state.view==="inicio")     return void await viewClientHome();
       if(state.view==="notificaciones") return void await viewNotifications();
@@ -444,7 +442,6 @@ async function render(){
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
       if(state.view==="quantnet")   return void await viewQuantNet();
       if(state.view==="cerebro")    return void await viewBrain();
-      if(state.view==="nodos")      return void await viewNetMap();
       if(state.view==="radar")      return void await viewRadar();
       if(state.view==="terminal")   return void await viewTerminal();
       if(state.view==="brief")      return void await viewBrief();
@@ -1922,7 +1919,8 @@ async function viewCrypto(){
     `<div class="courses-toggle" style="margin-bottom:1.1rem;flex-wrap:wrap">
       <button class="ct-btn ${mode==="mercado"?"on":""}" onclick="app.cryptoMode('mercado')">📈 Mercado</button>
       <button class="ct-btn ${mode==="convertir"?"on":""}" onclick="app.cryptoMode('convertir')">🔄 Convertidor</button>
-      <button class="ct-btn ${mode==="staking"?"on":""}" onclick="app.cryptoMode('staking')">🔒 Staking</button></div>
+      <button class="ct-btn ${mode==="staking"?"on":""}" onclick="app.cryptoMode('staking')">🔒 Staking</button>
+      <button class="ct-btn ${mode==="red"?"on":""}" onclick="app.cryptoMode('red')">🕸️ Ver la red</button></div>
     <div id="cryptoShell">${loading()}</div>`;
   if(!state.cache.cryptoMkt){
     let coins=null;
@@ -1937,6 +1935,7 @@ function renderCryptoMode(){
   const box=$("#cryptoShell"); if(!box) return; const mode=state.cache.cryptoMode||"mercado";
   if(mode==="convertir") renderCryptoConvert(box);
   else if(mode==="staking") renderCryptoStaking(box);
+  else if(mode==="red") renderCryptoNetwork(box);
   else renderCryptoMarket(box);
 }
 function cnum(v){ if(v==null) return "—"; const a=Math.abs(v); if(a>=1e12) return "$"+(v/1e12).toFixed(2)+" B"; if(a>=1e9) return "$"+(v/1e9).toFixed(1)+" MM"; if(a>=1e6) return "$"+(v/1e6).toFixed(1)+" M"; if(a>=1) return "$"+v.toLocaleString("en-US",{maximumFractionDigits:2}); return "$"+v.toFixed(v<0.01?6:4); }
@@ -2119,11 +2118,16 @@ async function viewNetMap(){
   const cv=$("#nmCanvas"); if(cv) netMapCanvas(cv, blocks);
 }
 function renderNmFilters(blocks){
-  const sel=state.cache.nmSel;
+  const sel=getSel();
   $("#nmFilters").innerHTML=`<button class="bf-chip ${!sel?"on":""}" onclick="app.nmSelect(-1)">Todos</button>`+
     blocks.map((b,i)=>`<button class="bf-chip ${sel===b.name?"on":""}" style="--c:${b.color}" onclick="app.nmSelect(${i})"><span class="dot" style="background:${b.color}"></span>${esc(b.name)} <span style="opacity:.6">${b.count}</span></button>`).join("");
 }
-function netMapCanvas(canvas, blocks){
+function netMapCanvas(canvas, blocks, opts){
+  opts=opts||{};
+  const getSel=opts.getSel||(()=>state.cache.nmSel);
+  const tipId=opts.tipId||"nmTip";
+  const onPick=opts.onPick||((it)=>{ if(it.type==="crypto") location.hash="#/cripto/"+(it.id||it.ticker.replace("-USD","").toLowerCase()); else location.hash="#/acciones/"+it.ticker; });
+  const onBlockClick=opts.onBlockClick||((i)=>app.nmSelect(i));
   const ctx=canvas.getContext("2d"); let W=0,H=0,DPR=1,nodes=[],intra=[],inter=[],glows={},t=0,mx=-999,my=-999,hover=null,downX=0,downY=0,moved=false;
   blocks.forEach(b=>{ if(!glows[b.color]) glows[b.color]=makeGlow(b.color); });
   function layout(){
@@ -2147,12 +2151,12 @@ function netMapCanvas(canvas, blocks){
   let ro; try{ ro=new ResizeObserver(()=>layout()); ro.observe(canvas); }catch(e){}
   canvas.addEventListener("pointermove",e=>{ const r=canvas.getBoundingClientRect(); mx=e.clientX-r.left; my=e.clientY-r.top; if(Math.hypot(e.clientX-downX,e.clientY-downY)>5) moved=true; });
   canvas.addEventListener("pointerdown",e=>{ downX=e.clientX; downY=e.clientY; moved=false; });
-  canvas.addEventListener("pointerleave",()=>{ mx=my=-999; const tp=document.getElementById("nmTip"); if(tp) tp.style.display="none"; });
-  canvas.addEventListener("click",()=>{ if(moved) return; if(hover){ const it=hover.it; if(it.type==="crypto") location.hash="#/cripto/"+(it.id||it.ticker.replace("-USD","").toLowerCase()); else location.hash="#/acciones/"+it.ticker; } else { const c=hitBlock(); if(c) app.nmSelect(c.i); else app.nmSelect(-1); } });
+  canvas.addEventListener("pointerleave",()=>{ mx=my=-999; const tp=document.getElementById(tipId); if(tp) tp.style.display="none"; });
+  canvas.addEventListener("click",()=>{ if(moved) return; if(hover){ onPick(hover.it); } else { const c=hitBlock(); onBlockClick(c?c.i:-1); } });
   function hitBlock(){ const cs=canvas.__centers||[]; for(const c of cs){ if(Math.hypot(c.x-mx,c.y-my)<c.r*0.8) return c; } return null; }
   function frame(){
     if(!document.body.contains(canvas)){ if(ro)ro.disconnect(); return; }
-    t+=0.016; const sel=state.cache.nmSel;
+    t+=0.016; const sel=getSel();
     ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,W,H);
     nodes.forEach(n=>{ n.x=n.bx+Math.cos(t*n.sp+n.ph)*n.amp; n.y=n.by+Math.sin(t*n.sp*1.1+n.ph)*n.amp; });
     const dim=n=>sel&&blocks[n.bi].name!==sel?0.10:1;
@@ -2170,7 +2174,7 @@ function netMapCanvas(canvas, blocks){
       ctx.fillStyle=cl.b.color; ctx.globalAlpha=(sel&&sel!==cl.b.name?0.25:0.95); ctx.fillText(cl.b.name, cl.x, cl.y-cl.r-8);
       ctx.globalAlpha=(sel&&sel!==cl.b.name?0.15:0.5); ctx.font="9px 'JetBrains Mono'"; ctx.fillText(cl.b.count+" activos", cl.x, cl.y-cl.r+4); });
     ctx.globalAlpha=1;
-    const tp=document.getElementById("nmTip");
+    const tp=document.getElementById(tipId);
     if(hover&&tp){ tp.style.display="block"; tp.style.left=(mx+14)+"px"; tp.style.top=(my-6)+"px"; tp.style.borderColor=hover.color;
       const t2=hover.it.type==="crypto"?hover.it.ticker.replace("-USD",""):hover.it.ticker;
       tp.innerHTML=`<b>${esc(t2)}</b> <span style="color:${(hover.it.change_1y||0)>=0?'#3DD6A0':'#c96a6a'}">${(hover.it.change_1y||0)>=0?'+':''}${hover.it.change_1y==null?'—':hover.it.change_1y}%</span><br><span class="tp-hint2">clic para analizar →</span>`;
@@ -2180,6 +2184,50 @@ function netMapCanvas(canvas, blocks){
   requestAnimationFrame(frame);
 }
 
+/* ===== Cripto · Ver la red (nodos agrupados en bloques) ===== */
+const CRYPTO_CAT={BTC:"Capa 1",ETH:"Capa 1",SOL:"Capa 1",ADA:"Capa 1",AVAX:"Capa 1",DOT:"Capa 1",ATOM:"Capa 1",NEAR:"Capa 1",APT:"Capa 1",TRX:"Capa 1",TON:"Capa 1",ICP:"Capa 1",ALGO:"Capa 1",XLM:"Capa 1",HBAR:"Capa 1",SUI:"Capa 1",SEI:"Capa 1",XRP:"Capa 1",BCH:"Capa 1",LTC:"Capa 1",ETC:"Capa 1",FIL:"Capa 1",
+  MATIC:"Capa 2",ARB:"Capa 2",OP:"Capa 2",IMX:"Capa 2",STRK:"Capa 2",MNT:"Capa 2",MANTA:"Capa 2",
+  USDT:"Estables",USDC:"Estables",DAI:"Estables",FDUSD:"Estables",TUSD:"Estables",USDE:"Estables",PYUSD:"Estables",
+  UNI:"DeFi",AAVE:"DeFi",MKR:"DeFi",LDO:"DeFi",CRV:"DeFi",SNX:"DeFi",COMP:"DeFi",CAKE:"DeFi",RUNE:"DeFi",INJ:"DeFi",GRT:"DeFi",LINK:"DeFi",PENDLE:"DeFi",JUP:"DeFi",
+  DOGE:"Meme",SHIB:"Meme",PEPE:"Meme",WIF:"Meme",FLOKI:"Meme",BONK:"Meme",BRETT:"Meme",
+  BNB:"Exchange",OKB:"Exchange",CRO:"Exchange",LEO:"Exchange",KCS:"Exchange",GT:"Exchange",BGB:"Exchange"};
+const CNET_COLORS={"Capa 1":"#4FA3FF","Capa 2":"#2DD4BF","DeFi":"#A78BFA","Estables":"#3DD6A0","Meme":"#F5C451","Exchange":"#FB923C","Otros":"#94A8C7",
+  "Grandes (>50 MM)":"#4FA3FF","Medianas (5–50 MM)":"#2DD4BF","Pequeñas (1–5 MM)":"#F5C451","Micro (<1 MM)":"#FB923C",
+  "Fuerte alza":"#3DD6A0","Alza":"#7FB0FF","Estable":"#94A8C7","Baja":"#F5C451","Fuerte baja":"#c96a6a"};
+const CNET_GROUPS=[["categoria","Categoría"],["capitalizacion","Capitalización"],["rendimiento","Rendimiento 7d"]];
+function cnetColor(n){ return CNET_COLORS[n]||"#8BA0BC"; }
+function buildCryptoBlocks(coins, mode){
+  const groups={}; const push=(k,it)=>{(groups[k]=groups[k]||[]).push(it);};
+  coins.forEach(c=>{ const node={ticker:c.sym,name:c.name,change_1y:(c.c7d!=null?c.c7d:c.c24h),mcap:c.mcap,type:"crypto",id:c.id||c.sym.toLowerCase()};
+    if(mode==="capitalizacion"){ const m=c.mcap||0; push(m>=50e9?"Grandes (>50 MM)":m>=5e9?"Medianas (5–50 MM)":m>=1e9?"Pequeñas (1–5 MM)":"Micro (<1 MM)",node); }
+    else if(mode==="rendimiento"){ const v=node.change_1y; push(v==null?"Estable":v>=20?"Fuerte alza":v>=5?"Alza":v>-5?"Estable":v>-20?"Baja":"Fuerte baja",node); }
+    else push(CRYPTO_CAT[c.sym]||"Otros",node); });
+  const order=mode==="capitalizacion"?["Grandes (>50 MM)","Medianas (5–50 MM)","Pequeñas (1–5 MM)","Micro (<1 MM)"]
+    :mode==="rendimiento"?["Fuerte alza","Alza","Estable","Baja","Fuerte baja"]
+    :["Capa 1","Capa 2","DeFi","Estables","Meme","Exchange","Otros"];
+  return order.filter(k=>groups[k]&&groups[k].length).map(name=>({name,color:cnetColor(name),nodes:groups[name].sort((a,b)=>(b.mcap||0)-(a.mcap||0)).slice(0,26),count:groups[name].length}));
+}
+function renderCnetFilters(blocks){
+  const sel=state.cache.cnetSel;
+  $("#cnetFilters").innerHTML=`<button class="bf-chip ${!sel?"on":""}" onclick="app.cnetSelect(-1)">Todos</button>`+
+    blocks.map((b,i)=>`<button class="bf-chip ${sel===b.name?"on":""}" style="--c:${b.color}" onclick="app.cnetSelect(${i})"><span class="dot" style="background:${b.color}"></span>${esc(b.name)} <span style="opacity:.6">${b.count}</span></button>`).join("");
+}
+function renderCryptoNetwork(box){
+  const coins=(state.cache.cryptoMkt||[]).slice(0,90);
+  const mode=state.cache.cnetMode||"categoria";
+  const blocks=buildCryptoBlocks(coins,mode);
+  state.cache.cnetBlocks=blocks; state.cache.cnetSel=null;
+  if(!blocks.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Sin datos de mercado para la red.</p>`; return; }
+  box.innerHTML=`<div class="brain-filters" style="margin-bottom:.5rem"><span class="bl-hint" style="align-self:center;margin-right:.3rem">Agrupar por:</span>${CNET_GROUPS.map(([k,l])=>`<button class="bf-chip ${mode===k?"on":""}" onclick="app.cnetGroup('${k}')">${l}</button>`).join("")}</div>
+    <div class="brain-filters" id="cnetFilters"></div>
+    <div class="brain-stage" id="cnetStage"><canvas id="cnetCanvas"></canvas><div class="brain-tip" id="cnetTip"></div></div>`;
+  renderCnetFilters(blocks);
+  const cv=$("#cnetCanvas"); if(cv) netMapCanvas(cv, blocks, {
+    getSel:()=>state.cache.cnetSel, tipId:"cnetTip",
+    onPick:(it)=>{ location.hash="#/cripto/"+(it.id||it.ticker.toLowerCase()); },
+    onBlockClick:(i)=>app.cnetSelect(i)
+  });
+}
 async function viewDineroReal(){
   const m=$("#main");
   m.innerHTML=head("Inversión","Invertir con dinero real");
@@ -4657,6 +4705,8 @@ const app = {
   stmtTab(t){ state.cache.stmtTab=t; renderStmtBlock(); },
   stmtPer(p){ state.cache.stmtPer=p; renderStmtBlock(); },
   cryptoMode(m){ state.cache.cryptoMode=m; renderCryptoMode(); },
+  cnetGroup(k){ state.cache.cnetMode=k; const b=$("#cryptoShell"); if(b) renderCryptoNetwork(b); },
+  cnetSelect(i){ const b=state.cache.cnetBlocks; if(!b) return; state.cache.cnetSel=(i==null||i<0)?null:b[i].name; renderCnetFilters(b); },
   openCoin(id){ if(id) location.hash="#/cripto/"+id; },
   cvGoTo(sym){ state.cache.cryptoMode="convertir"; state.cache.cvFrom=sym; state.cache.cvTo="USD"; location.hash="#/cripto"; },
   cryptoSearch(q){ state.cache.cryptoQ=q; const b=$("#cryptoShell"); if(b) renderCryptoMarket(b); },

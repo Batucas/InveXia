@@ -1501,3 +1501,7 @@ body.focus-mode .main.wide{padding:.6rem}
 #nmStage{height:70vh;min-height:480px}
 #nmCanvas{width:100%;height:100%;display:block}
 #nmGroupSel{margin-bottom:.5rem}
+
+/* v6.9 · Cripto · red de nodos (bloques) */
+#cnetStage{height:66vh;min-height:460px;margin-top:.3rem}
+#cnetCanvas{width:100%;height:100%;display:block}
