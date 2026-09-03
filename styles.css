@@ -1484,3 +1484,15 @@ body.focus-mode .main.wide{padding:.6rem}
 .stake-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:.7rem}
 .stake-usd{font-size:.72rem;color:var(--faint);margin-top:.1rem}.stake-usd.pos{color:#3DD6A0}
 @media(max-width:560px){ .stake-grid{grid-template-columns:1fr} }
+
+/* v6.7 · Ficha de detalle de cripto */
+.cx-row{cursor:pointer}
+.coin-head{display:grid;grid-template-columns:1fr auto;gap:1.4rem;align-items:start}
+.coin-price{font-family:'Sora';font-weight:700;font-size:1.9rem;color:var(--text)}
+.coin-spark{min-width:220px;text-align:right}
+.coin-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:.6rem;flex-wrap:wrap}
+.coin-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem;margin-top:1rem}
+.coin-stat{background:var(--navy-900);border:1px solid var(--line);border-radius:11px;padding:.8rem}
+.coin-stat b{font-size:1.05rem;display:block;margin-top:.2rem}
+.coin-perf{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:.5rem;margin-top:.6rem}
+@media(max-width:820px){ .coin-head{grid-template-columns:1fr} .coin-spark{text-align:left} .coin-actions{justify-content:flex-start} }

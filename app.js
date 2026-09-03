@@ -434,6 +434,7 @@ async function render(){
       if(state.view==="cartera")    return void await viewPortfolio();
       if(state.view==="acciones"&&state.param) return void await viewStockDetail(state.param);
       if(state.view==="acciones")   return void await viewStocks();
+      if(state.view==="cripto"&&state.param) return void await viewCoinDetail(state.param);
       if(state.view==="cripto")     return void await viewCrypto();
       if(state.view==="resultados") return void await viewEarnings();
       if(state.view==="operar")     return void await viewTrade();
@@ -1892,7 +1893,7 @@ const STAKE_POOLS=[
   {sym:"ATOM",name:"Cosmos",apy:15.0},{sym:"USDC",name:"USD Coin",apy:8.0},{sym:"USDT",name:"Tether",apy:7.5},
 ];
 function cryptoDemo(){
-  const mk=(sym,name,price,c1,c24,c7,mcap,vol,supply)=>({sym,name,price,c1h:c1,c24h:c24,c7d:c7,mcap,vol,supply,rank:0,img:null,spark:sparkGen(price*0.9,price,0.3)});
+  const mk=(sym,name,price,c1,c24,c7,mcap,vol,supply)=>({id:name.toLowerCase().replace(/ /g,"-"),sym,name,price,c1h:c1,c24h:c24,c7d:c7,mcap,vol,supply,rank:0,img:null,spark:sparkGen(price*0.9,price,0.3)});
   const d=[
     mk("BTC","Bitcoin",64200,0.3,1.7,-2.4,1.27e12,28e9,19.7e6),
     mk("ETH","Ethereum",3120,-0.2,2.1,4.1,375e9,14e9,120e6),
@@ -1949,7 +1950,7 @@ function renderCryptoMarket(box){
       <input class="input" placeholder="Buscar cripto…" oninput="app.cryptoSearch(this.value)" value="${esc(state.cache.cryptoQ||"")}"></div>
     <div class="cx-scroll"><table class="cx-table">
       <thead><tr><th>#</th><th class="cx-name">Moneda</th>${hdr("price","Precio")}${hdr("c1h","1h")}${hdr("c24h","24h")}${hdr("c7d","7d")}${hdr("mcap","Cap.")}${hdr("vol","Vol. 24h")}<th class="cx-hide">Suministro</th><th class="cx-hide">7 días</th></tr></thead>
-      <tbody>${list.slice(0,100).map((c,i)=>`<tr>
+      <tbody>${list.slice(0,100).map((c,i)=>`<tr class="cx-row" onclick="app.openCoin('${esc(c.id||c.sym.toLowerCase())}')">
         <td class="cx-rank">${c.rank||i+1}</td>
         <td class="cx-name"><div class="cx-co">${cImg(c)}<div><b>${esc(c.name||c.sym)}</b><span class="cx-sym">${esc(c.sym)}</span></div></div></td>
         <td class="mono">${cnum(c.price)}</td><td>${chg(c.c1h)}</td><td>${chg(c.c24h)}</td><td>${chg(c.c7d)}</td>
@@ -1989,7 +1990,7 @@ async function renderCryptoStaking(box){
     <div id="myStakes">${loading()}</div>`;
   const box2=$("#myStakes"); if(!box2) return;
   const { data:stakes, error }=await sb.from("crypto_stakes").select("*").order("staked_at",{ascending:false});
-  if(error){ box2.innerHTML=`<div class="card"><p class="card-sub" style="margin:0">${/relation|table|does not exist/i.test(error.message)?"Falta ejecutar <b>migration_v24.sql</b> en Supabase.":esc(error.message)}</p></div>`; return; }
+  if(error){ box2.innerHTML=`<div class="card"><p class="card-sub" style="margin:0">${/does not exist|schema cache|could not find/i.test(error.message)?"Falta ejecutar <b>migration_v24.sql</b> en Supabase.":esc(error.message)}</p></div>`; return; }
   if(!stakes||!stakes.length){ box2.innerHTML=`<div class="card empty"><p style="margin:0">Aún no tienes stakes. Elige una piscina arriba.</p></div>`; return; }
   state.cache.stakes=stakes;
   renderStakeList();
@@ -2011,6 +2012,49 @@ function renderStakeList(){
       <div class="flex between" style="margin-top:.6rem"><span class="k-mini">Desde ${new Date(s.staked_at).toLocaleDateString("es-BO")}</span>
         <button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.unstake('${s.id}','${esc(s.symbol)}')">Retirar</button></div>
     </div>`; }).join("");
+}
+
+async function viewCoinDetail(id){
+  const m=$("#main"); m.classList.add("wide");
+  m.innerHTML=`<button class="btn btn-ghost btn-sm" style="width:auto" onclick="location.hash='#/cripto'">← Volver al mercado</button><div id="coinShell" style="margin-top:.8rem">${loading()}</div>`;
+  let c=null, demo=false;
+  try{ const r=await fetch("/api/crypto-coin?id="+encodeURIComponent(id),{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.ok&&j.coin) c=j.coin; } }catch(e){}
+  if(!c){ const src=state.cache.cryptoMkt||cryptoDemo(); const d=src.find(x=>(x.id||x.sym.toLowerCase())===id||x.sym.toLowerCase()===id); if(d){ c={...d}; demo=true; } }
+  const box=$("#coinShell"); if(!box) return;
+  if(!c){ box.innerHTML=`<div class="card empty"><p>No encontramos esa moneda.</p></div>`; return; }
+  const pool=STAKE_POOLS.find(p=>p.sym===c.sym);
+  const st=(lbl,val)=>`<div class="coin-stat"><div class="k-mini">${lbl}</div><b class="mono">${val}</b></div>`;
+  const supStr=x=>x==null?"—":(x>=1e9?(x/1e9).toFixed(2)+" MM":x>=1e6?(x/1e6).toFixed(2)+" M":Math.round(x).toLocaleString("en-US"));
+  box.innerHTML=`
+    ${demo?`<div class="radar-demo-note" style="margin-bottom:1rem">Detalle de <b>demostración</b>. En producción se carga en vivo desde CoinGecko.</div>`:""}
+    <div class="card coin-head">
+      <div class="coin-head-main">
+        <div class="cx-co">${cImg(c)}<div><div class="flex" style="gap:.5rem;align-items:center;flex-wrap:wrap"><h2 style="margin:0">${esc(c.name)}</h2><span class="cx-sym" style="font-size:.85rem">${esc(c.sym)}</span>${c.rank?`<span class="stk-badge">#${c.rank}</span>`:""}</div></div></div>
+        <div class="flex" style="gap:1rem;align-items:flex-end;flex-wrap:wrap;margin-top:.7rem">
+          <div class="coin-price">${cnum(c.price)}</div>
+          ${c.c24h!=null?`<div class="chg-pill ${c.c24h>=0?"pos":"neg"}"><span class="cl">24h</span> ${c.c24h>=0?"+":""}${c.c24h.toFixed(1)}%</div>`:""}
+          ${c.c7d!=null?`<div class="chg-pill ${c.c7d>=0?"pos":"neg"}"><span class="cl">7D</span> ${c.c7d>=0?"+":""}${c.c7d.toFixed(1)}%</div>`:""}
+        </div>
+      </div>
+      <div class="coin-spark">${sparkSVG(c.spark||[],(c.c7d||0)>=0)}<div class="coin-actions">
+        ${pool?`<button class="btn btn-primary btn-sm" style="width:auto" onclick="app.openStake('${c.sym}',${pool.apy})">🔒 Stakear (${pool.apy}%)</button>`:""}
+        <button class="btn btn-ghost btn-sm" style="width:auto" onclick="app.cvGoTo('${c.sym}')">🔄 Convertir</button></div></div>
+    </div>
+    <div class="coin-stats-grid">
+      ${st("Cap. de mercado",cnum(c.mcap))}
+      ${st("Volumen 24h",cnum(c.vol))}
+      ${st("Suministro circulante",supStr(c.supply)+" "+esc(c.sym))}
+      ${c.max_supply!=null?st("Suministro máximo",supStr(c.max_supply)+" "+esc(c.sym)):st("Suministro total",supStr(c.total_supply)+" "+esc(c.sym))}
+      ${c.high24!=null?st("Máx. 24h",cnum(c.high24)):""}
+      ${c.low24!=null?st("Mín. 24h",cnum(c.low24)):""}
+      ${c.ath!=null?`<div class="coin-stat"><div class="k-mini">Máximo histórico (ATH)</div><b class="mono">${cnum(c.ath)}</b>${c.ath_chg!=null?`<span class="mono neg" style="font-size:.72rem">${c.ath_chg.toFixed(1)}%</span>`:""}</div>`:""}
+      ${c.atl!=null?`<div class="coin-stat"><div class="k-mini">Mínimo histórico (ATL)</div><b class="mono">${cnum(c.atl)}</b>${c.atl_chg!=null?`<span class="mono pos" style="font-size:.72rem">+${c.atl_chg.toFixed(0)}%</span>`:""}</div>`:""}
+    </div>
+    ${(c.c1h!=null||c.c30d!=null||c.c1y!=null)?`<div class="card"><h3>Rendimiento</h3><div class="coin-perf">
+      ${[["1h",c.c1h],["24h",c.c24h],["7d",c.c7d],["30d",c.c30d],["1 año",c.c1y]].filter(([,v])=>v!=null).map(([l,v])=>`<div class="perf-cell"><span class="pl">${l}</span><b class="mono ${v>=0?"pos":"neg"}">${v>=0?"+":""}${v.toFixed(1)}%</b></div>`).join("")}
+    </div></div>`:""}
+    ${c.desc?`<div class="card"><h3>Sobre ${esc(c.name)}</h3><p class="card-sub" style="line-height:1.6">${esc(c.desc)}${c.desc.length>=890?"…":""}</p>
+      <div class="flex" style="gap:.6rem;margin-top:.7rem;flex-wrap:wrap">${c.homepage?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.homepage)}" target="_blank" rel="noopener">Sitio oficial ↗</a>`:""}${c.twitter?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.twitter)}" target="_blank" rel="noopener">X / Twitter ↗</a>`:""}</div></div>`:""}`;
 }
 
 async function viewDineroReal(){
@@ -4490,6 +4534,8 @@ const app = {
   stmtTab(t){ state.cache.stmtTab=t; renderStmtBlock(); },
   stmtPer(p){ state.cache.stmtPer=p; renderStmtBlock(); },
   cryptoMode(m){ state.cache.cryptoMode=m; renderCryptoMode(); },
+  openCoin(id){ if(id) location.hash="#/cripto/"+id; },
+  cvGoTo(sym){ state.cache.cryptoMode="convertir"; state.cache.cvFrom=sym; state.cache.cvTo="USD"; location.hash="#/cripto"; },
   cryptoSearch(q){ state.cache.cryptoQ=q; const b=$("#cryptoShell"); if(b) renderCryptoMarket(b); },
   cryptoSort(k){ const s=state.cache.cryptoSort||{k:"mcap",dir:-1}; state.cache.cryptoSort=s.k===k?{k,dir:-s.dir}:{k,dir:-1}; const b=$("#cryptoShell"); if(b) renderCryptoMarket(b); },
   cvSet(f,v){ if(f==="amt") state.cache.cvAmt=parseFloat(v)||0; else if(f==="from") state.cache.cvFrom=v; else state.cache.cvTo=v; const b=$("#cryptoShell"); if(b) renderCryptoConvert(b); },
@@ -4498,8 +4544,8 @@ const app = {
     const amt=parseFloat(prompt(`¿Cuánto ${sym} quieres stakear? (simulado, ${apy}% APY)`,"1"));
     if(!amt||amt<=0) return;
     const name=(STAKE_POOLS.find(p=>p.sym===sym)||{}).name||sym;
-    const { error }=await sb.from("crypto_stakes").insert({symbol:sym,coin:name,amount:amt,apy});
-    if(error){ ui.toast(/relation|table|does not exist/i.test(error.message)?"Falta migration_v24.sql":error.message,"err"); return; }
+    const { error }=await sb.from("crypto_stakes").insert({user_id:state.profile.id,symbol:sym,coin:name,amount:amt,apy});
+    if(error){ ui.toast(/does not exist|schema cache|could not find/i.test(error.message)?"Falta ejecutar migration_v24.sql":error.message,"err"); return; }
     ui.toast(`Stakeaste ${amt} ${sym} ✓`,"ok"); renderCryptoMode();
   },
   async unstake(id,sym){
