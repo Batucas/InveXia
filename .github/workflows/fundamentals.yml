@@ -22,6 +22,11 @@ on:
         description: "Procesar solo los primeros N (0 = todos)"
         required: false
         default: "0"
+      fast:
+        description: "Modo rápido: llena el universo sin estados financieros (menos bloqueos)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   run-fundamentals:
@@ -43,4 +48,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python fundamentals_pipeline.py --limit ${{ github.event.inputs.limit || 0 }}
+        run: python fundamentals_pipeline.py --limit ${{ github.event.inputs.limit || 0 }} ${{ (github.event.inputs.fast == 'true') && '--fast' || '' }}

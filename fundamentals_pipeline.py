@@ -23,6 +23,7 @@ import os, sys, json, argparse, math, datetime as dt
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 BUCKET = "media"
+FAST = False   # modo rápido: omite estados financieros pesados (menos peticiones a Yahoo)
 
 _GICS = {
     "Information Technology": "Tecnología", "Health Care": "Salud",
@@ -451,15 +452,26 @@ def quarterly_financials(yft):
 
 def build_report(ticker, sector_es, kind):
     import yfinance as yf
+    import time
     yft = yf.Ticker(ticker)
-    try:
-        info = yft.info or {}
-    except Exception:
-        info = {}
-    try:
-        hist = yft.history(period="1y", interval="1d")
-    except Exception:
-        hist = None
+    info = {}
+    for attempt in range(3):
+        try:
+            info = yft.info or {}
+            if info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose"):
+                break
+        except Exception:
+            pass
+        time.sleep(1.0 + attempt * 1.5)
+    hist = None
+    for attempt in range(3):
+        try:
+            hist = yft.history(period="1y", interval="1d")
+            if hist is not None and len(hist):
+                break
+        except Exception:
+            pass
+        time.sleep(1.0 + attempt * 1.5)
 
     price = _n(info.get("currentPrice")) or _n(info.get("regularMarketPrice"))
     if price is None and hist is not None and len(hist):
@@ -612,9 +624,9 @@ def build_report(ticker, sector_es, kind):
         "domain": domain or None, "profile": profile, "stats": stats,
         "capital": capital, "ownership": ownership,
         "financials": (annual_financials(yft) if kind == "stock" else None),
-        "financials_q": (quarterly_financials(yft) if kind == "stock" else None),
-        "statements": (build_statements(yft) if kind == "stock" else None),
-        "earnings": (earnings_info(yft) if kind == "stock" else None),
+        "financials_q": (quarterly_financials(yft) if (kind == "stock" and not FAST) else None),
+        "statements": (build_statements(yft) if (kind == "stock" and not FAST) else None),
+        "earnings": (earnings_info(yft) if (kind == "stock" and not FAST) else None),
     }
 
     if kind == "stock":
@@ -673,12 +685,18 @@ def selftest():
 
 # ------------------------------------------------------------------ main
 def main():
+    import time
+    global FAST
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="procesar solo los primeros N")
+    ap.add_argument("--fast", action="store_true", help="omite estados financieros (llena el universo rápido)")
+    ap.add_argument("--pace", type=float, default=0.5, help="segundos de pausa entre activos (anti-bloqueo)")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
     if a.self_test:
         return selftest()
+    FAST = a.fast
+    print(f"Modo: {'RÁPIDO (sin estados financieros)' if FAST else 'COMPLETO'} · pausa {a.pace}s")
 
     uni = build_universe()
     items = [(t, s, "stock") for t, s in uni.items()]
@@ -720,6 +738,8 @@ def main():
             print(f"  [{i+1}/{len(items)}] {t} ✓")
         except Exception as ex:
             print(f"  [{i+1}/{len(items)}] {t}: error {ex}")
+        if a.pace:
+            time.sleep(a.pace)
 
     upload("fundamentals/index.json",
            {"generated_at": dt.datetime.utcnow().isoformat() + "Z", "stocks": index})
