@@ -1452,3 +1452,35 @@ body.focus-mode .main.wide{padding:.6rem}
 .stmt-table tr:hover td{background:rgba(46,125,246,.05)}
 
 .brain-tip .tp-hint2{color:var(--blue-400);font-size:.64rem}
+
+/* v6.6 · Cripto (mercado + convertidor + staking) */
+.cx-scroll{overflow-x:auto;margin-top:1rem}
+.cx-table{width:100%;border-collapse:collapse;font-size:.84rem;min-width:640px}
+.cx-table th{text-align:right;color:var(--faint);font-size:.72rem;font-weight:600;padding:.6rem .7rem;border-bottom:1px solid var(--line);white-space:nowrap}
+.cx-table th.cx-name,.cx-table td.cx-name{text-align:left}
+.cx-sortable{cursor:pointer;user-select:none}.cx-sortable:hover{color:var(--text)}.cx-sortable.on{color:var(--blue-400)}
+.cx-table td{text-align:right;padding:.55rem .7rem;border-bottom:1px solid var(--line);color:var(--text);white-space:nowrap}
+.cx-table tr:hover td{background:rgba(46,125,246,.05)}
+.cx-rank{color:var(--faint);font-size:.78rem}
+.cx-co{display:flex;align-items:center;gap:.6rem}
+.cx-logo{width:28px;height:28px;border-radius:50%;flex:none}
+.cx-co b{display:block;font-size:.85rem}.cx-sym{color:var(--faint);font-size:.72rem}
+@media(max-width:720px){ .cx-hide{display:none} }
+/* convertidor */
+.cv-card{max-width:640px}
+.cv-row{display:flex;align-items:flex-end;gap:.7rem;flex-wrap:wrap;margin-top:.8rem}
+.cv-field{flex:1;min-width:110px}.cv-field label{display:block;font-size:.72rem;color:var(--muted);margin-bottom:.3rem}.cv-field .input{width:100%}
+.cv-swap{background:var(--navy-850);border:1px solid var(--line);border-radius:8px;color:var(--blue-400);width:38px;height:38px;cursor:pointer;font-size:1rem;flex:none}
+.cv-result{margin-top:1.1rem;padding:1rem;background:var(--navy-950);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;gap:.2rem}
+.cv-result span{color:var(--muted);font-size:.85rem}.cv-result b{font-family:'Sora';font-size:1.5rem;color:var(--text)}
+.cv-rate{font-size:.74rem;color:var(--faint);margin-top:.6rem}
+/* staking */
+.stk-note-box{background:rgba(245,196,81,.08);border:1px solid rgba(245,196,81,.25);border-radius:10px;padding:.8rem 1rem;font-size:.86rem;color:var(--text);line-height:1.5}
+.pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.9rem}
+.pool-card{padding:1rem}
+.pool-apy{background:rgba(61,214,160,.14);color:#3DD6A0;border:1px solid rgba(61,214,160,.3);border-radius:20px;padding:.15rem .55rem;font-size:.74rem;font-weight:700;font-family:'JetBrains Mono';height:fit-content}
+.pool-price{color:var(--muted);font-size:.85rem;margin-top:.6rem}
+.stake-card{margin-bottom:.8rem}
+.stake-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:.7rem}
+.stake-usd{font-size:.72rem;color:var(--faint);margin-top:.1rem}.stake-usd.pos{color:#3DD6A0}
+@media(max-width:560px){ .stake-grid{grid-template-columns:1fr} }
