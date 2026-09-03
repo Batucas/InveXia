@@ -1979,6 +1979,14 @@ function renderCryptoConvert(box){
     ${pf!=null&&pt!=null?`<div class="cv-rate mono">1 ${esc(from)} = ${(pf/pt).toLocaleString("en-US",{maximumFractionDigits:8})} ${esc(to)} · 1 ${esc(from)} = ${cnum(pf)}</div>`:`<div class="cv-rate">Sin precio para una de las monedas.</div>`}
   </div>`;
 }
+function stakeErrMsg(msg){
+  msg=msg||"";
+  if(/schema cache|could not find/i.test(msg)) return "La tabla existe pero la API de Supabase aún no la reconoce. En Supabase → SQL Editor ejecuta: NOTIFY pgrst, 'reload schema'; (o espera 1–2 min y recarga).";
+  if(/does not exist/i.test(msg)) return "Falta ejecutar migration_v24.sql en Supabase.";
+  if(/row-level security|policy/i.test(msg)) return "Permiso denegado (RLS). Revisa las políticas de migration_v24.sql.";
+  if(/null value/i.test(msg)) return "No se detectó tu usuario. Cierra sesión y vuelve a entrar.";
+  return "Error: "+msg;
+}
 async function renderCryptoStaking(box){
   box.innerHTML=`<div class="stk-note-box">🔒 <b>Staking simulado</b> · educativo: bloqueas un monto y ganas un rendimiento anual (APY) simulado que se acumula con el tiempo. No implica cripto real.</div>
     <div class="nav-label" style="padding:0;margin:1rem 0 .6rem">Piscinas disponibles</div>
@@ -1990,7 +1998,7 @@ async function renderCryptoStaking(box){
     <div id="myStakes">${loading()}</div>`;
   const box2=$("#myStakes"); if(!box2) return;
   const { data:stakes, error }=await sb.from("crypto_stakes").select("*").order("staked_at",{ascending:false});
-  if(error){ box2.innerHTML=`<div class="card"><p class="card-sub" style="margin:0">${/does not exist|schema cache|could not find/i.test(error.message)?"Falta ejecutar <b>migration_v24.sql</b> en Supabase.":esc(error.message)}</p></div>`; return; }
+  if(error){ console.error("crypto_stakes select error:",error); box2.innerHTML=`<div class="card"><p class="card-sub" style="margin:0">${esc(stakeErrMsg(error.message))}</p></div>`; return; }
   if(!stakes||!stakes.length){ box2.innerHTML=`<div class="card empty"><p style="margin:0">Aún no tienes stakes. Elige una piscina arriba.</p></div>`; return; }
   state.cache.stakes=stakes;
   renderStakeList();
@@ -4544,8 +4552,10 @@ const app = {
     const amt=parseFloat(prompt(`¿Cuánto ${sym} quieres stakear? (simulado, ${apy}% APY)`,"1"));
     if(!amt||amt<=0) return;
     const name=(STAKE_POOLS.find(p=>p.sym===sym)||{}).name||sym;
-    const { error }=await sb.from("crypto_stakes").insert({user_id:state.profile.id,symbol:sym,coin:name,amount:amt,apy});
-    if(error){ ui.toast(/does not exist|schema cache|could not find/i.test(error.message)?"Falta ejecutar migration_v24.sql":error.message,"err"); return; }
+    let uid=state.profile&&state.profile.id;
+    if(!uid){ try{ uid=(await sb.auth.getUser()).data.user.id; }catch(e){} }
+    const { error }=await sb.from("crypto_stakes").insert({user_id:uid,symbol:sym,coin:name,amount:amt,apy});
+    if(error){ console.error("stake insert error:",error); ui.toast(stakeErrMsg(error.message),"err"); return; }
     ui.toast(`Stakeaste ${amt} ${sym} ✓`,"ok"); renderCryptoMode();
   },
   async unstake(id,sym){
@@ -5188,3 +5198,5 @@ function icon(n){
   if(session){ state.session=session; await loadProfile(); enterApp(); }
   else showAuth();
 })();
+
+try{console.log("%cInveXia · build cripto v6.7 (ficha detalle + fix staking)","color:#4FA3FF;font-weight:bold");}catch(e){}
