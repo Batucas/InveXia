@@ -318,6 +318,7 @@ const NAV_CLIENT=[
   ["ajuste","Ajuste de portafolio",icon("tune"),"premium"],
   ["quantnet","Red de mercado",icon("net"),"premium"],
   ["cerebro","Cerebro del mercado",icon("brain")],
+  ["nodos","Mapa de nodos",icon("nodes")],
   ["radar","Radar",icon("radar")],
   ["terminal","Terminal de opciones",icon("term")],
   ["brief","Brief macro",icon("brief")],
@@ -425,6 +426,7 @@ async function render(){
       if(state.view==="mensajes")      return void await viewAdminInbox();
       if(state.view==="quantnet")      return void await viewQuantNet();
       if(state.view==="cerebro")        return void await viewBrain();
+      if(state.view==="nodos")          return void await viewNetMap();
     } else {
       if(state.view==="inicio")     return void await viewClientHome();
       if(state.view==="notificaciones") return void await viewNotifications();
@@ -442,6 +444,7 @@ async function render(){
       if(state.view==="ajuste")     return void await viewPortfolioAdjust();
       if(state.view==="quantnet")   return void await viewQuantNet();
       if(state.view==="cerebro")    return void await viewBrain();
+      if(state.view==="nodos")      return void await viewNetMap();
       if(state.view==="radar")      return void await viewRadar();
       if(state.view==="terminal")   return void await viewTerminal();
       if(state.view==="brief")      return void await viewBrief();
@@ -2063,6 +2066,118 @@ async function viewCoinDetail(id){
     </div></div>`:""}
     ${c.desc?`<div class="card"><h3>Sobre ${esc(c.name)}</h3><p class="card-sub" style="line-height:1.6">${esc(c.desc)}${c.desc.length>=890?"…":""}</p>
       <div class="flex" style="gap:.6rem;margin-top:.7rem;flex-wrap:wrap">${c.homepage?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.homepage)}" target="_blank" rel="noopener">Sitio oficial ↗</a>`:""}${c.twitter?`<a class="btn btn-ghost btn-sm" style="width:auto" href="${esc(c.twitter)}" target="_blank" rel="noopener">X / Twitter ↗</a>`:""}</div></div>`:""}`;
+}
+
+/* ===================== Mapa de nodos (bloques) ===================== */
+const NM_FAMILY={"Tecnología":"Tecnología","Software":"Tecnología","Semiconductores":"Tecnología","Salud":"Salud","Financiero":"Financiero","Inmobiliario":"Financiero","Consumo discrecional":"Consumo","Consumo básico":"Consumo","Comunicación":"Consumo","Industrial":"Industria y energía","Energía":"Industria y energía","Materiales":"Industria y energía","Servicios públicos":"Industria y energía"};
+const NM_COLORS={"Tecnología":"#4FA3FF","Salud":"#F472B6","Financiero":"#F5C451","Consumo":"#A78BFA","Industria y energía":"#FB923C","Cripto":"#2DD4BF",
+  "Mega (>200 MM)":"#4FA3FF","Grande (10–200 MM)":"#2DD4BF","Mediana (2–10 MM)":"#F5C451","Pequeña (<2 MM)":"#FB923C","Cap. mixta":"#A78BFA",
+  "Fuerte alza":"#3DD6A0","Alza":"#7FB0FF","Estable":"#94A8C7","Baja":"#F5C451","Fuerte baja":"#c96a6a"};
+const NM_GROUPS=[["familia","Familias de mercado"],["capitalizacion","Capitalización"],["rendimiento","Rendimiento 1A"]];
+function nmColor(n){ return NM_COLORS[n]||"#8BA0BC"; }
+function nmDemo(){
+  const secs=["Tecnología","Software","Semiconductores","Salud","Financiero","Inmobiliario","Consumo discrecional","Consumo básico","Comunicación","Industrial","Energía","Materiales","Servicios públicos"];
+  const out=[]; secs.forEach(sec=>{ const n=6+Math.floor(Math.random()*8); for(let i=0;i<n;i++) out.push({ticker:sec.slice(0,2).toUpperCase()+i,sector:sec,type:"stock",change_1y:+(Math.random()*70-30).toFixed(1),mcap:Math.pow(10,9+Math.random()*3.4)}); });
+  ["BTC-USD","ETH-USD","SOL-USD","ADA-USD","DOT-USD","AVAX-USD","LINK-USD","MATIC-USD","XRP-USD"].forEach((t)=>out.push({ticker:t,id:t.replace("-USD","").toLowerCase(),sector:"Cripto",type:"crypto",change_1y:+(Math.random()*120-40).toFixed(1),mcap:Math.pow(10,9+Math.random()*2.5)}));
+  return out;
+}
+function buildNetBlocks(items, mode){
+  const groups={};
+  const push=(k,it)=>{ (groups[k]=groups[k]||[]).push(it); };
+  items.forEach(it=>{
+    if(mode==="capitalizacion"){ const m=it.mcap||0; const k=it.type==="crypto"?"Cap. mixta":m>=200e9?"Mega (>200 MM)":m>=10e9?"Grande (10–200 MM)":m>=2e9?"Mediana (2–10 MM)":"Pequeña (<2 MM)"; push(k,it); }
+    else if(mode==="rendimiento"){ const c=it.change_1y; const k=c==null?"Estable":c>=25?"Fuerte alza":c>=5?"Alza":c>-5?"Estable":c>-25?"Baja":"Fuerte baja"; push(k,it); }
+    else { const k=it.type==="crypto"?"Cripto":(NM_FAMILY[it.sector]||"Consumo"); push(k,it); }
+  });
+  const order=mode==="capitalizacion"?["Mega (>200 MM)","Grande (10–200 MM)","Mediana (2–10 MM)","Pequeña (<2 MM)","Cap. mixta"]
+    :mode==="rendimiento"?["Fuerte alza","Alza","Estable","Baja","Fuerte baja"]
+    :["Tecnología","Salud","Financiero","Consumo","Industria y energía","Cripto"];
+  return order.filter(k=>groups[k]&&groups[k].length).map(name=>{
+    const arr=groups[name].sort((a,b)=>(b.mcap||0)-(a.mcap||0)).slice(0,26);
+    return {name,color:nmColor(name),nodes:arr,count:groups[name].length};
+  });
+}
+async function viewNetMap(){
+  const m=$("#main"); m.classList.add("wide");
+  const mode=state.cache.nmMode||"familia";
+  m.innerHTML=`<div class="brain-head"><div><div class="eyebrow-b">RED · BLOQUES</div><h1 class="brain-title" style="background:linear-gradient(100deg,#4FA3FF,#A78BFA 50%,#2DD4BF);-webkit-background-clip:text;background-clip:text;color:transparent">Mapa de nodos</h1>
+      <p class="brain-sub">Cada bloque agrupa activos por una característica. Pasa el cursor para ver un activo, toca un bloque para aislarlo, o un nodo para analizarlo.</p></div>
+      <div id="nmStats" class="brain-stats"></div></div>
+    <div class="brain-filters" id="nmGroupSel"></div>
+    <div class="brain-filters" id="nmFilters"></div>
+    <div class="brain-stage" id="nmStage"><canvas id="nmCanvas"></canvas><div class="brain-tip" id="nmTip"></div></div>`;
+  let items=null;
+  try{ const u=sb.storage.from("media").getPublicUrl("fundamentals/index.json").data.publicUrl;
+    const r=await fetch(u,{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.stocks&&j.stocks.length) items=j.stocks; } }catch(e){}
+  const demo=!items||items.length<20; if(demo) items=nmDemo();
+  state.cache.nmItems=items;
+  const blocks=buildNetBlocks(items,mode);
+  state.cache.nmBlocks=blocks; state.cache.nmSel=null;
+  $("#nmStats").innerHTML=`<div class="bstat"><span class="bk">Nodos</span><b>${blocks.reduce((a,b)=>a+b.nodes.length,0)}</b></div><div class="bstat"><span class="bk">Bloques</span><b>${blocks.length}</b></div>${demo?`<span class="pill-soon" style="align-self:center">DEMO</span>`:""}`;
+  $("#nmGroupSel").innerHTML=`<span class="bl-hint" style="align-self:center;margin-right:.3rem">Agrupar por:</span>`+NM_GROUPS.map(([k,l])=>`<button class="bf-chip ${mode===k?"on":""}" onclick="app.nmGroup('${k}')">${l}</button>`).join("");
+  renderNmFilters(blocks);
+  const cv=$("#nmCanvas"); if(cv) netMapCanvas(cv, blocks);
+}
+function renderNmFilters(blocks){
+  const sel=state.cache.nmSel;
+  $("#nmFilters").innerHTML=`<button class="bf-chip ${!sel?"on":""}" onclick="app.nmSelect(-1)">Todos</button>`+
+    blocks.map((b,i)=>`<button class="bf-chip ${sel===b.name?"on":""}" style="--c:${b.color}" onclick="app.nmSelect(${i})"><span class="dot" style="background:${b.color}"></span>${esc(b.name)} <span style="opacity:.6">${b.count}</span></button>`).join("");
+}
+function netMapCanvas(canvas, blocks){
+  const ctx=canvas.getContext("2d"); let W=0,H=0,DPR=1,nodes=[],intra=[],inter=[],glows={},t=0,mx=-999,my=-999,hover=null,downX=0,downY=0,moved=false;
+  blocks.forEach(b=>{ if(!glows[b.color]) glows[b.color]=makeGlow(b.color); });
+  function layout(){
+    W=canvas.clientWidth||700; H=canvas.clientHeight||520; DPR=Math.min(2,window.devicePixelRatio||1);
+    canvas.width=W*DPR; canvas.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+    nodes=[]; intra=[]; inter=[]; const N=blocks.length; const cx=W/2, cy=H/2;
+    const R=Math.min(W,H)*0.34*(W>H?1.25:1);
+    const centers=blocks.map((b,i)=>{ const a=i/N*Math.PI*2-Math.PI/2; return {b,i,x:cx+Math.cos(a)*R*(W>H?1.05:0.9),y:cy+Math.sin(a)*R*0.92, r:26+Math.sqrt(b.nodes.length)*11}; });
+    const maxCh=Math.max(...blocks.flatMap(b=>b.nodes.map(x=>Math.abs(x.change_1y||0))),1);
+    centers.forEach(cl=>{ cl.b.nodes.forEach(it=>{ const ang=Math.random()*6.28, rr=Math.pow(Math.random(),.7)*cl.r;
+      const act=Math.min(1,Math.abs(it.change_1y||0)/maxCh);
+      nodes.push({bx:cl.x+Math.cos(ang)*rr, by:cl.y+Math.sin(ang)*rr, x:0,y:0, ph:Math.random()*6.28, sp:0.5+Math.random()*0.7, amp:1.6+Math.random()*2.6,
+        size:1.8+Math.min(4,(Math.log10((it.mcap||1e9))-8))*0.7, color:cl.b.color, bi:cl.i, act, it, cl}); }); });
+    // intra: cada nodo con 2 vecinos de su bloque
+    centers.forEach(cl=>{ const ns=nodes.filter(n=>n.cl===cl); for(let i=0;i<ns.length;i++){ for(let k=1;k<=2;k++){ const b=ns[(i+k)%ns.length]; if(b!==ns[i]) intra.push([ns[i],b]); } } });
+    // inter: anillo + un par de cruces (con "espacio identificado")
+    for(let i=0;i<centers.length;i++){ [ (i+1)%centers.length, (i+2)%centers.length ].forEach(j=>{ const A=nodes.filter(n=>n.cl===centers[i]), B=nodes.filter(n=>n.cl===centers[j]); if(A.length&&B.length){ for(let k=0;k<2;k++){ inter.push([A[Math.random()*A.length|0],B[Math.random()*B.length|0],centers[i].b.color]); } } }); }
+    canvas.__centers=centers;
+  }
+  layout();
+  let ro; try{ ro=new ResizeObserver(()=>layout()); ro.observe(canvas); }catch(e){}
+  canvas.addEventListener("pointermove",e=>{ const r=canvas.getBoundingClientRect(); mx=e.clientX-r.left; my=e.clientY-r.top; if(Math.hypot(e.clientX-downX,e.clientY-downY)>5) moved=true; });
+  canvas.addEventListener("pointerdown",e=>{ downX=e.clientX; downY=e.clientY; moved=false; });
+  canvas.addEventListener("pointerleave",()=>{ mx=my=-999; const tp=document.getElementById("nmTip"); if(tp) tp.style.display="none"; });
+  canvas.addEventListener("click",()=>{ if(moved) return; if(hover){ const it=hover.it; if(it.type==="crypto") location.hash="#/cripto/"+(it.id||it.ticker.replace("-USD","").toLowerCase()); else location.hash="#/acciones/"+it.ticker; } else { const c=hitBlock(); if(c) app.nmSelect(c.i); else app.nmSelect(-1); } });
+  function hitBlock(){ const cs=canvas.__centers||[]; for(const c of cs){ if(Math.hypot(c.x-mx,c.y-my)<c.r*0.8) return c; } return null; }
+  function frame(){
+    if(!document.body.contains(canvas)){ if(ro)ro.disconnect(); return; }
+    t+=0.016; const sel=state.cache.nmSel;
+    ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,W,H);
+    nodes.forEach(n=>{ n.x=n.bx+Math.cos(t*n.sp+n.ph)*n.amp; n.y=n.by+Math.sin(t*n.sp*1.1+n.ph)*n.amp; });
+    const dim=n=>sel&&blocks[n.bi].name!==sel?0.10:1;
+    hover=null; if(mx>-900){ let best=13; nodes.forEach(n=>{ const d=Math.hypot(n.x-mx,n.y-my); if(d<best){ best=d; hover=n; } }); }
+    canvas.style.cursor=hover?"pointer":"default";
+    ctx.globalCompositeOperation="lighter";
+    intra.forEach(([a,b])=>{ const f=Math.min(dim(a),dim(b)); ctx.strokeStyle=a.color; ctx.globalAlpha=0.09*f; ctx.lineWidth=0.6; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); });
+    inter.forEach(([a,b,col])=>{ const f=Math.min(dim(a),dim(b)); ctx.strokeStyle=col; ctx.globalAlpha=0.18*f; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); });
+    ctx.globalAlpha=1;
+    nodes.forEach(n=>{ const f=dim(n); const pulse=0.6+0.4*Math.sin(t*2+n.ph); const gl=glows[n.color]; const gr=(5+n.size*2.6)*(0.5+n.act*0.7)*pulse*(n===hover?1.6:1);
+      if(gl){ ctx.globalAlpha=(0.45+n.act*0.5)*f; ctx.drawImage(gl,n.x-gr,n.y-gr,gr*2,gr*2); }
+      ctx.globalAlpha=f; ctx.fillStyle=n.color; ctx.beginPath(); ctx.arc(n.x,n.y,n.size*(n===hover?1.6:1),0,6.28); ctx.fill(); });
+    ctx.globalCompositeOperation="source-over"; ctx.globalAlpha=1;
+    (canvas.__centers||[]).forEach(cl=>{ ctx.font="600 12px 'JetBrains Mono', monospace"; ctx.textAlign="center";
+      ctx.fillStyle=cl.b.color; ctx.globalAlpha=(sel&&sel!==cl.b.name?0.25:0.95); ctx.fillText(cl.b.name, cl.x, cl.y-cl.r-8);
+      ctx.globalAlpha=(sel&&sel!==cl.b.name?0.15:0.5); ctx.font="9px 'JetBrains Mono'"; ctx.fillText(cl.b.count+" activos", cl.x, cl.y-cl.r+4); });
+    ctx.globalAlpha=1;
+    const tp=document.getElementById("nmTip");
+    if(hover&&tp){ tp.style.display="block"; tp.style.left=(mx+14)+"px"; tp.style.top=(my-6)+"px"; tp.style.borderColor=hover.color;
+      const t2=hover.it.type==="crypto"?hover.it.ticker.replace("-USD",""):hover.it.ticker;
+      tp.innerHTML=`<b>${esc(t2)}</b> <span style="color:${(hover.it.change_1y||0)>=0?'#3DD6A0':'#c96a6a'}">${(hover.it.change_1y||0)>=0?'+':''}${hover.it.change_1y==null?'—':hover.it.change_1y}%</span><br><span class="tp-hint2">clic para analizar →</span>`;
+    } else if(tp&&!hover) tp.style.display="none";
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 
 async function viewDineroReal(){
@@ -4568,6 +4683,8 @@ const app = {
   brainRotate(btn){ const nv=!(state.cache.brainAuto!==false); state.cache.brainAuto=nv; if(state.cache.brain3dAPI) state.cache.brain3dAPI.setAutoRotate(nv); if(btn) btn.classList.toggle("off",!nv); },
   brainReset(){ if(state.cache.brain3dAPI&&state.cache.brain3dAPI.reset) state.cache.brain3dAPI.reset(); },
   brainMin(btn){ const w=$("#brainWrap"); if(!w) return; const on=w.classList.toggle("panels-min"); if(btn) btn.textContent=on?"▴ Mostrar panel":"▾ Minimizar panel"; },
+  nmGroup(k){ state.cache.nmMode=k; viewNetMap(); },
+  nmSelect(i){ const b=state.cache.nmBlocks; if(!b) return; state.cache.nmSel=(i==null||i<0)?null:b[i].name; renderNmFilters(b); },
   resetScreen(){ state.cache.screen={value:0,future:0,past:0,health:0,dividend:0}; drawScreenSnow(); applyScreen(); },
   setFilter(i,j){ state.cache.scrSel=state.cache.scrSel||{}; state.cache.scrSel[i]=j; applyFilters(); },
   resetFilters(){ state.cache.scrSel={}; buildFilterScreener(); },
@@ -5163,6 +5280,7 @@ async function anyPortfolio(uid){
    ============================================================ */
 function icon(n){
   const p={
+    nodes:'<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="7" cy="18" r="2.5"/><circle cx="17" cy="17" r="2.5"/><path d="M8.2 7.2 15.6 6.6M7 8.4 7 15.6M8.7 16.7 15 16.8M17.6 9.3 17.2 14.6M8.5 8.5 15.4 15.4"/>',
     coins:'<ellipse cx="8" cy="6" rx="5" ry="2.5"/><path d="M3 6v5c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5V6"/><path d="M11 13.5c.3 1.3 2.4 2.3 5 2.3 2.8 0 5-1.1 5-2.5v-5c0-1.4-2.2-2.5-5-2.5-1.2 0-2.3.2-3.1.5"/><path d="M11 13.5V16c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-2.5"/>',
     brain:'<path d="M8.5 4A2.5 2.5 0 0 0 6 6.5 2.5 2.5 0 0 0 4.5 11 2.5 2.5 0 0 0 6 15.3 2.5 2.5 0 0 0 8.5 19 2.4 2.4 0 0 0 12 18.5 2.4 2.4 0 0 0 15.5 19 2.5 2.5 0 0 0 18 15.3 2.5 2.5 0 0 0 19.5 11 2.5 2.5 0 0 0 18 6.5 2.5 2.5 0 0 0 15.5 4 2.4 2.4 0 0 0 12 4.6 2.4 2.4 0 0 0 8.5 4Z"/><path d="M12 4.6v13.9"/>',
     search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
