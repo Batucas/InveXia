@@ -1077,6 +1077,7 @@ function stocksDemo(){
       stats:{income:53008e6,revenue:130497e6,book_sh:2.7,cash_sh:1.4,roa:0.65,quick_ratio:3.4,ev_sales:28.1,p_fcf:52.3,shares_out:24500e6,float_shares:23400e6,insider_own:0.041,inst_own:0.66,short_float:0.012,avg_volume:245e6,eps_ttm:2.53,eps_fwd:3.85,rsi:57.2,atr:4.1,sma50_pct:5.4,sma200_pct:19.8,perf:{week:1.3,month:8.2,quarter:14.1,half:22.6,ytd:31.0,year:24.9}},
       financials:{years:[2022,2023,2024,2025],eps:[0.17,0.17,1.19,2.53],revenue:[26914e6,26974e6,60922e6,130497e6],net_income:[9752e6,4368e6,29760e6,72880e6],shares:[25000e6,24700e6,24600e6,24500e6]},
       capital:{mcap:2980e9,debt:9700e6,cash:34800e6,ev:2955e9},ownership:{float:23400e6,shares_out:24500e6},
+      statements:{income:{annual:{periods:["2022","2023","2024","2025"],rows:[{label:"Ingresos totales",values:[26914e6,26974e6,60922e6,130497e6]},{label:"Beneficio bruto",values:[15356e6,14371e6,44301e6,97858e6]},{label:"Beneficio operativo",values:[10041e6,4224e6,32972e6,81453e6]},{label:"Beneficio neto",values:[9752e6,4368e6,29760e6,72880e6]},{label:"BPA diluido",values:[0.17,0.17,1.19,2.53]}]},quarterly:{periods:["1T25","2T25","3T25","4T25"],rows:[{label:"Ingresos totales",values:[26044e6,30040e6,35082e6,39331e6]},{label:"Beneficio bruto",values:[19405e6,22574e6,26156e6,29723e6]},{label:"Beneficio neto",values:[14881e6,16599e6,19309e6,22091e6]},{label:"BPA diluido",values:[0.60,0.67,0.78,0.90]}]}},balance:{annual:{periods:["2022","2023","2024","2025"],rows:[{label:"Activos totales",values:[44187e6,41182e6,65728e6,111601e6]},{label:"Pasivos totales",values:[17575e6,19081e6,22750e6,32274e6]},{label:"Deuda total",values:[11831e6,10953e6,9709e6,8463e6]},{label:"Efectivo e inversiones",values:[21208e6,13296e6,25984e6,38487e6]},{label:"Patrimonio neto",values:[26612e6,22101e6,42978e6,79327e6]}]}},cashflow:{annual:{periods:["2022","2023","2024","2025"],rows:[{label:"Flujo operativo",values:[9108e6,5641e6,28090e6,64089e6]},{label:"Gastos de capital (Capex)",values:[-1833e6,-1069e6,-1069e6,-3236e6]},{label:"Flujo de caja libre",values:[7275e6,3808e6,27021e6,60853e6]}]}}},
       financials_q:{years:["4T24","1T25","2T25","3T25","4T25"],revenue:[22103e6,26044e6,30040e6,35082e6,39331e6],net_income:[12285e6,14881e6,16599e6,19309e6,22091e6],eps:[0.49,0.60,0.67,0.78,0.90],shares:[24600e6,24580e6,24550e6,24520e6,24500e6]},
       rewards:["Se prevé un crecimiento anual de beneficios de 42%","Los beneficios crecieron 88% el año pasado","Deuda muy bien cubierta por el flujo de caja"],
       risks:["Cotiza con múltiplos elevados (P/E 52)","Precio volátil en los últimos 3 meses"],
@@ -1222,10 +1223,43 @@ async function viewStockDetail(ticker){
       <div id="tvChart" class="stk-tvchart"></div></div>
     ${finvizGrid(s)}
     ${capitalBlock(s)}
-    <div id="finBlock"></div>`;
+    <div id="finBlock"></div>
+    <div id="stmtBlock"></div>`;
   state.cache.curStock=s;
   renderFinBlock();
+  renderStmtBlock();
   const sym=s.ticker; setTimeout(()=>{ try{ tvWidget(sym); }catch(e){} }, 60);
+}
+const STMT_TABS=[["income","Estado de resultados"],["balance","Balance general"],["cashflow","Flujo de efectivo"]];
+function renderStmtBlock(){
+  const box=$("#stmtBlock"); const s=state.cache.curStock; if(!box||!s) return;
+  const st=s.statements; if(!st||!Object.keys(st).length){ box.innerHTML=""; return; }
+  let tab=state.cache.stmtTab||"income"; if(!st[tab]) tab=Object.keys(st)[0];
+  const per=state.cache.stmtPer||"annual";
+  box.innerHTML=`<div class="card stmt-card">
+    <div class="flex between" style="flex-wrap:wrap;gap:.6rem;align-items:center"><h3 style="margin:0">Estados financieros</h3>
+      <div class="courses-toggle" style="margin:0">
+        <button class="ct-btn ${per==="annual"?"on":""}" onclick="app.stmtPer('annual')">Anual</button>
+        <button class="ct-btn ${per==="quarterly"?"on":""}" onclick="app.stmtPer('quarterly')">Trimestral</button></div></div>
+    <div class="stmt-tabs">${STMT_TABS.filter(([k])=>st[k]).map(([k,l])=>`<button class="stmt-tab ${tab===k?"on":""}" onclick="app.stmtTab('${k}')">${l}</button>`).join("")}</div>
+    <div id="stmtTable"></div>
+    <p class="disc-mini">Cifras en millones de US$ (salvo BPA). Fuente: yfinance. No es asesoría financiera.</p>
+  </div>`;
+  renderStmtTable();
+}
+function renderStmtTable(){
+  const box=$("#stmtTable"); const s=state.cache.curStock; if(!box||!s) return;
+  const st=s.statements||{}; let tab=state.cache.stmtTab||"income"; if(!st[tab]) tab=Object.keys(st)[0];
+  const per=state.cache.stmtPer||"annual";
+  let data=st[tab]&&st[tab][per]; if(!data){ const alt=per==="annual"?"quarterly":"annual"; data=st[tab]&&st[tab][alt]; }
+  if(!data||!data.rows||!data.rows.length){ box.innerHTML=`<p class="empty" style="padding:1rem">Sin datos para este periodo.</p>`; return; }
+  const fmt=(v,label)=>{ if(v==null) return "—";
+    if((label||"").includes("BPA")) return (+v).toFixed(2);
+    const a=Math.abs(v), s2=v<0?"-":""; const n=a>=1e9?(a/1e9).toFixed(1)+" MM":a>=1e6?(a/1e6).toFixed(0):(a/1e3).toFixed(0)+" mil"; return s2+n; };
+  box.innerHTML=`<div class="stmt-scroll"><table class="stmt-table">
+    <thead><tr><th>Concepto</th>${data.periods.map(p=>`<th>${esc(p)}</th>`).join("")}</tr></thead>
+    <tbody>${data.rows.map(r=>`<tr><td class="st-lbl">${esc(r.label)}</td>${r.values.map(v=>`<td class="mono ${v!=null&&v<0?"neg":""}">${esc(fmt(v,r.label))}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table></div>`;
 }
 function renderFinBlock(){
   const box=$("#finBlock"); const s=state.cache.curStock; if(!box||!s) return;
@@ -1693,6 +1727,7 @@ async function viewBrain(){
     if(state.view!=="cerebro") return;   // el usuario navegó a otra parte mientras cargaba
     const ld=$("#brainLoading"); if(ld) ld.remove();
     window.__brainOnSelect=(i)=>{ state.cache.brainSel=(i<0?null:data.sectors[i].name); renderBrainFilters(data); renderBrainStatic(data); };
+    window.__brainOnPick=(ticker)=>{ if(ticker) location.hash="#/acciones/"+ticker; };
     const bs=$("#bSyn"); const mount=$("#brainMount");
     if(mount){ state.cache.brain3dAPI=window.brain3D(mount, data); }
   }catch(e){ const ld=$("#brainLoading"); if(ld) ld.innerHTML=`<div class="brain-fallback">No se pudo cargar el visor 3D. Verifica que <b>three.min.js</b> y <b>brain3d.js</b> estén subidos al repo.</div>`; console.error(e); }
@@ -4322,6 +4357,8 @@ const app = {
   stkMode(m){ state.cache.stkMode=m; viewStocks(); },
   earnMode(m){ state.cache.earnMode=m; viewEarnings(); },
   finMode(m){ state.cache.finMode=m; renderFinBlock(); },
+  stmtTab(t){ state.cache.stmtTab=t; renderStmtBlock(); },
+  stmtPer(p){ state.cache.stmtPer=p; renderStmtBlock(); },
   brainSelect(i){ const d=state.cache.brainData; if(!d) return; state.cache.brainSel=(i==null||i<0)?null:d.sectors[i].name; renderBrainFilters(d); renderBrainStatic(d); if(state.cache.brain3dAPI) state.cache.brain3dAPI.setSelected((i==null||i<0)?null:i); },
   brainRotate(btn){ const nv=!(state.cache.brainAuto!==false); state.cache.brainAuto=nv; if(state.cache.brain3dAPI) state.cache.brain3dAPI.setAutoRotate(nv); if(btn) btn.classList.toggle("off",!nv); },
   brainReset(){ if(state.cache.brain3dAPI&&state.cache.brain3dAPI.reset) state.cache.brain3dAPI.reset(); },

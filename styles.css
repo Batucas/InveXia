@@ -1436,3 +1436,19 @@ body.focus-mode .main.wide{padding:.6rem}
 .brain-wrap.panels-min .brain-panels{display:none}
 .brain-wrap.panels-min .brain-stage{height:82vh}
 .brain-wrap.panels-min .brain-filters{margin-bottom:.6rem}
+
+/* v6.5 · Estados financieros */
+.stmt-card{margin-top:1rem}
+.stmt-tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin:.8rem 0 .2rem;border-bottom:1px solid var(--line)}
+.stmt-tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:.82rem;font-weight:600;padding:.5rem .3rem;cursor:pointer;transition:.14s var(--tin)}
+.stmt-tab:hover{color:var(--text)}
+.stmt-tab.on{color:var(--blue-400);border-bottom-color:var(--blue-400)}
+.stmt-scroll{overflow-x:auto;margin-top:.6rem}
+.stmt-table{width:100%;border-collapse:collapse;font-size:.82rem;min-width:420px}
+.stmt-table th{text-align:right;color:var(--faint);font-size:.72rem;font-weight:600;padding:.5rem .6rem;border-bottom:1px solid var(--line);white-space:nowrap}
+.stmt-table th:first-child{text-align:left}
+.stmt-table td{text-align:right;padding:.5rem .6rem;border-bottom:1px solid var(--line);color:var(--text);white-space:nowrap}
+.stmt-table td.st-lbl{text-align:left;color:var(--muted)}
+.stmt-table tr:hover td{background:rgba(46,125,246,.05)}
+
+.brain-tip .tp-hint2{color:var(--blue-400);font-size:.64rem}

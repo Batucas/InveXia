@@ -185,6 +185,79 @@ def build_universe():
 
 
 # ------------------------------------------------------------------ ficha
+INCOME_ITEMS = [
+    ("Ingresos totales", ["Total Revenue", "TotalRevenue", "Operating Revenue"]),
+    ("Costo de ingresos", ["Cost Of Revenue", "Reconciled Cost Of Revenue"]),
+    ("Beneficio bruto", ["Gross Profit"]),
+    ("Gastos operativos", ["Operating Expense", "Total Operating Expenses"]),
+    ("Beneficio operativo", ["Operating Income", "Total Operating Income As Reported"]),
+    ("EBITDA", ["EBITDA", "Normalized EBITDA"]),
+    ("Beneficio neto", ["Net Income", "Net Income Common Stockholders"]),
+    ("BPA diluido", ["Diluted EPS"]),
+]
+BALANCE_ITEMS = [
+    ("Activos totales", ["Total Assets"]),
+    ("Activos corrientes", ["Current Assets", "Total Current Assets"]),
+    ("Pasivos totales", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
+    ("Pasivos corrientes", ["Current Liabilities", "Total Current Liabilities"]),
+    ("Deuda total", ["Total Debt"]),
+    ("Efectivo e inversiones", ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"]),
+    ("Patrimonio neto", ["Stockholders Equity", "Total Equity Gross Minority Interest"]),
+    ("Ganancias retenidas", ["Retained Earnings"]),
+]
+CASHFLOW_ITEMS = [
+    ("Flujo operativo", ["Operating Cash Flow", "Total Cash From Operating Activities", "Cash Flow From Continuing Operating Activities"]),
+    ("Flujo de inversión", ["Investing Cash Flow", "Total Cashflows From Investing Activities", "Cash Flow From Continuing Investing Activities"]),
+    ("Flujo de financiación", ["Financing Cash Flow", "Total Cash From Financing Activities", "Cash Flow From Continuing Financing Activities"]),
+    ("Gastos de capital (Capex)", ["Capital Expenditure", "Capital Expenditures"]),
+    ("Flujo de caja libre", ["Free Cash Flow"]),
+]
+
+
+def _statement(df, items, quarterly=False, n=4):
+    if df is None or getattr(df, "empty", True):
+        return None
+    cols = list(df.columns)[:n][::-1]
+    periods = []
+    for c in cols:
+        try:
+            periods.append(f"{(c.month-1)//3+1}T{c.year%100:02d}" if quarterly else str(c.year))
+        except Exception:
+            periods.append(str(c))
+    rows = []
+    for label, names in items:
+        r = None
+        for nm in names:
+            if nm in df.index:
+                r = df.loc[nm]; break
+        vals = [(_n(r.get(c)) if r is not None else None) for c in cols]
+        if any(v is not None for v in vals):
+            rows.append({"label": label, "values": vals})
+    if not rows:
+        return None
+    return {"periods": periods, "rows": rows}
+
+
+def build_statements(yft):
+    def pair(annual_df, q_df, items):
+        a = _statement(annual_df, items, False)
+        q = _statement(q_df, items, True)
+        if not a and not q:
+            return None
+        return {"annual": a, "quarterly": q}
+    try:
+        inc = pair(yft.income_stmt, yft.quarterly_income_stmt, INCOME_ITEMS)
+        bal = pair(yft.balance_sheet, yft.quarterly_balance_sheet, BALANCE_ITEMS)
+        cfl = pair(yft.cashflow, yft.quarterly_cashflow, CASHFLOW_ITEMS)
+    except Exception:
+        return None
+    out = {}
+    if inc: out["income"] = inc
+    if bal: out["balance"] = bal
+    if cfl: out["cashflow"] = cfl
+    return out or None
+
+
 def _ceo(info):
     try:
         offs = info.get("companyOfficers") or []
@@ -243,6 +316,76 @@ def earnings_info(yft):
     except Exception:
         pass
     if not out["next_date"] and not out["quarters"]:
+        return None
+    return out
+
+
+INCOME_SPEC = [
+    ("Ingresos", ["Total Revenue", "Operating Revenue"]),
+    ("Costo de ventas", ["Cost Of Revenue", "Reconciled Cost Of Revenue"]),
+    ("Beneficio bruto", ["Gross Profit"]),
+    ("Gastos operativos", ["Operating Expense", "Total Operating Expenses"]),
+    ("Beneficio operativo", ["Operating Income", "Total Operating Income As Reported"]),
+    ("Beneficio antes de impuestos", ["Pretax Income"]),
+    ("Impuestos", ["Tax Provision"]),
+    ("Beneficio neto", ["Net Income", "Net Income Common Stockholders"]),
+    ("BPA diluido", ["Diluted EPS"]),
+]
+BALANCE_SPEC = [
+    ("Activos totales", ["Total Assets"]),
+    ("Activos corrientes", ["Current Assets", "Total Current Assets"]),
+    ("Efectivo e inversiones", ["Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents"]),
+    ("Pasivos totales", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
+    ("Pasivos corrientes", ["Current Liabilities", "Total Current Liabilities"]),
+    ("Deuda total", ["Total Debt"]),
+    ("Patrimonio", ["Stockholders Equity", "Total Equity Gross Minority Interest"]),
+]
+CASHFLOW_SPEC = [
+    ("Flujo operativo", ["Operating Cash Flow", "Total Cash From Operating Activities"]),
+    ("Inversión de capital (CapEx)", ["Capital Expenditure"]),
+    ("Flujo de caja libre (FCF)", ["Free Cash Flow"]),
+    ("Flujo de inversión", ["Investing Cash Flow", "Total Cashflows From Investing Activities"]),
+    ("Flujo de financiación", ["Financing Cash Flow", "Total Cash From Financing Activities"]),
+    ("Variación de efectivo", ["Changes In Cash", "Change In Cash"]),
+]
+
+
+def _stmt(df, spec, quarterly=False, n=4):
+    if df is None or getattr(df, "empty", True):
+        return None
+    cols = list(df.columns)[:n][::-1]
+    periods = []
+    for c in cols:
+        try:
+            periods.append(f"{(c.month-1)//3+1}T{c.year % 100:02d}" if quarterly else c.year)
+        except Exception:
+            periods.append(str(c))
+    rows = []
+    for label, names in spec:
+        r = None
+        for nm in names:
+            if nm in df.index:
+                r = df.loc[nm]; break
+        if r is None:
+            continue
+        vals = [_n(r.get(c)) for c in cols]
+        if any(v is not None for v in vals):
+            rows.append({"label": label, "values": vals})
+    return {"periods": periods, "rows": rows} if rows else None
+
+
+def statements(yft):
+    try:
+        inc, bs, cf = yft.income_stmt, yft.balance_sheet, yft.cashflow
+        qi, qb, qc = yft.quarterly_income_stmt, yft.quarterly_balance_sheet, yft.quarterly_cashflow
+    except Exception:
+        return None
+    out = {
+        "income": {"annual": _stmt(inc, INCOME_SPEC), "quarterly": _stmt(qi, INCOME_SPEC, True, 6)},
+        "balance": {"annual": _stmt(bs, BALANCE_SPEC), "quarterly": _stmt(qb, BALANCE_SPEC, True, 6)},
+        "cashflow": {"annual": _stmt(cf, CASHFLOW_SPEC), "quarterly": _stmt(qc, CASHFLOW_SPEC, True, 6)},
+    }
+    if not any(v.get("annual") or v.get("quarterly") for v in out.values()):
         return None
     return out
 
@@ -470,6 +613,7 @@ def build_report(ticker, sector_es, kind):
         "capital": capital, "ownership": ownership,
         "financials": (annual_financials(yft) if kind == "stock" else None),
         "financials_q": (quarterly_financials(yft) if kind == "stock" else None),
+        "statements": (build_statements(yft) if kind == "stock" else None),
         "earnings": (earnings_info(yft) if kind == "stock" else None),
     }
 

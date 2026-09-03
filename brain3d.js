@@ -47,7 +47,7 @@
     renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
 
-    const SCALE = 3.4;
+    const SCALE = 5.0;
     const sectors = data.sectors;
     const S = sectors.length;
     const tex = glowTexture();
@@ -61,9 +61,9 @@
       const c = fibDir(si, S);
       const maxCh = Math.max(...s.stocks.map(x => Math.abs(x.change_1y || 0)), 1);
       s.stocks.forEach(st => {
-        let x = c[0] + (Math.random() - 0.5) * 0.55;
-        let y = c[1] + (Math.random() - 0.5) * 0.55;
-        let z = c[2] + (Math.random() - 0.5) * 0.55;
+        let x = c[0] + (Math.random() - 0.5) * 0.85;
+        let y = c[1] + (Math.random() - 0.5) * 0.85;
+        let z = c[2] + (Math.random() - 0.5) * 0.85;
         const p = brainPos(x, y, z);
         posArr.push(p[0] * SCALE, p[1] * SCALE, p[2] * SCALE);
         const col = new THREE.Color(s.color);
@@ -166,7 +166,7 @@
     scene.add(pPoints);
 
     // ---- controles de órbita (propios) ----
-    let theta = 0.6, phi = 1.30, radius = 8.6, tRadius = 8.6;
+    let theta = 0.6, phi = 1.30, radius = 12, tRadius = 12;
     let tTheta = theta, tPhi = phi, dragging = false, lastX = 0, lastY = 0, idle = 0, pointers = {}, pinch = 0;
     function applyCam() {
       const x = radius * Math.sin(phi) * Math.sin(theta);
@@ -182,16 +182,16 @@
       const ids = Object.keys(pointers);
       if (ids.length >= 2) { // pinch
         const a = pointers[ids[0]], b = pointers[ids[1]]; const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch) tRadius = Math.max(4.5, Math.min(20, tRadius * (pinch / d))); pinch = d; idle = 0; return;
+        if (pinch) tRadius = Math.max(6, Math.min(30, tRadius * (pinch / d))); pinch = d; idle = 0; return;
       }
       if (dragging) { tTheta -= (e.clientX - lastX) * 0.006; tPhi = Math.max(0.25, Math.min(Math.PI - 0.25, tPhi - (e.clientY - lastY) * 0.006)); lastX = e.clientX; lastY = e.clientY; idle = 0; }
       onHover(e);
     });
     const up = e => { delete pointers[e.pointerId]; if (Object.keys(pointers).length < 2) pinch = 0; if (Object.keys(pointers).length === 0) dragging = false; };
     el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
-    el.addEventListener("wheel", e => { e.preventDefault(); tRadius = Math.max(4.5, Math.min(20, tRadius + Math.sign(e.deltaY) * 0.8)); idle = 0; }, { passive: false });
+    el.addEventListener("wheel", e => { e.preventDefault(); tRadius = Math.max(6, Math.min(30, tRadius + Math.sign(e.deltaY) * 0.8)); idle = 0; }, { passive: false });
     let autoRotate = true;
-    el.addEventListener("click", e => { if (moved) return; const n = pick(e); if (n) selectAPI(n.si); else selectAPI(-1); });
+    el.addEventListener("click", e => { if (moved) return; const n = pick(e); if (n) { if (typeof window.__brainOnPick === "function") window.__brainOnPick(n.ticker); } else selectAPI(-1); });
     let downX = 0, downY = 0, moved = false;
     el.addEventListener("pointerdown", e => { downX = e.clientX; downY = e.clientY; moved = false; });
     el.addEventListener("pointermove", e => { if (Math.hypot(e.clientX - downX, e.clientY - downY) > 5) moved = true; });
@@ -211,7 +211,7 @@
       const r = el.getBoundingClientRect(); const mx = e.clientX - r.left, my = e.clientY - r.top;
       const n = pickAt(mx, my);
       if (n && tip) { tip.style.display = "block"; tip.style.left = (mx + 14) + "px"; tip.style.top = (my - 6) + "px";
-        tip.style.borderColor = n.color; tip.innerHTML = `<b>${n.ticker}</b> <span style="color:${n.ch >= 0 ? '#3DD6A0' : '#c96a6a'}">${n.ch >= 0 ? '+' : ''}${n.ch == null ? '—' : n.ch}%</span><br><span class="tp-lo-sec">${n.sec}</span>`; }
+        tip.style.borderColor = n.color; tip.innerHTML = `<b>${n.ticker}</b> <span style="color:${n.ch >= 0 ? '#3DD6A0' : '#c96a6a'}">${n.ch >= 0 ? '+' : ''}${n.ch == null ? '—' : n.ch}%</span><br><span class="tp-lo-sec">${n.sec}</span><br><span class="tp-hint2">clic para analizar →</span>`; }
       else if (tip) tip.style.display = "none";
     }
     function pickAt(mx, my) {
@@ -273,6 +273,6 @@
 
     function dispose() { stopped = true; try { ro && ro.disconnect(); } catch (e) {} try { renderer.dispose(); geo.dispose(); lgeo.dispose(); pgeo.dispose(); tex.dispose(); } catch (e) {} }
 
-    return { setSelected: (i) => { selected = i; mat.uniforms.uSel.value = (i == null ? -1 : i); }, setAutoRotate: (v) => { autoRotate = v; idle = 0; }, reset: () => { tTheta = 0.6; tPhi = 1.25; tRadius = 8.6; idle = 0; }, dispose };
+    return { setSelected: (i) => { selected = i; mat.uniforms.uSel.value = (i == null ? -1 : i); }, setAutoRotate: (v) => { autoRotate = v; idle = 0; }, reset: () => { tTheta = 0.6; tPhi = 1.25; tRadius = 12; idle = 0; }, dispose };
   };
 })();
