@@ -623,7 +623,7 @@ def build_report(ticker, sector_es, kind):
         "fair_value": fv, "fair_upside": fu,
         "domain": domain or None, "profile": profile, "stats": stats,
         "capital": capital, "ownership": ownership,
-        "financials": (annual_financials(yft) if kind == "stock" else None),
+        "financials": (annual_financials(yft) if (kind == "stock" and not FAST) else None),
         "financials_q": (quarterly_financials(yft) if (kind == "stock" and not FAST) else None),
         "statements": (build_statements(yft) if (kind == "stock" and not FAST) else None),
         "earnings": (earnings_info(yft) if (kind == "stock" and not FAST) else None),
@@ -696,7 +696,12 @@ def main():
     if a.self_test:
         return selftest()
     FAST = a.fast
-    print(f"Modo: {'RÁPIDO (sin estados financieros)' if FAST else 'COMPLETO'} · pausa {a.pace}s")
+    print(f"Modo: {'RÁPIDO (solo precio + ratios, ~2 peticiones/activo)' if FAST else 'COMPLETO (con estados financieros, ~15 peticiones/activo)'} · pausa {a.pace}s")
+    try:
+        import curl_cffi  # yfinance lo usa para imitar un navegador y evitar bloqueos
+        print("curl_cffi disponible ✓ (menos bloqueos de Yahoo)")
+    except Exception:
+        print("curl_cffi NO disponible — instálalo para reducir bloqueos (pip install curl_cffi)")
 
     uni = build_universe()
     items = [(t, s, "stock") for t, s in uni.items()]

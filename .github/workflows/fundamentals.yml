@@ -42,10 +42,15 @@ jobs:
           python-version: "3.11"
 
       - name: Instalar dependencias
-        run: pip install yfinance numpy pandas requests lxml
+        run: pip install yfinance curl_cffi numpy pandas requests lxml
 
       - name: Ejecutar el pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python fundamentals_pipeline.py --limit ${{ github.event.inputs.limit || 0 }} ${{ (github.event.inputs.fast == 'true') && '--fast' || '' }}
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python fundamentals_pipeline.py --fast
+          else
+            python fundamentals_pipeline.py --limit ${{ github.event.inputs.limit || 0 }} ${{ (github.event.inputs.fast == 'true') && '--fast' || '' }}
+          fi
