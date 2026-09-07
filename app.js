@@ -1226,11 +1226,9 @@ async function viewStockDetail(ticker){
       <div id="tvChart" class="stk-tvchart"></div></div>
     ${finvizGrid(s)}
     ${capitalBlock(s)}
-    <div id="finBlock"></div>
-    <div id="stmtBlock"></div>`;
+    <div id="finBlock"></div>`;
   state.cache.curStock=s;
   renderFinBlock();
-  renderStmtBlock();
   const sym=s.ticker; setTimeout(()=>{ try{ tvWidget(sym); }catch(e){} }, 60);
 }
 const STMT_TABS=[["income","Estado de resultados"],["balance","Balance general"],["cashflow","Flujo de efectivo"]];
@@ -1343,12 +1341,14 @@ function financialsCharts(fin){
   const Brev=x=>x==null?"—":(Math.abs(x)>=1e9?(x/1e9).toFixed(1):Math.abs(x)>=1e6?(x/1e6).toFixed(0)+"M":(+x).toFixed(0));
   const Bsh=x=>x==null?"—":(x/1e9).toFixed(2);
   const Beps=x=>x==null?"—":(+x).toFixed(2);
-  const ni=fin.net_income||[];
+  const ni=fin.net_income||[]; const ocf=fin.op_cf||[]; const fcf=fin.fcf||[];
   const margin=(fin.revenue||[]).map((r,i)=>(r&&ni[i]!=null)?+(ni[i]/r*100).toFixed(1):null);
-  const hasEps=(fin.eps||[]).some(v=>v!=null), hasRev=(fin.revenue||[]).some(v=>v!=null), hasSh=(fin.shares||[]).some(v=>v!=null), hasNi=ni.some(v=>v!=null), hasMg=margin.some(v=>v!=null);
+  const hasEps=(fin.eps||[]).some(v=>v!=null), hasRev=(fin.revenue||[]).some(v=>v!=null), hasSh=(fin.shares||[]).some(v=>v!=null), hasNi=ni.some(v=>v!=null), hasMg=margin.some(v=>v!=null), hasOcf=ocf.some(v=>v!=null), hasFcf=fcf.some(v=>v!=null);
   return `<div class="fin-grid">
       ${hasRev?`<div class="fin-col"><div class="fin-t">Ingresos (miles de millones US$)</div>${barsSVG(fin.years,fin.revenue,"#4FA3FF",Brev)}</div>`:""}
       ${hasNi?`<div class="fin-col"><div class="fin-t">Beneficio neto (miles de millones US$)</div>${barsSVG(fin.years,ni,"#2DD4BF",Brev)}</div>`:""}
+      ${hasOcf?`<div class="fin-col"><div class="fin-t">Flujo de caja operativo (miles de millones US$)</div>${barsSVG(fin.years,ocf,"#38BDF8",Brev)}</div>`:""}
+      ${hasFcf?`<div class="fin-col"><div class="fin-t">Flujo de caja libre (miles de millones US$)</div>${barsSVG(fin.years,fcf,"#3DD6A0",Brev)}</div>`:""}
       ${hasMg?`<div class="fin-col"><div class="fin-t">Margen neto (%)</div>${barsSVG(fin.years,margin,"#F5C451",x=>x.toFixed(1)+"%")}</div>`:""}
       ${hasEps?`<div class="fin-col"><div class="fin-t">BPA (EPS)</div>${barsSVG(fin.years,fin.eps,"#8B5CF6",Beps)}</div>`:""}
       ${hasSh?`<div class="fin-col"><div class="fin-t">Acciones en circulación (MM)</div>${barsSVG(fin.years,fin.shares,"#94A8C7",Bsh)}</div>`:""}

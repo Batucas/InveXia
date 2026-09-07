@@ -165,13 +165,45 @@ def fetch_sp500_universe():
     df = pd.read_html(io.StringIO(html))[0]
     sym_col = next((c for c in df.columns if str(c).lower() in ("symbol", "ticker")), df.columns[0])
     sec_col = next((c for c in df.columns if "sector" in str(c).lower()), None)
+    nam_col = next((c for c in df.columns if str(c).lower() in ("security", "company", "name")), None)
     uni = {}
     for _, row in df.iterrows():
         tid = str(row[sym_col]).strip().replace(".", "-")
         sec = _GICS.get(str(row[sec_col]).strip(), "—") if sec_col else "—"
+        nam = str(row[nam_col]).strip() if nam_col else None
         if tid and tid.upper() == tid:
-            uni[tid] = sec
+            uni[tid] = {"sector": sec, "name": nam}
     return uni
+
+
+def batch_prices(tickers, chunk=100):
+    """Descarga los precios de 1 año de TODOS los activos en pocas peticiones (yf.download)."""
+    import yfinance as yf, time
+    out = {}
+    for i in range(0, len(tickers), chunk):
+        part = tickers[i:i + chunk]
+        try:
+            df = yf.download(part, period="1y", interval="1d", group_by="ticker",
+                             auto_adjust=True, threads=True, progress=False)
+        except Exception as e:
+            print(f"  batch {i//chunk+1}: error {e}")
+            continue
+        for t in part:
+            try:
+                if len(part) == 1:
+                    sub = df
+                else:
+                    if t not in df.columns.get_level_values(0):
+                        continue
+                    sub = df[t]
+                if sub is None or "Close" not in sub or sub["Close"].dropna().shape[0] < 2:
+                    continue
+                out[t] = sub
+            except Exception:
+                continue
+        print(f"  batch {i//chunk+1}/{(len(tickers)+chunk-1)//chunk}: {len(out)} con precio")
+        time.sleep(1.5)
+    return out
 
 
 def build_universe():
@@ -182,7 +214,7 @@ def build_universe():
             return uni
     except Exception as e:
         print(f"  (no se pudo leer S&P 500: {e}; uso Nasdaq-100)")
-    return {t: "—" for t in NASDAQ100_FALLBACK}
+    return {t: {"sector": "—", "name": None} for t in NASDAQ100_FALLBACK}
 
 
 # ------------------------------------------------------------------ ficha
@@ -391,7 +423,7 @@ def statements(yft):
     return out
 
 
-def _financials_df(inc, bs, quarterly=False, n=5):
+def _financials_df(inc, bs, cf=None, quarterly=False, n=5):
     if inc is None or getattr(inc, "empty", True):
         return None
     cols = list(inc.columns)[:n][::-1]
@@ -408,8 +440,10 @@ def _financials_df(inc, bs, quarterly=False, n=5):
     eps_r = row(inc, "Diluted EPS", "Basic EPS")
     ni_r = row(inc, "Net Income", "Net Income Common Stockholders", "NetIncome")
     sh_r = row(bs, "Ordinary Shares Number", "Share Issued", "Common Stock Shares Outstanding")
+    ocf_r = row(cf, "Operating Cash Flow", "Total Cash From Operating Activities", "Cash Flow From Continuing Operating Activities")
+    fcf_r = row(cf, "Free Cash Flow")
 
-    years, revenue, eps, shares, net_income = [], [], [], [], []
+    years, revenue, eps, shares, net_income, op_cf, fcf = [], [], [], [], [], [], []
     for c in cols:
         if quarterly:
             try:
@@ -426,6 +460,8 @@ def _financials_df(inc, bs, quarterly=False, n=5):
         net_income.append(ni)
         sh = _n(sh_r.get(c)) if sh_r is not None else None
         shares.append(sh)
+        op_cf.append(_n(ocf_r.get(c)) if ocf_r is not None else None)
+        fcf.append(_n(fcf_r.get(c)) if fcf_r is not None else None)
         e = _n(eps_r.get(c)) if eps_r is not None else None
         if e is None and ni and sh:
             e = round(ni / sh, 2)
@@ -433,45 +469,38 @@ def _financials_df(inc, bs, quarterly=False, n=5):
 
     if not any(v is not None for v in revenue) and not any(v is not None for v in eps):
         return None
-    return {"years": years, "revenue": revenue, "eps": eps, "shares": shares, "net_income": net_income}
+    return {"years": years, "revenue": revenue, "eps": eps, "shares": shares,
+            "net_income": net_income, "op_cf": op_cf, "fcf": fcf}
 
 
 def annual_financials(yft):
     try:
-        return _financials_df(yft.income_stmt, yft.balance_sheet, quarterly=False, n=5)
+        return _financials_df(yft.income_stmt, yft.balance_sheet, yft.cashflow, quarterly=False, n=5)
     except Exception:
         return None
 
 
 def quarterly_financials(yft):
     try:
-        return _financials_df(yft.quarterly_income_stmt, yft.quarterly_balance_sheet, quarterly=True, n=6)
+        return _financials_df(yft.quarterly_income_stmt, yft.quarterly_balance_sheet, yft.quarterly_cashflow, quarterly=True, n=6)
     except Exception:
         return None
 
 
-def build_report(ticker, sector_es, kind):
+def build_report(ticker, sector_es, kind, price_hist=None, name_hint=None):
     import yfinance as yf
     import time
     yft = yf.Ticker(ticker)
     info = {}
-    for attempt in range(3):
+    for attempt in range(2):   # .info best-effort: si falla, el activo igual aparece con datos del batch
         try:
             info = yft.info or {}
-            if info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose"):
+            if info.get("currentPrice") or info.get("regularMarketPrice") or info.get("shortName"):
                 break
         except Exception:
             pass
-        time.sleep(1.0 + attempt * 1.5)
-    hist = None
-    for attempt in range(3):
-        try:
-            hist = yft.history(period="1y", interval="1d")
-            if hist is not None and len(hist):
-                break
-        except Exception:
-            pass
-        time.sleep(1.0 + attempt * 1.5)
+        time.sleep(0.5)
+    hist = price_hist   # precios de la descarga masiva (batch), sin bloqueos por activo
 
     price = _n(info.get("currentPrice")) or _n(info.get("regularMarketPrice"))
     if price is None and hist is not None and len(hist):
@@ -610,7 +639,7 @@ def build_report(ticker, sector_es, kind):
 
     d = {
         "ticker": ticker,
-        "name": info.get("longName") or info.get("shortName") or ticker,
+        "name": info.get("longName") or info.get("shortName") or name_hint or ticker,
         "sector": sector_es, "industry": info.get("industry"), "type": kind,
         "currency": info.get("currency", "USD"),
         "summary": (info.get("longBusinessSummary") or "")[:420],
@@ -625,7 +654,7 @@ def build_report(ticker, sector_es, kind):
         "capital": capital, "ownership": ownership,
         "financials": (annual_financials(yft) if (kind == "stock" and not FAST) else None),
         "financials_q": (quarterly_financials(yft) if (kind == "stock" and not FAST) else None),
-        "statements": (build_statements(yft) if (kind == "stock" and not FAST) else None),
+        "statements": None,
         "earnings": (earnings_info(yft) if (kind == "stock" and not FAST) else None),
     }
 
@@ -704,19 +733,25 @@ def main():
         print("curl_cffi NO disponible — instálalo para reducir bloqueos (pip install curl_cffi)")
 
     uni = build_universe()
-    items = [(t, s, "stock") for t, s in uni.items()]
-    items += [(e, "ETF · Fondo cotizado", "etf") for e in ETFS]
-    items += [(c, "Cripto", "crypto") for c in CRYPTO]
+    items = [(t, v.get("sector", "—"), v.get("name"), "stock") for t, v in uni.items()]
+    items += [(e, "ETF · Fondo cotizado", None, "etf") for e in ETFS]
+    items += [(c, "Cripto", None, "crypto") for c in CRYPTO]
     if a.limit:
         items = items[:a.limit]
 
+    all_tickers = [t for t, _, _, _ in items]
+    print(f"Descargando precios en bloque de {len(all_tickers)} activos…")
+    PRICES = batch_prices(all_tickers)
+    print(f"Precios (batch) obtenidos para {len(PRICES)} de {len(all_tickers)} activos.")
+
     index = []
     cal_up, cal_recent = [], []
-    for i, (t, sec, kind) in enumerate(items):
+    for i, (t, sec, name, kind) in enumerate(items):
+        ph = PRICES.get(t)
         try:
-            d = build_report(t, sec, kind)
+            d = build_report(t, sec, kind, price_hist=ph, name_hint=name)
             if not d:
-                print(f"  [{i+1}/{len(items)}] {t}: sin datos")
+                print(f"  [{i+1}/{len(items)}] {t}: sin precio")
                 continue
             upload(f"fundamentals/{t}.json", d)
             index.append({"ticker": t, "name": d["name"], "sector": d["sector"],
