@@ -1160,13 +1160,12 @@ async function viewStocks(){
     <div id="stkMode"></div>`;
   if(mode==="screener") buildScreener(); else if(mode==="filtros") buildFilterScreener(); else renderSearchMode();
 }
-function stockCard(s){ const up=(s.change_1y||0)>=0;
+function stockCard(s){ const up=(s.change_1y||0)>=0; const chg=s.change_1y==null?`<span class="mono" style="color:var(--faint)">—</span>`:`<span class="mono ${up?"pos":"neg"}">${up?"+":""}${(s.change_1y).toFixed(1)}% <span style="color:var(--faint);font-size:.7rem">1A</span></span>`;
   return `<div class="stk-card card" onclick="app.openStock('${s.ticker}')">
       <div class="flex" style="gap:.7rem;align-items:center">${stockLogo(s)}<div style="flex:1;min-width:0"><b class="stk-tk">${esc(s.ticker)}</b><div class="stk-nm">${esc(s.name||"")}</div></div>
         <span class="stk-badge">${esc(s.type==="crypto"?"Cripto":s.type==="etf"?"ETF":"Acción")}</span></div>
       <div class="flex between" style="margin-top:.7rem;align-items:flex-end">
-        <span class="stk-sec">${esc(s.sector||"")}</span>
-        <span class="mono ${up?"pos":"neg"}">${up?"+":""}${(s.change_1y??0).toFixed(1)}% <span style="color:var(--faint);font-size:.7rem">1A</span></span></div>
+        <span class="stk-sec">${esc(s.sector||"")}</span>${chg}</div>
     </div>`;
 }
 function renderSearchMode(){

@@ -176,6 +176,25 @@ def fetch_sp500_universe():
     return uni
 
 
+def stooq_series(ticker):
+    """Historial diario de 1 año desde Stooq (fuente confiable, no bloquea como Yahoo)."""
+    import requests, io, datetime as dt
+    import pandas as pd
+    sym = ticker.lower().replace(".", "-") + ".us"
+    d1 = (dt.date.today() - dt.timedelta(days=400)).strftime("%Y%m%d")
+    url = f"https://stooq.com/q/d/l/?s={sym}&d1={d1}&i=d"
+    try:
+        txt = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20).text
+        if not txt or "Date" not in txt[:40]:
+            return None
+        df = pd.read_csv(io.StringIO(txt), parse_dates=["Date"], index_col="Date")
+        if df.empty or "Close" not in df.columns or df["Close"].dropna().shape[0] < 2:
+            return None
+        return df
+    except Exception:
+        return None
+
+
 def batch_prices(tickers, chunk=100):
     """Descarga los precios de 1 año de TODOS los activos en pocas peticiones (yf.download)."""
     import yfinance as yf, time
@@ -506,7 +525,26 @@ def build_report(ticker, sector_es, kind, price_hist=None, name_hint=None):
     if price is None and hist is not None and len(hist):
         price = _n(hist["Close"].iloc[-1])
     if price is None:
-        return None
+        # sin precio de ninguna fuente: ficha mínima para que el activo NO desaparezca del universo
+        return {
+            "ticker": ticker,
+            "name": info.get("longName") or info.get("shortName") or name_hint or ticker,
+            "sector": sector_es, "industry": info.get("industry"), "type": kind,
+            "currency": info.get("currency", "USD"),
+            "summary": (info.get("longBusinessSummary") or "")[:420],
+            "price": None, "prev_close": None, "mcap": _n(info.get("marketCap")),
+            "change_1d": None, "change_7d": None, "change_1y": None, "spark": [],
+            "valuation": {"pe": _n(info.get("trailingPE")), "forward_pe": _n(info.get("forwardPE")),
+                          "pb": _n(info.get("priceToBook")), "peg": _n(info.get("trailingPegRatio"))},
+            "growth": {"earnings_growth": None, "revenue_growth": None},
+            "past": {"roe": _n(info.get("returnOnEquity")), "profit_margin": None, "gross_margin": None},
+            "health": {"debt_to_equity": None, "current_ratio": None},
+            "dividend": {"yield": _n(info.get("dividendYield")), "payout": None},
+            "analyst": {}, "fair_value": None, "fair_upside": None,
+            "domain": None, "profile": {}, "stats": {}, "capital": {}, "ownership": {},
+            "financials": None, "financials_q": None, "statements": None,
+            "earnings": None, "snowflake": None,
+        }
     prev = _n(info.get("previousClose"))
 
     ch1d = ch7d = ch1y = None
@@ -742,7 +780,21 @@ def main():
     all_tickers = [t for t, _, _, _ in items]
     print(f"Descargando precios en bloque de {len(all_tickers)} activos…")
     PRICES = batch_prices(all_tickers)
-    print(f"Precios (batch) obtenidos para {len(PRICES)} de {len(all_tickers)} activos.")
+    print(f"Precios (batch Yahoo) obtenidos para {len(PRICES)} de {len(all_tickers)} activos.")
+
+    # Respaldo Stooq para las acciones/ETFs sin precio (Stooq no bloquea como Yahoo)
+    missing = [t for t, _, _, k in items if t not in PRICES and k != "crypto"]
+    if missing:
+        print(f"Faltan {len(missing)} sin precio → respaldo Stooq…")
+        got = 0
+        for j, t in enumerate(missing):
+            s = stooq_series(t)
+            if s is not None:
+                PRICES[t] = s; got += 1
+            if (j + 1) % 50 == 0:
+                print(f"  Stooq {j+1}/{len(missing)} (recuperados {got})")
+            time.sleep(0.12)
+        print(f"Stooq recuperó {got} precios más. Total con precio: {len(PRICES)}.")
 
     index = []
     cal_up, cal_recent = [], []
