@@ -1509,3 +1509,13 @@ body.focus-mode .main.wide{padding:.6rem}
 /* v7.0 · botón ampliar gráfico más visible */
 .chart-exp{border-color:var(--gold)!important;color:var(--gold)!important;font-family:'JetBrains Mono'}
 .chart-exp:hover{background:rgba(245,196,81,.12)!important}
+
+/* v7.1 · Posiciones del cliente (vista admin) */
+.pos-scroll{overflow-x:auto;margin-top:.4rem}
+.pos-table{width:100%;border-collapse:collapse;font-size:.8rem;min-width:520px}
+.pos-table th{text-align:right;color:var(--faint);font-size:.68rem;font-weight:600;padding:.4rem .6rem;border-bottom:1px solid var(--line);white-space:nowrap}
+.pos-table th:first-child{text-align:left}
+.pos-table td{text-align:right;padding:.45rem .6rem;border-bottom:1px solid var(--line);white-space:nowrap}
+.pos-table td.pos-tk{text-align:left}
+.pos-tk b{font-size:.9rem}.pos-nm{font-size:.7rem;color:var(--muted)}.pos-cls{font-size:.66rem;color:var(--faint)}
+.pos-cash td{color:var(--muted)}

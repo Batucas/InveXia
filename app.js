@@ -974,7 +974,7 @@ function etParts(date=new Date()){
   const p={}; f.formatToParts(date).forEach(x=>p[x.type]=x.value);
   return { wd:p.weekday, ymd:`${p.year}-${p.month}-${p.day}`, min:(+p.hour)*60+(+p.minute) };
 }
-function isCrypto(sym){ return /BTC|ETH|SOL|DOGE|ADA/i.test(sym||""); }
+function isCrypto(sym){ const s=(sym||"").toUpperCase(); return (state.cache.cryptoSyms&&state.cache.cryptoSyms.has(s.replace(/-?USD$/,"")))||/BTC|ETH|SOL|DOGE|ADA|XRP|BNB|USDT|USDC|AVAX|DOT|MATIC|LINK|SHIB|TRX|LTC|ATOM/i.test(sym||""); }
 function marketStatus(sym){
   if(isCrypto(sym)) return { open:true, label:"Cripto · 24/7", crypto:true };
   const e=etParts();
@@ -2258,7 +2258,11 @@ async function viewTrade(){
 async function loadTradeQuotes(){
   const pf=(state.cache.portfolios||[]).find(p=>p.id===state.cache.tradePf);
   const tks=[...new Set((pf?.holdings||[]).filter(h=>num(h.quantity)>0).map(h=>h.ticker))];
-  const qr=await fetchQuotes(tks); state.cache.tradeQuotes=qr.quotes||{};
+  const qr=await fetchQuotes(tks); const quotes=qr.quotes||{};
+  const needCrypto=tks.some(t=>classOf(t)==="crypto"&&(!quotes[t]||!Number.isFinite(quotes[t].price)));
+  if(needCrypto && !state.cache.cryptoMkt){ try{ const r=await fetch("/api/crypto?n=200",{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.ok) state.cache.cryptoMkt=j.coins; } }catch(e){} }
+  tks.forEach(t=>{ if((!quotes[t]||!Number.isFinite(quotes[t].price))&&classOf(t)==="crypto"){ const cs=t.toUpperCase().replace(/-?USD$/,""); const coin=(state.cache.cryptoMkt||[]).find(c=>c.sym===cs||c.sym===t.toUpperCase()); if(coin) quotes[t]={price:coin.price,percent:coin.c24h}; } });
+  state.cache.tradeQuotes=quotes;
 }
 function renderTrade(){
   const body=$("#tradeBody"); if(!body) return;
@@ -2304,7 +2308,7 @@ const ASSET_CATS={
   rv:{label:"Renta variable",syms:["AAPL","MSFT","NVDA","AMZN","META","GOOGL","TSLA","SPY","QQQ","DIA","IWM"]},
   rf:{label:"Renta fija",syms:["TLT","AGG","LQD","BND","IEF","SHY","HYG","TIP","EMB"]},
   alt:{label:"Alternativos",syms:["GLD","SLV","USO","UNG","DBC","GDX","VNQ"]},
-  cripto:{label:"Cripto",syms:["BTCUSD","ETHUSD","SOLUSD"]},
+  cripto:{label:"Cripto",syms:["BTC","ETH","SOL","BNB","XRP","ADA","DOGE","AVAX","DOT","LINK","MATIC"]},
 };
 function renderAssetPicker(){
   const box=$("#assetPicker"); if(!box) return;
@@ -2382,16 +2386,23 @@ function tvSymbol(sym){
 }
 function classOf(sym){
   const s=(sym||"").toUpperCase();
-  if(/BTC|ETH|SOL|DOGE|ADA/.test(s)) return "crypto";
+  if((state.cache.cryptoSyms&&state.cache.cryptoSyms.has(s.replace(/-?USD$/,"")))||/BTC|ETH|SOL|DOGE|ADA|XRP|BNB|USDT|USDC|AVAX|DOT|MATIC|LINK|SHIB|TRX|LTC|ATOM/.test(s)) return "crypto";
   if(["TLT","AGG","LQD","BND","IEF","SHY","HYG","TIP","BNDX","MUB","EMB","VCIT","VCSH"].includes(s)) return "fixed_income";
   if(["GLD","SLV","USO","UNG","DBC","GDX"].includes(s)) return "alt";
   return "equity";
 }
 async function loadOrderPrice(sym){
   const el2=document.getElementById("ordPrice"); if(el2) el2.textContent="Consultando…";
-  const qr=await fetchQuotes([sym]); const q=qr.quotes?.[sym];
-  state.cache.tradePrice = (q&&Number.isFinite(q.price))?q.price:null;
-  if(el2) el2.textContent = state.cache.tradePrice!=null ? money(state.cache.tradePrice,"USD")+(q.percent!=null?` (${pct(q.percent)} hoy)`:"") : "No disponible";
+  let price=null, percent=null;
+  if(classOf(sym)==="crypto"){
+    if(!state.cache.cryptoMkt){ try{ const r=await fetch("/api/crypto?n=200",{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.ok) state.cache.cryptoMkt=j.coins; } }catch(e){} }
+    const cs=(sym||"").toUpperCase().replace(/-?USD$/,"");
+    const coin=(state.cache.cryptoMkt||[]).find(c=>c.sym===cs||c.sym===(sym||"").toUpperCase());
+    if(coin){ price=coin.price; percent=coin.c24h; }
+  }
+  if(price==null){ const qr=await fetchQuotes([sym]); const q=qr.quotes?.[sym]; if(q&&Number.isFinite(q.price)){ price=q.price; percent=q.percent; } }
+  state.cache.tradePrice = price;
+  if(el2) el2.textContent = price!=null ? money(price,"USD")+(percent!=null?` (${pct(percent)} hoy)`:"") : "No disponible";
   app.tradeEstimate();
 }
 
@@ -4086,7 +4097,8 @@ async function renderClientSuggestions(m, uid){
     state.cache.csSugg[p.id]=normalizeSugg(p.suggested_alloc);
     box.append(el(`<div class="card cs-card">
       <div class="flex between"><h3 style="margin:0">${esc(p.name)}</h3><span class="mono" style="color:var(--muted)">${money(total,"USD")}</span></div>
-      <div class="cs-cols">
+      <div class="k-mini" style="margin-top:.6rem">Activos que compró</div>${positionsList(P.rows, cash)}
+      <div class="cs-cols" style="margin-top:.9rem">
         <div><div class="k-mini">Composición actual del cliente</div>${allocBars(actual)}</div>
         <div><div class="k-mini">Cartera sugerida (objetivo)</div><div id="csEd-${p.id}"></div><div id="csSum-${p.id}" class="cs-sum"></div></div>
       </div>
@@ -4096,6 +4108,22 @@ async function renderClientSuggestions(m, uid){
     </div>`));
     renderSuggEditor(p.id);
   });
+}
+function positionsList(rows, cash){
+  const held=(rows||[]).filter(r=>num(r.quantity)>0);
+  if(!held.length) return `<p class="empty" style="padding:.6rem;margin:0">Sin posiciones — solo efectivo (${money(cash||0,"USD")}).</p>`;
+  return `<div class="pos-scroll"><table class="pos-table">
+    <thead><tr><th>Activo</th><th>Cantidad</th><th>Precio comp.</th><th>Precio act.</th><th>Valor</th><th>Ganancia/Pérdida</th></tr></thead>
+    <tbody>${held.map(r=>`<tr>
+      <td class="pos-tk"><b class="mono">${esc(r.ticker)}</b>${r.name?`<div class="pos-nm">${esc(r.name)}</div>`:""}<div class="pos-cls">${esc(CLASSES[r.asset_class]?.label||r.asset_class||"")}</div></td>
+      <td class="mono">${num(r.quantity)}</td>
+      <td class="mono">${r.avg_cost!=null?money(r.avg_cost,"USD"):"—"}</td>
+      <td class="mono">${r.price!=null?money(r.price,"USD"):"—"}</td>
+      <td class="mono">${r.value!=null?money(r.value,"USD"):"—"}</td>
+      <td class="mono ${r.pnl>=0?"pos":"neg"}">${r.pnl!=null?(r.pnl>=0?"+":"")+money(r.pnl,"USD")+(r.pnlPct!=null?` (${pct(r.pnlPct)})`:""):"—"}</td>
+    </tr>`).join("")}
+    <tr class="pos-cash"><td>Efectivo</td><td colspan="3"></td><td class="mono">${money(cash||0,"USD")}</td><td></td></tr>
+    </tbody></table></div>`;
 }
 function renderSuggEditor(pfId){
   const box=$("#csEd-"+pfId); if(!box) return; const s=state.cache.csSugg[pfId];
@@ -4570,8 +4598,13 @@ const app = {
       state.cache.tradeUniverseP=(async()=>{
         let uni=[];
         try{ const u=sb.storage.from("media").getPublicUrl("fundamentals/index.json").data.publicUrl;
-          const r=await fetch(u,{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.stocks) uni=j.stocks.map(s=>({symbol:s.ticker,name:s.name,type:s.type})); } }catch(e){}
-        const extra=[["SPY","SPDR S&P 500 ETF","etf"],["QQQ","Invesco QQQ","etf"],["DIA","Dow Jones ETF","etf"],["IWM","Russell 2000 ETF","etf"],["VOO","Vanguard S&P 500","etf"],["VTI","Vanguard Total Market","etf"],["GLD","Oro (SPDR Gold)","etf"],["SLV","Plata (iShares)","etf"],["USO","Petróleo","etf"],["TLT","Bonos 20+ años","etf"],["AGG","Bonos agregados","etf"],["LQD","Bonos corporativos","etf"],["HYG","Bonos alto rendimiento","etf"],["BTCUSD","Bitcoin","crypto"],["ETHUSD","Ethereum","crypto"],["SOLUSD","Solana","crypto"]];
+          const r=await fetch(u,{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.stocks) uni=j.stocks.filter(s=>s.type!=="crypto").map(s=>({symbol:s.ticker,name:s.name,type:s.type})); } }catch(e){}
+        // TODAS las criptos desde CoinGecko
+        try{ if(!state.cache.cryptoMkt){ const r=await fetch("/api/crypto?n=200",{cache:"no-store"}); if(r.ok){ const j=await r.json(); if(j.ok&&j.coins&&j.coins.length) state.cache.cryptoMkt=j.coins; } } }catch(e){}
+        const coins=state.cache.cryptoMkt||[]; const cset=new Set();
+        coins.forEach(c=>{ uni.push({symbol:c.sym,name:c.name,type:"crypto"}); cset.add(c.sym); });
+        state.cache.cryptoSyms=cset;
+        const extra=[["SPY","SPDR S&P 500 ETF","etf"],["QQQ","Invesco QQQ","etf"],["DIA","Dow Jones ETF","etf"],["IWM","Russell 2000 ETF","etf"],["VOO","Vanguard S&P 500","etf"],["VTI","Vanguard Total Market","etf"],["GLD","Oro (SPDR Gold)","etf"],["SLV","Plata (iShares)","etf"],["USO","Petróleo","etf"],["TLT","Bonos 20+ años","etf"],["AGG","Bonos agregados","etf"],["LQD","Bonos corporativos","etf"],["HYG","Bonos alto rendimiento","etf"]];
         const have=new Set(uni.map(x=>x.symbol));
         extra.forEach(([s,n,t])=>{ if(!have.has(s)) uni.push({symbol:s,name:n,type:t}); });
         return uni;
