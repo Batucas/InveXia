@@ -717,6 +717,17 @@ def build_report(ticker, sector_es, kind, price_hist=None, name_hint=None):
 
 
 # ------------------------------------------------------------------ subida
+def _clean(o):
+    import math
+    if isinstance(o, dict):
+        return {k: _clean(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_clean(v) for v in o]
+    if isinstance(o, float):
+        return None if (math.isnan(o) or math.isinf(o)) else o
+    return o
+
+
 def upload(name, obj):
     import requests
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -725,7 +736,7 @@ def upload(name, obj):
     url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{name}"
     headers = {"Authorization": f"Bearer {SUPABASE_KEY}", "apikey": SUPABASE_KEY,
                "Content-Type": "application/json", "x-upsert": "true"}
-    r = requests.post(url, headers=headers, data=json.dumps(obj, allow_nan=False))
+    r = requests.post(url, headers=headers, data=json.dumps(_clean(obj), allow_nan=False))
     if r.status_code in (200, 201):
         return True
     print(f"  ✗ error subiendo {name}: {r.status_code} {r.text[:160]}")

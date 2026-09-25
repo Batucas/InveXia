@@ -2290,7 +2290,7 @@ function renderTrade(){
     <div class="trade-grid">
       <div class="card trade-chart-card" id="chartCard">
         <div class="flex between"><h3 style="margin:0">${esc(sym)}</h3>
-          <button class="tp-max" onclick="app.maxChart(this)" title="Ampliar gráfico">⤢</button></div>
+          <button class="btn btn-ghost btn-sm chart-exp" style="width:auto" onclick="app.maxChart(this)" title="Ampliar / reducir gráfico">⤢ Ampliar</button></div>
         <div id="tvChart" class="tv-chart"></div>
       </div>
       <div id="ordWrap"></div>
@@ -4664,9 +4664,11 @@ const app = {
     pf.pending_orders=pend; ui.toast("Orden cancelada","ok"); renderOrderCard();
   },
   maxChart(btn){ const c=btn.closest(".trade-chart-card"); if(!c) return;
-    const on=c.classList.toggle("chart-full"); btn.textContent=on?"⤡":"⤢";
+    const on=c.classList.toggle("chart-full"); btn.innerHTML=on?"⤡ Reducir":"⤢ Ampliar";
     document.body.classList.toggle("chart-maxed",on);
-    setTimeout(()=>tvWidget(state.cache.tradeSym), 60);
+    if(on){ state.cache.chartEsc=(e)=>{ if(e.key==="Escape"){ const b=document.querySelector(".chart-exp"); if(b) app.maxChart(b); } }; document.addEventListener("keydown",state.cache.chartEsc); }
+    else if(state.cache.chartEsc){ document.removeEventListener("keydown",state.cache.chartEsc); state.cache.chartEsc=null; }
+    setTimeout(()=>tvWidget(state.cache.tradeSym||"AAPL"), 80);
   },
   async createPortfolio(goTrade){
     const pfs=state.cache.portfolios||[];
