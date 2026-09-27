@@ -693,7 +693,7 @@ def build_report(ticker, sector_es, kind, price_hist=None, name_hint=None):
         "financials": (annual_financials(yft) if (kind == "stock" and not FAST) else None),
         "financials_q": (quarterly_financials(yft) if (kind == "stock" and not FAST) else None),
         "statements": None,
-        "earnings": (earnings_info(yft) if (kind == "stock" and not FAST) else None),
+        "earnings": None,
     }
 
     if kind == "stock":
@@ -762,6 +762,103 @@ def selftest():
 
 
 # ------------------------------------------------------------------ main
+def _pnum(s):
+    if s is None:
+        return None
+    t = str(s).replace("$", "").replace(",", "").replace("%", "").strip()
+    neg = t.startswith("(") and t.endswith(")")
+    t = t.strip("()")
+    if t in ("", "N/A", "--", "n/a", "-"):
+        return None
+    try:
+        v = float(t)
+        return -v if neg else v
+    except Exception:
+        return None
+
+
+def _nasdaq_earnings(date_str):
+    import requests
+    hdr = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                         "(KHTML, like Gecko) Chrome/122 Safari/537.36",
+           "Accept": "application/json, text/plain, */*",
+           "Accept-Language": "en-US,en;q=0.9"}
+    try:
+        r = requests.get(f"https://api.nasdaq.com/api/calendar/earnings?date={date_str}",
+                         headers=hdr, timeout=20)
+        j = r.json()
+        return ((j.get("data") or {}).get("rows")) or []
+    except Exception:
+        return None
+
+
+def build_earnings_calendar(keep=None):
+    """Calendario de resultados desde Nasdaq (masivo y confiable, no bloquea como Yahoo).
+    keep: set opcional de tickers para filtrar (p. ej. el S&P 500)."""
+    import datetime as dt, time
+    today = dt.date.today()
+    up, rec = [], []
+    for delta in list(range(0, 25)) + list(range(-1, -13, -1)):
+        d = today + dt.timedelta(days=delta)
+        if d.weekday() >= 5:
+            continue
+        ds = d.strftime("%Y-%m-%d")
+        rows = _nasdaq_earnings(ds)
+        if not rows:
+            continue
+        for row in rows:
+            sym = (row.get("symbol") or "").strip().upper()
+            if not sym or not sym.replace(".", "").replace("-", "").isalnum():
+                continue
+            if keep is not None and sym not in keep:
+                continue
+            est = _pnum(row.get("epsForecast"))
+            base = {"ticker": sym, "name": row.get("name"), "date": ds, "eps_est": est}
+            if delta >= 0:
+                up.append(base)
+            else:
+                rec.append({**base, "eps_act": None, "surprise": None,
+                            "revenue": None, "revenue_yoy": None})
+        time.sleep(0.35)
+    if not up and not rec:
+        return None
+    up.sort(key=lambda x: x["date"])
+    seen, up2 = set(), []
+    for e in up:
+        if e["ticker"] in seen:
+            continue
+        seen.add(e["ticker"]); up2.append(e)
+    rec.sort(key=lambda x: x["date"], reverse=True)
+    return {"upcoming": up2[:250], "recent": rec[:250]}
+
+
+def enrich_recent_actuals(recent, limit=120):
+    """Rellena BPA real + sorpresa de los que ya reportaron (yfinance, acotado, best-effort)."""
+    import yfinance as yf, time
+    import pandas as pd
+    for e in recent[:limit]:
+        try:
+            ed = yf.Ticker(e["ticker"]).earnings_dates
+            if ed is None or getattr(ed, "empty", True):
+                continue
+            tz = ed.index.tz
+            target = pd.Timestamp(e["date"], tz=tz) if tz else pd.Timestamp(e["date"])
+            idx = (ed.index - target).to_series().abs().idxmin()
+            row = ed.loc[idx]
+            rep = _n(row.get("Reported EPS")); est = _n(row.get("EPS Estimate"))
+            if rep is not None:
+                e["eps_act"] = rep
+                if e.get("eps_est") is None and est is not None:
+                    e["eps_est"] = est
+                base = e.get("eps_est")
+                if base not in (None, 0):
+                    e["surprise"] = round((rep - base) / abs(base) * 100, 1)
+        except Exception:
+            pass
+        time.sleep(0.2)
+    return recent
+
+
 def main():
     import time
     global FAST
@@ -808,7 +905,6 @@ def main():
         print(f"Stooq recuperó {got} precios más. Total con precio: {len(PRICES)}.")
 
     index = []
-    cal_up, cal_recent = [], []
     for i, (t, sec, name, kind) in enumerate(items):
         ph = PRICES.get(t)
         try:
@@ -826,18 +922,6 @@ def main():
                           "roe": d["past"]["roe"], "beta": d["profile"].get("beta"),
                           "rsi": d["stats"].get("rsi"),
                           "snowflake": d.get("snowflake")})
-            e = d.get("earnings")
-            if e:
-                if e.get("next_date"):
-                    cal_up.append({"ticker": t, "name": d["name"], "domain": d.get("domain"),
-                                   "sector": d["sector"], "date": e["next_date"],
-                                   "eps_est": e.get("next_eps_est"), "rev_est": e.get("rev_est")})
-                if e.get("quarters"):
-                    q = e["quarters"][0]
-                    cal_recent.append({"ticker": t, "name": d["name"], "domain": d.get("domain"),
-                                       "date": q["date"], "eps_est": q["eps_est"], "eps_act": q["eps_act"],
-                                       "surprise": q["surprise"], "revenue": e.get("last_revenue"),
-                                       "revenue_yoy": e.get("revenue_yoy")})
             print(f"  [{i+1}/{len(items)}] {t} ✓")
         except Exception as ex:
             print(f"  [{i+1}/{len(items)}] {t}: error {ex}")
@@ -846,12 +930,28 @@ def main():
 
     upload("fundamentals/index.json",
            {"generated_at": dt.datetime.utcnow().isoformat() + "Z", "stocks": index})
-    cal_up.sort(key=lambda x: x["date"])
-    cal_recent.sort(key=lambda x: x["date"], reverse=True)
-    upload("earnings/calendar.json",
-           {"generated_at": dt.datetime.utcnow().isoformat() + "Z",
-            "upcoming": cal_up[:250], "recent": cal_recent[:250]})
-    print(f"\nListo: {len(index)} fichas · {len(cal_up)} próximos · {len(cal_recent)} recientes.")
+    print(f"Índice subido: {len(index)} fichas.")
+
+    # Calendario de resultados desde Nasdaq (masivo y confiable; independiente de Yahoo)
+    print("Armando calendario de resultados (Nasdaq)…")
+    keep = set(e["ticker"] for e in index)
+    dommap = {e["ticker"]: e.get("domain") for e in index}
+    cal = build_earnings_calendar(keep=keep)
+    if cal:
+        if cal.get("recent"):
+            enrich_recent_actuals(cal["recent"])
+        for e in cal.get("upcoming", []):
+            e["domain"] = dommap.get(e["ticker"])
+        for e in cal.get("recent", []):
+            e["domain"] = dommap.get(e["ticker"])
+        upload("earnings/calendar.json",
+               {"generated_at": dt.datetime.utcnow().isoformat() + "Z",
+                "upcoming": cal["upcoming"], "recent": cal["recent"]})
+        print(f"Calendario real: {len(cal['upcoming'])} próximos · {len(cal['recent'])} recientes.")
+    else:
+        print("Calendario: Nasdaq no respondió (se mantiene el anterior).")
+
+    print(f"\nListo: {len(index)} fichas.")
 
 
 if __name__ == "__main__":
